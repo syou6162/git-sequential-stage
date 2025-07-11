@@ -1,8 +1,10 @@
 package stager
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/syou6162/git-sequential-stage/internal/executor"
@@ -45,7 +47,39 @@ index abc123..def456 100644
 			name:  "stage multiple hunks with patch ID",
 			hunks: "1,2",
 			setup: func(m *executor.MockCommandExecutor) {
-				// Git apply will be called twice
+				// filterdiff will be called twice (for hunk 1 and 2)
+				m.Commands[fmt.Sprintf("filterdiff [--hunks=1 %s]", patchFile)] = executor.MockResponse{
+					Output: []byte(`diff --git a/test.txt b/test.txt
+index abc123..def456 100644
+--- a/test.txt
++++ b/test.txt
+@@ -1,3 +1,3 @@
+ line1
+-line2
++line2 modified
+ line3
+`),
+					Error: nil,
+				}
+				m.Commands[fmt.Sprintf("filterdiff [--hunks=2 %s]", patchFile)] = executor.MockResponse{
+					Output: []byte(`diff --git a/test.txt b/test.txt
+index abc123..def456 100644
+--- a/test.txt
++++ b/test.txt
+@@ -10,3 +10,3 @@
+ line10
+-line11
++line11 modified
+ line12
+`),
+					Error: nil,
+				}
+				// git patch-id will be called twice
+				m.Commands["git [patch-id]"] = executor.MockResponse{
+					Output: []byte("abcdef1234567890 0000000000000000000000000000000000000000\n"),
+					Error:  nil,
+				}
+				// git apply will be called twice
 				m.Commands["git [apply --cached]"] = executor.MockResponse{
 					Output: []byte(""),
 					Error:  nil,
@@ -53,14 +87,9 @@ index abc123..def456 100644
 			},
 			wantErr: false,
 			validate: func(t *testing.T, m *executor.MockCommandExecutor) {
-				if len(m.ExecutedCommands) != 2 {
-					t.Errorf("Expected 2 commands, got %d", len(m.ExecutedCommands))
-				}
-				// Check that both commands are git apply
-				for i, cmd := range m.ExecutedCommands {
-					if cmd.Name != "git" || len(cmd.Args) != 2 || cmd.Args[0] != "apply" || cmd.Args[1] != "--cached" {
-						t.Errorf("Command %d: expected 'git apply --cached', got '%s %v'", i, cmd.Name, cmd.Args)
-					}
+				// Should have: filterdiff 1, git patch-id 1, git apply 1, filterdiff 2, git patch-id 2, git apply 2
+				if len(m.ExecutedCommands) != 6 {
+					t.Errorf("Expected 6 commands, got %d", len(m.ExecutedCommands))
 				}
 			},
 		},

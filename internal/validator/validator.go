@@ -28,6 +28,11 @@ func (v *Validator) CheckDependencies() error {
 		return errors.New("git command not found")
 	}
 	
+	// Check filterdiff
+	if _, err := v.executor.Execute("filterdiff", "--version"); err != nil {
+		return errors.New("filterdiff command not found (install patchutils)")
+	}
+	
 	return nil
 }
 

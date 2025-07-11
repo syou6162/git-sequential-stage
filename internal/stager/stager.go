@@ -1,6 +1,7 @@
 package stager
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -29,95 +30,49 @@ func (s *Stager) StageHunks(hunks string, patchFile string) error {
 		return err
 	}
 	
-	// Read patch file content
-	patchContent, err := s.readFile(patchFile)
-	if err != nil {
-		return fmt.Errorf("failed to read patch file: %v", err)
-	}
-	
-	// Extract all hunks and build patch ID map
-	allHunks, err := ExtractHunksFromPatch(patchContent)
-	if err != nil {
-		return fmt.Errorf("failed to parse patch file: %v", err)
-	}
-	
-	// Create a map for quick lookup by hunk number
-	hunkMap := make(map[int]Hunk)
-	for _, hunk := range allHunks {
-		hunkMap[hunk.Number] = hunk
-	}
-	
-	// Stage each requested hunk
+	// Stage each requested hunk using filterdiff + git patch-id workflow
 	for _, hunkNum := range hunkNumbers {
-		hunk, exists := hunkMap[hunkNum]
-		if !exists {
-			return fmt.Errorf("hunk %d not found in patch file", hunkNum)
+		// Extract single hunk using filterdiff
+		hunkPatch, err := s.executor.Execute("filterdiff", fmt.Sprintf("--hunks=%d", hunkNum), patchFile)
+		if err != nil {
+			return fmt.Errorf("failed to extract hunk %d: %v", hunkNum, err)
 		}
 		
-		// Apply the hunk using its content
-		_, err = s.executor.ExecuteWithStdin("git", strings.NewReader(hunk.Content), "apply", "--cached")
+		// Check if filterdiff returned empty output (hunk not found)
+		if len(hunkPatch) == 0 {
+			return fmt.Errorf("failed to extract hunk %d: hunk not found in patch file", hunkNum)
+		}
+		
+		// Calculate patch ID for this hunk
+		patchID, err := s.calculatePatchIDForHunk(hunkPatch)
+		if err != nil {
+			// Continue without patch ID
+			patchID = fmt.Sprintf("unknown-%d", hunkNum)
+		}
+		
+		// Apply the hunk to staging area
+		_, err = s.executor.ExecuteWithStdin("git", bytes.NewReader(hunkPatch), "apply", "--cached")
 		if err != nil {
 			stderr := s.getStderrFromError(err)
 			
 			// Try to provide more helpful error information
-			_, checkErr := s.executor.ExecuteWithStdin("git", strings.NewReader(hunk.Content), "apply", "--cached", "--check")
+			_, checkErr := s.executor.ExecuteWithStdin("git", bytes.NewReader(hunkPatch), "apply", "--cached", "--check")
 			var checkMsg string
 			if checkErr != nil {
 				checkMsg = s.getStderrFromError(checkErr)
 			}
 			
+			// Extract file path from patch for error message
+			filePath := extractFilePathFromPatch(string(hunkPatch))
+			
 			return fmt.Errorf("failed to apply hunk %d (patch ID: %s):\nFile: %s\nError: %s\n\nDetailed check: %s\n\nPossible causes:\n1. The file has been modified since the patch was created\n2. This hunk has already been staged\n3. There are conflicts with existing changes\n\nTry running 'git status' to check the current state", 
-				hunkNum, hunk.PatchID, hunk.FilePath, stderr, checkMsg)
+				hunkNum, patchID, filePath, stderr, checkMsg)
 		}
 	}
 	
 	return nil
 }
 
-// StageHunksByPatchID stages hunks by their patch IDs
-func (s *Stager) StageHunksByPatchID(patchIDs string, patchFile string) error {
-	// Read patch file content
-	patchContent, err := s.readFile(patchFile)
-	if err != nil {
-		return fmt.Errorf("failed to read patch file: %v", err)
-	}
-	
-	// Extract all hunks from patch
-	allHunks, err := ExtractHunksFromPatch(patchContent)
-	if err != nil {
-		return fmt.Errorf("failed to parse patch file: %v", err)
-	}
-	
-	// Parse requested patch IDs
-	requestedIDs := strings.Split(patchIDs, ",")
-	for i, id := range requestedIDs {
-		requestedIDs[i] = strings.TrimSpace(id)
-	}
-	
-	// Find and apply requested hunks
-	for _, requestedID := range requestedIDs {
-		found := false
-		for _, hunk := range allHunks {
-			if hunk.PatchID == requestedID {
-				// Apply this hunk
-				_, err = s.executor.ExecuteWithStdin("git", strings.NewReader(hunk.Content), "apply", "--cached")
-				if err != nil {
-					stderr := s.getStderrFromError(err)
-					return fmt.Errorf("failed to apply hunk with patch ID %s (hunk #%d from %s): %s\nNote: This often happens when the hunk has already been staged or when there are conflicts", 
-						requestedID, hunk.Number, hunk.FilePath, stderr)
-				}
-				found = true
-				break
-			}
-		}
-		
-		if !found {
-			return fmt.Errorf("patch ID %s not found in patch file", requestedID)
-		}
-	}
-	
-	return nil
-}
 
 // parseHunks parses the comma-separated hunk numbers
 func (s *Stager) parseHunks(hunks string) ([]int, error) {
@@ -156,4 +111,41 @@ func (s *Stager) readFile(filePath string) (string, error) {
 		return "", err
 	}
 	return string(content), nil
+}
+
+// calculatePatchIDForHunk calculates patch ID using git patch-id
+func (s *Stager) calculatePatchIDForHunk(hunkPatch []byte) (string, error) {
+	output, err := s.executor.ExecuteWithStdin("git", bytes.NewReader(hunkPatch), "patch-id")
+	if err != nil {
+		return "", err
+	}
+	
+	// git patch-id output format: "patch-id commit-id"
+	parts := strings.Fields(string(output))
+	if len(parts) > 0 {
+		// Return first 8 chars for brevity
+		if len(parts[0]) >= 8 {
+			return parts[0][:8], nil
+		}
+		return parts[0], nil
+	}
+	
+	return "", fmt.Errorf("unexpected git patch-id output")
+}
+
+// extractFilePathFromPatch extracts the file path from a patch
+func extractFilePathFromPatch(patch string) string {
+	lines := strings.Split(patch, "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "+++ b/") {
+			return strings.TrimPrefix(line, "+++ b/")
+		}
+		if strings.HasPrefix(line, "diff --git") {
+			parts := strings.Fields(line)
+			if len(parts) >= 4 {
+				return strings.TrimPrefix(parts[3], "b/")
+			}
+		}
+	}
+	return "unknown"
 }
