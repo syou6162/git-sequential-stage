@@ -1,7 +1,6 @@
 package stager
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -23,25 +22,44 @@ func NewStager(exec executor.CommandExecutor) *Stager {
 	}
 }
 
-// StageHunks stages the specified hunks sequentially
+// StageHunks stages the specified hunks sequentially using patch IDs internally
 func (s *Stager) StageHunks(hunks string, patchFile string) error {
 	hunkNumbers, err := s.parseHunks(hunks)
 	if err != nil {
 		return err
 	}
 	
+	// Read patch file content
+	patchContent, err := s.readFile(patchFile)
+	if err != nil {
+		return fmt.Errorf("failed to read patch file: %v", err)
+	}
+	
+	// Extract all hunks and build patch ID map
+	allHunks, err := ExtractHunksFromPatch(patchContent)
+	if err != nil {
+		return fmt.Errorf("failed to parse patch file: %v", err)
+	}
+	
+	// Create a map for quick lookup by hunk number
+	hunkMap := make(map[int]Hunk)
+	for _, hunk := range allHunks {
+		hunkMap[hunk.Number] = hunk
+	}
+	
+	// Stage each requested hunk
 	for _, hunkNum := range hunkNumbers {
-		// Extract single hunk using filterdiff
-		hunkPatch, err := s.executor.Execute("filterdiff", fmt.Sprintf("--hunks=%d", hunkNum), patchFile)
-		if err != nil {
-			return fmt.Errorf("failed to extract hunk %d: %v", hunkNum, err)
+		hunk, exists := hunkMap[hunkNum]
+		if !exists {
+			return fmt.Errorf("hunk %d not found in patch file", hunkNum)
 		}
 		
-		// Apply the hunk to staging area
-		_, err = s.executor.ExecuteWithStdin("git", bytes.NewReader(hunkPatch), "apply", "--cached")
+		// Apply the hunk using its content
+		_, err = s.executor.ExecuteWithStdin("git", strings.NewReader(hunk.Content), "apply", "--cached")
 		if err != nil {
 			stderr := s.getStderrFromError(err)
-			return fmt.Errorf("failed to apply hunk %d: %s\nNote: This often happens when the hunk has already been staged or when there are conflicts", hunkNum, stderr)
+			return fmt.Errorf("failed to apply hunk %d (patch ID: %s, file: %s): %s\nNote: This often happens when the hunk has already been staged or when there are conflicts", 
+				hunkNum, hunk.PatchID, hunk.FilePath, stderr)
 		}
 	}
 	

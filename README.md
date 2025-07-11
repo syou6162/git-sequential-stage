@@ -29,7 +29,6 @@ This tool solves the problem of selectively staging multiple hunks from a patch 
 ## Prerequisites
 
 - `git` command must be installed
-- `filterdiff` command must be installed (part of the `patchutils` package)
 
 ## Installation
 
@@ -48,55 +47,54 @@ go build
 ## Usage
 
 ```bash
-# Basic usage with hunk numbers
 git-sequential-stage -hunks=<hunk_list> -patch=<patch_file>
-
-# Advanced usage with patch IDs
-git-sequential-stage -patch-ids=<patch_id_list> -patch=<patch_file>
-
-# Show all hunks with their patch IDs
-git-sequential-stage -show-hunks -patch=<patch_file>
 ```
 
 ### Options
 
 - `-hunks`: Comma-separated list of hunk numbers to stage (e.g., "1,3,5")
-- `-patch-ids`: Comma-separated list of patch IDs to stage (more reliable for complex workflows)
 - `-patch`: Path to the patch file
-- `-show-hunks`: Display all hunks with their patch IDs for inspection
+- `-show-hunks`: Display all hunks with their patch IDs for debugging
 
-### Examples
+### Example
 
 ```bash
 # Generate a patch file
 git diff > changes.patch
 
-# Traditional: Stage by hunk numbers
+# Stage hunks 1, 3, and 5 from the patch
 git-sequential-stage -hunks=1,3,5 -patch=changes.patch
 
-# Advanced: First, inspect hunks and their patch IDs
+# Debug: Show all hunks with their internal patch IDs
 git-sequential-stage -show-hunks -patch=changes.patch
-
-# Then stage by patch IDs (more reliable)
-git-sequential-stage -patch-ids=a1b2c3d4,e5f6g7h8 -patch=changes.patch
 ```
 
-### Patch ID Mode
+### How It Works Internally
 
-The patch ID mode is designed for integration with LLM agents and semantic commit workflows:
+The tool uses patch IDs internally to ensure reliable hunk identification:
 
-- Each hunk gets a unique 8-character patch ID based on its content
-- Patch IDs remain stable even if hunk numbers change due to partial staging
-- Perfect for workflows where an LLM analyzes patches and selects hunks semantically
+1. When you specify hunk numbers (e.g., 1,3,5), the tool:
+   - Parses the entire patch file
+   - Assigns a unique patch ID to each hunk based on its content
+   - Uses these IDs internally to track and apply hunks
+   
+2. This approach solves the "hunk number drift" problem:
+   - Even if applying hunk 1 would change line numbers for subsequent hunks
+   - The tool can still correctly identify and apply hunks 3 and 5
+   - Because it uses content-based IDs, not line numbers
+
+This makes the tool perfect for LLM agent workflows where semantic commit splitting is required.
 
 ## How it works
 
-1. Validates that `git` and `filterdiff` commands are available
+1. Validates that `git` command is available
 2. Parses the hunk numbers from the command line
-3. For each hunk number:
-   - Extracts the hunk using `filterdiff --hunks=N`
+3. Reads and parses the patch file to extract all hunks
+4. For each requested hunk number:
+   - Finds the hunk by its number
+   - Generates a unique patch ID based on content
    - Applies it to the staging area using `git apply --cached`
-4. If any hunk fails to apply, the tool stops and reports the error
+5. If any hunk fails to apply, the tool stops and reports the error with detailed information
 
 ## Development
 
