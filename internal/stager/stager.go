@@ -274,7 +274,7 @@ func (s *Stager) StageHunksNew(hunkSpecs []string, patchFile string) error {
 						return fmt.Errorf("failed to apply hunk with patch ID %s: %v (saved to %s)", targetID, err, debugFile)
 					}
 					
-					// d. Remove from target list
+					// Remove from target list
 					targetIDs = append(targetIDs[:i], targetIDs[i+1:]...)
 					applied = true
 					break
@@ -312,4 +312,80 @@ func (s *Stager) calculatePatchIDStable(hunkPatch []byte) (string, error) {
 	}
 	
 	return "", fmt.Errorf("unexpected git patch-id output")
+}
+
+// parseHunks parses the comma-separated hunk numbers
+func (s *Stager) parseHunks(hunks string) ([]int, error) {
+	parts := strings.Split(hunks, ",")
+	result := make([]int, 0, len(parts))
+	
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		num, err := strconv.Atoi(part)
+		if err != nil {
+			return nil, fmt.Errorf("invalid hunk number: %s", part)
+		}
+		result = append(result, num)
+	}
+	
+	return result, nil
+}
+
+// getStderrFromError extracts stderr from exec.ExitError
+func (s *Stager) getStderrFromError(err error) string {
+	if err == nil {
+		return ""
+	}
+	
+	if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
+		return string(exitErr.Stderr)
+	}
+	
+	return err.Error()
+}
+
+// readFile reads the content of a file
+func (s *Stager) readFile(filePath string) (string, error) {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", err
+	}
+	return string(content), nil
+}
+
+// calculatePatchIDForHunk calculates patch ID using git patch-id
+func (s *Stager) calculatePatchIDForHunk(hunkPatch []byte) (string, error) {
+	output, err := s.executor.ExecuteWithStdin("git", bytes.NewReader(hunkPatch), "patch-id")
+	if err != nil {
+		return "", err
+	}
+	
+	// git patch-id output format: "patch-id commit-id"
+	parts := strings.Fields(string(output))
+	if len(parts) > 0 {
+		// Return first 8 chars for brevity
+		if len(parts[0]) >= 8 {
+			return parts[0][:8], nil
+		}
+		return parts[0], nil
+	}
+	
+	return "", fmt.Errorf("unexpected git patch-id output")
+}
+
+// extractFilePathFromPatch extracts the file path from a patch
+func extractFilePathFromPatch(patch string) string {
+	lines := strings.Split(patch, "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "+++ b/") {
+			return strings.TrimPrefix(line, "+++ b/")
+		}
+		if strings.HasPrefix(line, "diff --git") {
+			parts := strings.Fields(line)
+			if len(parts) >= 4 {
+				return strings.TrimPrefix(parts[3], "b/")
+			}
+		}
+	}
+	return "unknown"
 }
