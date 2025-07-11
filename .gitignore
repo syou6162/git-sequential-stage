@@ -8,6 +8,9 @@
 *.so
 *.dylib
 
+# Project binary
+git-sequential-stage
+
 # Test binary, built with `go test -c`
 *.test
 
