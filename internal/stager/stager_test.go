@@ -1,7 +1,6 @@
 package stager
 
 import (
-	"bytes"
 	"errors"
 	"os/exec"
 	"testing"
