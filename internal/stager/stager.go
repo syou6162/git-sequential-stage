@@ -73,6 +73,15 @@ func (s *Stager) StageHunks(hunks string, patchFile string) error {
 	return nil
 }
 
+// isNewFileHunk checks if a hunk represents a new file by looking for @@ -0,0 in the hunk header
+func isNewFileHunk(patchLines []string, hunk *HunkInfo) bool {
+	if hunk.StartLine < len(patchLines) {
+		hunkHeader := patchLines[hunk.StartLine]
+		return strings.Contains(hunkHeader, "@@ -0,0")
+	}
+	return false
+}
+
 // StageHunksNew stages the specified hunks using the new file:hunk format
 func (s *Stager) StageHunksNew(hunkSpecs []string, patchFile string) error {
 	// Preparation phase: Parse master patch and build HunkInfo list
@@ -87,16 +96,10 @@ func (s *Stager) StageHunksNew(hunkSpecs []string, patchFile string) error {
 	}
 	
 	// Calculate patch IDs for all hunks using filterdiff
+	patchLines := strings.Split(patchContent, "\n")
 	for i := range allHunks {
 		// Check if this is a new file by looking for @@ -0,0
-		isNewFile := false
-		patchLines := strings.Split(patchContent, "\n")
-		if allHunks[i].StartLine < len(patchLines) {
-			hunkHeader := patchLines[allHunks[i].StartLine]
-			if strings.Contains(hunkHeader, "@@ -0,0") {
-				isNewFile = true
-			}
-		}
+		isNewFile := isNewFileHunk(patchLines, &allHunks[i])
 		
 		var hunkContent []byte
 		if isNewFile {
@@ -216,13 +219,7 @@ func (s *Stager) StageHunksNew(hunkSpecs []string, patchFile string) error {
 		
 		for _, currentHunk := range currentHunks {
 			// Check if this is a new file
-			isNewFile := false
-			if currentHunk.StartLine < len(diffLines) {
-				hunkHeader := diffLines[currentHunk.StartLine]
-				if strings.Contains(hunkHeader, "@@ -0,0") {
-					isNewFile = true
-				}
-			}
+			isNewFile := isNewFileHunk(diffLines, &currentHunk)
 			
 			var hunkContent []byte
 			if isNewFile {
