@@ -96,10 +96,14 @@ index abc123..def456 100644
 			name:  "hunk not found",
 			hunks: "999",
 			setup: func(m *executor.MockCommandExecutor) {
-				// No commands should be executed
+				// filterdiff returns empty output for non-existent hunks
+				m.Commands[fmt.Sprintf("filterdiff [--hunks=999 %s]", patchFile)] = executor.MockResponse{
+					Output: []byte(""),
+					Error:  nil,
+				}
 			},
 			wantErr: true,
-			errMsg:  "hunk 999 not found in patch file",
+			errMsg:  "failed to extract hunk 999: hunk not found in patch file",
 		},
 	}
 	
