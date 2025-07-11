@@ -126,9 +126,10 @@ func (s *Stager) StageHunksNew(hunkSpecs []string, patchFile string) error {
 			}
 			hunkContent = []byte(strings.Join(fileDiff, "\n"))
 		} else {
-			// Use filterdiff to extract single hunk
+			// Use filterdiff to extract single hunk with file filter
 			filterCmd := fmt.Sprintf("--hunks=%d", allHunks[i].IndexInFile)
-			hunkContent, _ = s.executor.Execute("filterdiff", filterCmd, patchFile)
+			filePattern := fmt.Sprintf("*%s", allHunks[i].FilePath)
+			hunkContent, _ = s.executor.Execute("filterdiff", "-i", filePattern, filterCmd, patchFile)
 		}
 		
 		if len(hunkContent) == 0 {
