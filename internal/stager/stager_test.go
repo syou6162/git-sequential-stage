@@ -93,7 +93,7 @@ func TestStager_StageHunks(t *testing.T) {
 				}
 			},
 			wantErr: true,
-			errMsg:  "failed to apply hunk 1: error: patch does not apply",
+			errMsg:  "failed to apply hunk 1: error: patch does not apply\nNote: This often happens when the hunk has already been staged or when there are conflicts",
 		},
 		{
 			name:      "second hunk fails",

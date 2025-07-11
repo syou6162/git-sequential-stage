@@ -47,7 +47,14 @@ func main() {
 	// Stage hunks
 	s := stager.NewStager(exec)
 	if err := s.StageHunks(*hunks, *patchFile); err != nil {
-		log.Fatalf("Failed to stage hunks: %v", err)
+		// Show helpful error message
+		fmt.Fprintf(os.Stderr, "Failed to stage hunks: %v\n\n", err)
+		fmt.Fprintf(os.Stderr, "Troubleshooting tips:\n")
+		fmt.Fprintf(os.Stderr, "1. Check if the patch file exists and is readable\n")
+		fmt.Fprintf(os.Stderr, "2. Verify that the hunks haven't already been staged\n")
+		fmt.Fprintf(os.Stderr, "3. Ensure the patch was generated from the current working tree state\n")
+		fmt.Fprintf(os.Stderr, "4. Run 'git status' to check the current state\n")
+		os.Exit(1)
 	}
 	
 	fmt.Printf("Successfully staged hunks: %s\n", *hunks)

@@ -40,7 +40,7 @@ func (s *Stager) StageHunks(hunks string, patchFile string) error {
 		_, err = s.executor.ExecuteWithStdin("git", bytes.NewReader(hunkPatch), "apply", "--cached")
 		if err != nil {
 			stderr := s.getStderrFromError(err)
-			return fmt.Errorf("failed to apply hunk %d: %s", hunkNum, stderr)
+			return fmt.Errorf("failed to apply hunk %d: %s\nNote: This often happens when the hunk has already been staged or when there are conflicts", hunkNum, stderr)
 		}
 	}
 	
