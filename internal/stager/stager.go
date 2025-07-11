@@ -181,6 +181,33 @@ func collectTargetFiles(hunkSpecs []string) (map[string]bool, error) {
 	return targetFiles, nil
 }
 
+// buildTargetIDs builds a list of patch IDs from hunk specifications
+func buildTargetIDs(hunkSpecs []string, allHunks []HunkInfo) ([]string, error) {
+	var targetIDs []string
+	for _, spec := range hunkSpecs {
+		filePath, hunkNumbers, err := parseHunkSpec(spec)
+		if err != nil {
+			return nil, err
+		}
+		
+		// Find matching hunks in allHunks
+		for _, hunkNum := range hunkNumbers {
+			found := false
+			for _, hunk := range allHunks {
+				if hunk.FilePath == filePath && hunk.IndexInFile == hunkNum {
+					targetIDs = append(targetIDs, hunk.PatchID)
+					found = true
+					break
+				}
+			}
+			if !found {
+				return nil, fmt.Errorf("hunk %d not found in file %s", hunkNum, filePath)
+			}
+		}
+	}
+	return targetIDs, nil
+}
+
 // StageHunksNew stages the specified hunks using the new file:hunk format
 func (s *Stager) StageHunksNew(hunkSpecs []string, patchFile string) error {
 	// Preparation phase: Parse master patch and build HunkInfo list
@@ -200,27 +227,9 @@ func (s *Stager) StageHunksNew(hunkSpecs []string, patchFile string) error {
 	}
 	
 	// Parse hunk specifications and build target ID list
-	var targetIDs []string
-	for _, spec := range hunkSpecs {
-		filePath, hunkNumbers, err := parseHunkSpec(spec)
-		if err != nil {
-			return err
-		}
-		
-		// Find matching hunks in allHunks
-		for _, hunkNum := range hunkNumbers {
-			found := false
-			for _, hunk := range allHunks {
-				if hunk.FilePath == filePath && hunk.IndexInFile == hunkNum {
-					targetIDs = append(targetIDs, hunk.PatchID)
-					found = true
-					break
-				}
-			}
-			if !found {
-				return fmt.Errorf("hunk %d not found in file %s", hunkNum, filePath)
-			}
-		}
+	targetIDs, err := buildTargetIDs(hunkSpecs, allHunks)
+	if err != nil {
+		return err
 	}
 	
 	// Execution phase: Sequential staging loop
