@@ -11,19 +11,33 @@ import (
 	"github.com/syou6162/git-sequential-stage/internal/validator"
 )
 
+// Custom type to handle multiple -hunk flags
+type hunkList []string
+
+func (h *hunkList) String() string {
+	return ""
+}
+
+func (h *hunkList) Set(value string) error {
+	*h = append(*h, value)
+	return nil
+}
+
 func main() {
 	var (
-		hunks     = flag.String("hunks", "", "Comma-separated list of hunk numbers to stage (e.g., 1,3,5)")
+		hunks     hunkList
 		patchFile = flag.String("patch", "", "Path to the patch file")
 	)
 	
+	flag.Var(&hunks, "hunk", "File:hunk_numbers to stage (e.g., path/to/file.py:1,3). Can be specified multiple times")
+	
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s -hunks=<hunk_list> -patch=<patch_file>\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s -patch=<patch_file> -hunk=<file:numbers> [-hunk=<file:numbers>...]\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "\nStages specified hunks from a patch file sequentially.\n\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		flag.PrintDefaults()
 		fmt.Fprintf(os.Stderr, "\nExample:\n")
-		fmt.Fprintf(os.Stderr, "  %s -hunks=1,3,5 -patch=changes.patch\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s -patch=changes.patch -hunk=\"src/main.go:1,3\" -hunk=\"src/test.go:2\"\n", os.Args[0])
 	}
 	
 	flag.Parse()
@@ -46,24 +60,24 @@ func main() {
 	}
 	
 	// Validate arguments
-	if *hunks == "" {
-		fmt.Fprintf(os.Stderr, "Error: -hunks flag is required\n\n")
+	if len(hunks) == 0 {
+		fmt.Fprintf(os.Stderr, "Error: at least one -hunk flag is required\n\n")
 		flag.Usage()
 		os.Exit(1)
 	}
 	
-	if err := v.ValidateArgs(*hunks, *patchFile); err != nil {
+	if err := v.ValidateArgsNew(hunks, *patchFile); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n\n", err)
 		flag.Usage()
 		os.Exit(1)
 	}
 	
 	// Stage hunks
-	if err := s.StageHunks(*hunks, *patchFile); err != nil {
+	if err := s.StageHunksNew(hunks, *patchFile); err != nil {
 		handleStageError(err)
 	}
 	
-	fmt.Printf("Successfully staged hunks: %s\n", *hunks)
+	fmt.Printf("Successfully staged specified hunks\n")
 }
 
 func handleStageError(err error) {
