@@ -58,8 +58,16 @@ func (s *Stager) StageHunks(hunks string, patchFile string) error {
 		_, err = s.executor.ExecuteWithStdin("git", strings.NewReader(hunk.Content), "apply", "--cached")
 		if err != nil {
 			stderr := s.getStderrFromError(err)
-			return fmt.Errorf("failed to apply hunk %d (patch ID: %s, file: %s): %s\nNote: This often happens when the hunk has already been staged or when there are conflicts", 
-				hunkNum, hunk.PatchID, hunk.FilePath, stderr)
+			
+			// Try to provide more helpful error information
+			_, checkErr := s.executor.ExecuteWithStdin("git", strings.NewReader(hunk.Content), "apply", "--cached", "--check")
+			var checkMsg string
+			if checkErr != nil {
+				checkMsg = s.getStderrFromError(checkErr)
+			}
+			
+			return fmt.Errorf("failed to apply hunk %d (patch ID: %s):\nFile: %s\nError: %s\n\nDetailed check: %s\n\nPossible causes:\n1. The file has been modified since the patch was created\n2. This hunk has already been staged\n3. There are conflicts with existing changes\n\nTry running 'git status' to check the current state", 
+				hunkNum, hunk.PatchID, hunk.FilePath, stderr, checkMsg)
 		}
 	}
 	

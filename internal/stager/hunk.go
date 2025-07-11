@@ -81,7 +81,10 @@ func ExtractHunksFromPatch(patchContent string) ([]Hunk, error) {
 		} else if currentHunk != nil {
 			// Part of current hunk
 			hunkContent.WriteString(line)
-			hunkContent.WriteString("\n")
+			// Only add newline if not the last line or if the line is not empty
+			if i < len(lines)-1 || line != "" {
+				hunkContent.WriteString("\n")
+			}
 		}
 	}
 	
