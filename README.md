@@ -29,6 +29,7 @@ This tool solves the problem of selectively staging multiple hunks from a patch 
 ## Prerequisites
 
 - `git` command must be installed
+- `filterdiff` command must be installed (part of the `patchutils` package)
 
 ## Installation
 
@@ -83,14 +84,13 @@ This makes the tool perfect for LLM agent workflows where semantic commit splitt
 
 ## How it works
 
-1. Validates that `git` command is available
+1. Validates that `git` and `filterdiff` commands are available
 2. Parses the hunk numbers from the command line
-3. Reads and parses the patch file to extract all hunks
-4. For each requested hunk number:
-   - Finds the hunk by its number
-   - Generates a unique patch ID based on content
+3. For each requested hunk number:
+   - Extracts the single hunk using `filterdiff --hunks=N`
+   - Calculates its patch ID using `git patch-id`
    - Applies it to the staging area using `git apply --cached`
-5. If any hunk fails to apply, the tool stops and reports the error with detailed information
+4. If any hunk fails to apply, the tool stops and reports the error with detailed information
 
 ## Development
 
