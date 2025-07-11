@@ -82,6 +82,34 @@ func isNewFileHunk(patchLines []string, hunk *HunkInfo) bool {
 	return false
 }
 
+// extractFileDiff extracts the entire file diff including headers for a given hunk
+func extractFileDiff(patchLines []string, hunk *HunkInfo) []byte {
+	// Find the start of the file (diff --git line)
+	fileStartLine := hunk.StartLine
+	for j := hunk.StartLine - 1; j >= 0; j-- {
+		if strings.HasPrefix(patchLines[j], "diff --git") {
+			fileStartLine = j
+			break
+		}
+	}
+	
+	// Find the end of the file (next diff or end of patch)
+	fileEndLine := len(patchLines)
+	for j := hunk.EndLine + 1; j < len(patchLines); j++ {
+		if strings.HasPrefix(patchLines[j], "diff --git") {
+			fileEndLine = j
+			break
+		}
+	}
+	
+	// Extract the entire file diff
+	var fileDiff []string
+	for j := fileStartLine; j < fileEndLine; j++ {
+		fileDiff = append(fileDiff, patchLines[j])
+	}
+	return []byte(strings.Join(fileDiff, "\n"))
+}
+
 // StageHunksNew stages the specified hunks using the new file:hunk format
 func (s *Stager) StageHunksNew(hunkSpecs []string, patchFile string) error {
 	// Preparation phase: Parse master patch and build HunkInfo list
@@ -104,30 +132,7 @@ func (s *Stager) StageHunksNew(hunkSpecs []string, patchFile string) error {
 		var hunkContent []byte
 		if isNewFile {
 			// For new files, we need to get the entire file diff including the header
-			// First, get the file boundaries
-			fileStartLine := allHunks[i].StartLine
-			for j := allHunks[i].StartLine - 1; j >= 0; j-- {
-				if strings.HasPrefix(patchLines[j], "diff --git") {
-					fileStartLine = j
-					break
-				}
-			}
-			
-			// Find the end of the file (next diff or end of patch)
-			fileEndLine := len(patchLines)
-			for j := allHunks[i].EndLine + 1; j < len(patchLines); j++ {
-				if strings.HasPrefix(patchLines[j], "diff --git") {
-					fileEndLine = j
-					break
-				}
-			}
-			
-			// Extract the entire file diff
-			var fileDiff []string
-			for j := fileStartLine; j < fileEndLine; j++ {
-				fileDiff = append(fileDiff, patchLines[j])
-			}
-			hunkContent = []byte(strings.Join(fileDiff, "\n"))
+			hunkContent = extractFileDiff(patchLines, &allHunks[i])
 		} else {
 			// Use filterdiff to extract single hunk with file filter
 			filterCmd := fmt.Sprintf("--hunks=%d", allHunks[i].IndexInFile)
@@ -224,27 +229,7 @@ func (s *Stager) StageHunksNew(hunkSpecs []string, patchFile string) error {
 			var hunkContent []byte
 			if isNewFile {
 				// For new files, extract the entire file diff
-				fileStartLine := currentHunk.StartLine
-				for j := currentHunk.StartLine - 1; j >= 0; j-- {
-					if strings.HasPrefix(diffLines[j], "diff --git") {
-						fileStartLine = j
-						break
-					}
-				}
-				
-				fileEndLine := len(diffLines)
-				for j := currentHunk.EndLine + 1; j < len(diffLines); j++ {
-					if strings.HasPrefix(diffLines[j], "diff --git") {
-						fileEndLine = j
-						break
-					}
-				}
-				
-				var fileDiff []string
-				for j := fileStartLine; j < fileEndLine; j++ {
-					fileDiff = append(fileDiff, diffLines[j])
-				}
-				hunkContent = []byte(strings.Join(fileDiff, "\n"))
+				hunkContent = extractFileDiff(diffLines, &currentHunk)
 			} else {
 				// Use filterdiff to extract single hunk from current diff
 				filterCmd := fmt.Sprintf("--hunks=%d", currentHunk.IndexInFile)
