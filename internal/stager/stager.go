@@ -168,6 +168,19 @@ func (s *Stager) calculatePatchIDsForHunks(allHunks []HunkInfo, patchContent str
 	return nil
 }
 
+// collectTargetFiles extracts unique file paths from hunk specifications
+func collectTargetFiles(hunkSpecs []string) (map[string]bool, error) {
+	targetFiles := make(map[string]bool)
+	for _, spec := range hunkSpecs {
+		filePath, _, err := parseHunkSpec(spec)
+		if err != nil {
+			return nil, err
+		}
+		targetFiles[filePath] = true
+	}
+	return targetFiles, nil
+}
+
 // StageHunksNew stages the specified hunks using the new file:hunk format
 func (s *Stager) StageHunksNew(hunkSpecs []string, patchFile string) error {
 	// Preparation phase: Parse master patch and build HunkInfo list
@@ -213,10 +226,9 @@ func (s *Stager) StageHunksNew(hunkSpecs []string, patchFile string) error {
 	// Execution phase: Sequential staging loop
 	for len(targetIDs) > 0 {
 		// a. Get latest diff for target files only
-		targetFiles := make(map[string]bool)
-		for _, spec := range hunkSpecs {
-			filePath, _, _ := parseHunkSpec(spec)
-			targetFiles[filePath] = true
+		targetFiles, err := collectTargetFiles(hunkSpecs)
+		if err != nil {
+			return fmt.Errorf("failed to collect target files: %v", err)
 		}
 		
 		// Build diff command with specific files
