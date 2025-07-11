@@ -6,9 +6,9 @@ import (
 	"log"
 	"os"
 
-	"github.com/yasuhisa-yoshida/git-sequential-stage/internal/executor"
-	"github.com/yasuhisa-yoshida/git-sequential-stage/internal/stager"
-	"github.com/yasuhisa-yoshida/git-sequential-stage/internal/validator"
+	"github.com/syou6162/git-sequential-stage/internal/executor"
+	"github.com/syou6162/git-sequential-stage/internal/stager"
+	"github.com/syou6162/git-sequential-stage/internal/validator"
 )
 
 func main() {

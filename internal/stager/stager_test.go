@@ -5,7 +5,7 @@ import (
 	"os/exec"
 	"testing"
 
-	"github.com/yasuhisa-yoshida/git-sequential-stage/internal/executor"
+	"github.com/syou6162/git-sequential-stage/internal/executor"
 )
 
 func TestStager_StageHunks(t *testing.T) {

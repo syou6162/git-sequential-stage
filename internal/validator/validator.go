@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/yasuhisa-yoshida/git-sequential-stage/internal/executor"
+	"github.com/syou6162/git-sequential-stage/internal/executor"
 )
 
 // Validator handles dependency checks and argument validation

@@ -1,3 +1,3 @@
-module github.com/yasuhisa-yoshida/git-sequential-stage
+module github.com/syou6162/git-sequential-stage
 
 go 1.24.2

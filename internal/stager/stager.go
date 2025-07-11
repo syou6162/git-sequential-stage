@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/yasuhisa-yoshida/git-sequential-stage/internal/executor"
+	"github.com/syou6162/git-sequential-stage/internal/executor"
 )
 
 // Stager handles the sequential staging of hunks

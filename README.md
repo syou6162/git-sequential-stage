@@ -14,13 +14,13 @@ This tool solves the problem of selectively staging multiple hunks from a patch 
 ## Installation
 
 ```bash
-go install github.com/yasuhisa-yoshida/git-sequential-stage@latest
+go install github.com/syou6162/git-sequential-stage@latest
 ```
 
 Or build from source:
 
 ```bash
-git clone https://github.com/yasuhisa-yoshida/git-sequential-stage.git
+git clone https://github.com/syou6162/git-sequential-stage.git
 cd git-sequential-stage
 go build
 ```
