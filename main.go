@@ -26,19 +26,17 @@ func (h *hunkList) Set(value string) error {
 func main() {
 	var (
 		hunks     hunkList
-		hunksStr  = flag.String("hunks", "", "Comma-separated list of hunk numbers to stage (e.g., 1,3,5)")
 		patchFile = flag.String("patch", "", "Path to the patch file")
 	)
 	
 	flag.Var(&hunks, "hunk", "File:hunk_numbers to stage (e.g., path/to/file.py:1,3). Can be specified multiple times")
 	
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s -patch=<patch_file> {-hunks=<numbers> | -hunk=<file:numbers> [-hunk=<file:numbers>...]}\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s -patch=<patch_file> -hunk=<file:numbers> [-hunk=<file:numbers>...]\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "\nStages specified hunks from a patch file sequentially.\n\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		flag.PrintDefaults()
-		fmt.Fprintf(os.Stderr, "\nExamples:\n")
-		fmt.Fprintf(os.Stderr, "  %s -patch=changes.patch -hunks=\"1,3,5\"\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "\nExample:\n")
 		fmt.Fprintf(os.Stderr, "  %s -patch=changes.patch -hunk=\"src/main.go:1,3\" -hunk=\"src/test.go:2\"\n", os.Args[0])
 	}
 	
@@ -61,43 +59,23 @@ func main() {
 		log.Fatalf("Dependency check failed: %v", err)
 	}
 	
-	// Check for mutually exclusive flags
-	if *hunksStr != "" && len(hunks) > 0 {
-		fmt.Fprintf(os.Stderr, "Error: -hunks and -hunk flags are mutually exclusive\n\n")
+	// Validate arguments
+	if len(hunks) == 0 {
+		fmt.Fprintf(os.Stderr, "Error: at least one -hunk flag is required\n\n")
 		flag.Usage()
 		os.Exit(1)
 	}
 	
 	// Validate arguments
-	if *hunksStr == "" && len(hunks) == 0 {
-		fmt.Fprintf(os.Stderr, "Error: either -hunks or -hunk flag is required\n\n")
+	if err := v.ValidateArgsNew(hunks, *patchFile); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n\n", err)
 		flag.Usage()
 		os.Exit(1)
 	}
 	
-	// Stage hunks based on which flag was used
-	if *hunksStr != "" {
-		// Use simple hunk numbers format
-		if err := v.ValidateArgs(*hunksStr, *patchFile); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n\n", err)
-			flag.Usage()
-			os.Exit(1)
-		}
-		
-		if err := s.StageHunks(*hunksStr, *patchFile); err != nil {
-			handleStageError(err)
-		}
-	} else {
-		// Use file:hunk format
-		if err := v.ValidateArgsNew(hunks, *patchFile); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n\n", err)
-			flag.Usage()
-			os.Exit(1)
-		}
-		
-		if err := s.StageHunksNew(hunks, *patchFile); err != nil {
-			handleStageError(err)
-		}
+	// Stage hunks
+	if err := s.StageHunksNew(hunks, *patchFile); err != nil {
+		handleStageError(err)
 	}
 	
 	fmt.Printf("Successfully staged specified hunks\n")
