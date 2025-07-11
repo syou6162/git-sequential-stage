@@ -136,21 +136,10 @@ func (s *Stager) extractHunkContentFromTempFile(diffLines []string, hunk *HunkIn
 	return s.executor.Execute("filterdiff", filterCmd, tmpFileName)
 }
 
-// StageHunksNew stages the specified hunks using the new file:hunk format
-func (s *Stager) StageHunksNew(hunkSpecs []string, patchFile string) error {
-	// Preparation phase: Parse master patch and build HunkInfo list
-	patchContent, err := s.readFile(patchFile)
-	if err != nil {
-		return fmt.Errorf("failed to read patch file: %v", err)
-	}
-	
-	allHunks, err := parsePatchFile(patchContent)
-	if err != nil {
-		return fmt.Errorf("failed to parse patch file: %v", err)
-	}
-	
-	// Calculate patch IDs for all hunks using filterdiff
+// calculatePatchIDsForHunks calculates patch IDs for all hunks in the list
+func (s *Stager) calculatePatchIDsForHunks(allHunks []HunkInfo, patchContent string, patchFile string) error {
 	patchLines := strings.Split(patchContent, "\n")
+	
 	for i := range allHunks {
 		// Check if this is a new file by looking for @@ -0,0
 		isNewFile := isNewFileHunk(patchLines, &allHunks[i])
@@ -174,6 +163,27 @@ func (s *Stager) StageHunksNew(hunkSpecs []string, patchFile string) error {
 		} else {
 			allHunks[i].PatchID = patchID
 		}
+	}
+	
+	return nil
+}
+
+// StageHunksNew stages the specified hunks using the new file:hunk format
+func (s *Stager) StageHunksNew(hunkSpecs []string, patchFile string) error {
+	// Preparation phase: Parse master patch and build HunkInfo list
+	patchContent, err := s.readFile(patchFile)
+	if err != nil {
+		return fmt.Errorf("failed to read patch file: %v", err)
+	}
+	
+	allHunks, err := parsePatchFile(patchContent)
+	if err != nil {
+		return fmt.Errorf("failed to parse patch file: %v", err)
+	}
+	
+	// Calculate patch IDs for all hunks using filterdiff
+	if err := s.calculatePatchIDsForHunks(allHunks, patchContent, patchFile); err != nil {
+		return fmt.Errorf("failed to calculate patch IDs: %v", err)
 	}
 	
 	// Parse hunk specifications and build target ID list
