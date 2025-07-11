@@ -54,7 +54,6 @@ git-sequential-stage -hunks=<hunk_list> -patch=<patch_file>
 
 - `-hunks`: Comma-separated list of hunk numbers to stage (e.g., "1,3,5")
 - `-patch`: Path to the patch file
-- `-show-hunks`: Display all hunks with their patch IDs for debugging
 
 ### Example
 
@@ -64,9 +63,6 @@ git diff > changes.patch
 
 # Stage hunks 1, 3, and 5 from the patch
 git-sequential-stage -hunks=1,3,5 -patch=changes.patch
-
-# Debug: Show all hunks with their internal patch IDs
-git-sequential-stage -show-hunks -patch=changes.patch
 ```
 
 ### How It Works Internally
