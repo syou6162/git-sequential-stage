@@ -60,4 +60,40 @@ func (v *Validator) ValidateArgs(hunks, patchFile string) error {
 	}
 	
 	return nil
+}	return nil
 }
+
+// ValidateArgsNew validates command line arguments for the new format
+func (v *Validator) ValidateArgsNew(hunkSpecs []string, patchFile string) error {
+	if len(hunkSpecs) == 0 {
+		return errors.New("at least one hunk specification is required")
+	}
+	
+	if patchFile == "" {
+		return errors.New("patch file cannot be empty")
+	}
+	
+	// Validate each hunk specification
+	for _, spec := range hunkSpecs {
+		if !strings.Contains(spec, ":") {
+			return fmt.Errorf("invalid hunk specification format: %s (expected file:numbers)", spec)
+		}
+		
+		parts := strings.SplitN(spec, ":", 2)
+		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+			return fmt.Errorf("invalid hunk specification: %s", spec)
+		}
+		
+		// Validate hunk numbers
+		for _, numStr := range strings.Split(parts[1], ",") {
+			numStr = strings.TrimSpace(numStr)
+			num, err := strconv.Atoi(numStr)
+			if err != nil {
+				return fmt.Errorf("invalid hunk number in %s: %s", spec, numStr)
+			}
+			if num <= 0 {
+				return fmt.Errorf("hunk number must be positive in %s: %d", spec, num)
+			}
+		}
+	}
+	
