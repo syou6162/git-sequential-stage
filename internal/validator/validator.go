@@ -60,7 +60,6 @@ func (v *Validator) ValidateArgs(hunks, patchFile string) error {
 	}
 	
 	return nil
-}	return nil
 }
 
 // ValidateArgsNew validates command line arguments for the new format
@@ -97,3 +96,5 @@ func (v *Validator) ValidateArgsNew(hunkSpecs []string, patchFile string) error 
 		}
 	}
 	
+	return nil
+}
