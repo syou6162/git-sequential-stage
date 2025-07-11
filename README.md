@@ -2,6 +2,26 @@
 
 A Go CLI tool that stages specified hunks from a patch file sequentially.
 
+## Background and Motivation
+
+This tool was developed to solve challenges faced when using LLM agents to create semantically meaningful commits from code changes.
+
+### Problems to Solve
+
+When having LLM agents create commits, we encountered the following issues:
+
+1. **Difficulty in creating semantically cohesive commits**: It's challenging to select only semantically related parts from changes across multiple files
+2. **Hunk dependencies**: When certain hunks depend on others, simple `git add -p` cannot handle the ordering
+3. **Need for automation**: LLM agents need a programmatic way to select and stage hunks
+
+### Why This Tool is Needed
+
+- **LLM-friendly**: Programmatically controllable by simply specifying hunk numbers via command-line arguments
+- **Sequential application**: Applies hunks in the specified order, correctly handling dependent hunks
+- **Error handling**: Passes through `git apply` errors directly, making it easy for LLMs to understand issues
+
+This tool enables LLM agents to create "semantically cohesive and clean commits" just like humans do.
+
 ## Purpose
 
 This tool solves the problem of selectively staging multiple hunks from a patch file one by one, ensuring each hunk is applied in sequence. It's particularly useful when you need fine-grained control over which changes to stage.
