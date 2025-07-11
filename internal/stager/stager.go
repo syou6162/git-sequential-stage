@@ -171,22 +171,21 @@ func (s *Stager) StageHunksNew(hunkSpecs []string, patchFile string) error {
 	
 	// Execution phase: Sequential staging loop
 	for len(targetIDs) > 0 {
-		// a. Get latest diff (only for files in the target list)
-		// Collect unique file paths from target hunks
+		// a. Get latest diff for target files only
 		targetFiles := make(map[string]bool)
 		for _, spec := range hunkSpecs {
-			filePath, _, err := parseHunkSpec(spec)
-			if err == nil {
-				targetFiles[filePath] = true
-			}
+			filePath, _, _ := parseHunkSpec(spec)
+			targetFiles[filePath] = true
 		}
 		
-		// Get diff for target files only
-		diffArgs := []string{"diff", "-U0", "HEAD"}
+		// Build diff command with specific files
+		diffArgs := []string{"diff", "HEAD"}
 		for file := range targetFiles {
 			diffArgs = append(diffArgs, file)
 		}
+		
 		diffOutput, err := s.executor.Execute("git", diffArgs...)
+		
 		if err != nil {
 			return fmt.Errorf("failed to get current diff: %v", err)
 		}
@@ -266,7 +265,7 @@ func (s *Stager) StageHunksNew(hunkSpecs []string, patchFile string) error {
 			// Check if this hunk matches any target
 			for i, targetID := range targetIDs {
 				if currentPatchID == targetID {
-					// c. Apply this hunk
+					// Always apply hunks one by one (simpler and more reliable)
 					_, err = s.executor.ExecuteWithStdin("git", bytes.NewReader(hunkContent), "apply", "--cached")
 					if err != nil {
 						// Debug: save the failing patch
