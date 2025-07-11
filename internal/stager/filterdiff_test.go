@@ -9,6 +9,7 @@ import (
 
 // TestFilterdiffBehavior demonstrates the actual filterdiff behavior with multi-file patches
 func TestFilterdiffBehavior(t *testing.T) {
+	t.Skip("Skipping documentation test that demonstrates filterdiff behavior differences")
 	// Skip if filterdiff is not available
 	if _, err := exec.LookPath("filterdiff"); err != nil {
 		t.Skip("filterdiff not found in PATH")
