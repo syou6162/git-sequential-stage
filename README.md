@@ -48,23 +48,46 @@ go build
 ## Usage
 
 ```bash
+# Basic usage with hunk numbers
 git-sequential-stage -hunks=<hunk_list> -patch=<patch_file>
+
+# Advanced usage with patch IDs
+git-sequential-stage -patch-ids=<patch_id_list> -patch=<patch_file>
+
+# Show all hunks with their patch IDs
+git-sequential-stage -show-hunks -patch=<patch_file>
 ```
 
 ### Options
 
 - `-hunks`: Comma-separated list of hunk numbers to stage (e.g., "1,3,5")
+- `-patch-ids`: Comma-separated list of patch IDs to stage (more reliable for complex workflows)
 - `-patch`: Path to the patch file
+- `-show-hunks`: Display all hunks with their patch IDs for inspection
 
-### Example
+### Examples
 
 ```bash
 # Generate a patch file
 git diff > changes.patch
 
-# Stage hunks 1, 3, and 5 from the patch
+# Traditional: Stage by hunk numbers
 git-sequential-stage -hunks=1,3,5 -patch=changes.patch
+
+# Advanced: First, inspect hunks and their patch IDs
+git-sequential-stage -show-hunks -patch=changes.patch
+
+# Then stage by patch IDs (more reliable)
+git-sequential-stage -patch-ids=a1b2c3d4,e5f6g7h8 -patch=changes.patch
 ```
+
+### Patch ID Mode
+
+The patch ID mode is designed for integration with LLM agents and semantic commit workflows:
+
+- Each hunk gets a unique 8-character patch ID based on its content
+- Patch IDs remain stable even if hunk numbers change due to partial staging
+- Perfect for workflows where an LLM analyzes patches and selects hunks semantically
 
 ## How it works
 
