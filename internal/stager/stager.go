@@ -110,6 +110,32 @@ func extractFileDiff(patchLines []string, hunk *HunkInfo) []byte {
 	return []byte(strings.Join(fileDiff, "\n"))
 }
 
+// extractHunkContent extracts the content for a specific hunk
+// For new files, it returns the entire file diff
+// For regular files, it uses filterdiff to extract the specific hunk
+func (s *Stager) extractHunkContent(patchLines []string, hunk *HunkInfo, patchFile string, isNewFile bool) ([]byte, error) {
+	if isNewFile {
+		return extractFileDiff(patchLines, hunk), nil
+	}
+	
+	// Use filterdiff to extract single hunk with file filter
+	filterCmd := fmt.Sprintf("--hunks=%d", hunk.IndexInFile)
+	filePattern := fmt.Sprintf("*%s", hunk.FilePath)
+	return s.executor.Execute("filterdiff", "-i", filePattern, filterCmd, patchFile)
+}
+
+// extractHunkContentFromTempFile extracts hunk content using a temporary file
+// This is used in the staging loop where we work with current diffs
+func (s *Stager) extractHunkContentFromTempFile(diffLines []string, hunk *HunkInfo, tmpFileName string, isNewFile bool) ([]byte, error) {
+	if isNewFile {
+		return extractFileDiff(diffLines, hunk), nil
+	}
+	
+	// Use filterdiff to extract single hunk from current diff
+	filterCmd := fmt.Sprintf("--hunks=%d", hunk.IndexInFile)
+	return s.executor.Execute("filterdiff", filterCmd, tmpFileName)
+}
+
 // StageHunksNew stages the specified hunks using the new file:hunk format
 func (s *Stager) StageHunksNew(hunkSpecs []string, patchFile string) error {
 	// Preparation phase: Parse master patch and build HunkInfo list
@@ -129,15 +155,11 @@ func (s *Stager) StageHunksNew(hunkSpecs []string, patchFile string) error {
 		// Check if this is a new file by looking for @@ -0,0
 		isNewFile := isNewFileHunk(patchLines, &allHunks[i])
 		
-		var hunkContent []byte
-		if isNewFile {
-			// For new files, we need to get the entire file diff including the header
-			hunkContent = extractFileDiff(patchLines, &allHunks[i])
-		} else {
-			// Use filterdiff to extract single hunk with file filter
-			filterCmd := fmt.Sprintf("--hunks=%d", allHunks[i].IndexInFile)
-			filePattern := fmt.Sprintf("*%s", allHunks[i].FilePath)
-			hunkContent, _ = s.executor.Execute("filterdiff", "-i", filePattern, filterCmd, patchFile)
+		hunkContent, err := s.extractHunkContent(patchLines, &allHunks[i], patchFile, isNewFile)
+		if err != nil {
+			// Continue without this hunk
+			allHunks[i].PatchID = fmt.Sprintf("unknown-%d", allHunks[i].GlobalIndex)
+			continue
 		}
 		
 		if len(hunkContent) == 0 {
@@ -226,14 +248,9 @@ func (s *Stager) StageHunksNew(hunkSpecs []string, patchFile string) error {
 			// Check if this is a new file
 			isNewFile := isNewFileHunk(diffLines, &currentHunk)
 			
-			var hunkContent []byte
-			if isNewFile {
-				// For new files, extract the entire file diff
-				hunkContent = extractFileDiff(diffLines, &currentHunk)
-			} else {
-				// Use filterdiff to extract single hunk from current diff
-				filterCmd := fmt.Sprintf("--hunks=%d", currentHunk.IndexInFile)
-				hunkContent, _ = s.executor.Execute("filterdiff", filterCmd, tmpFile.Name())
+			hunkContent, err := s.extractHunkContentFromTempFile(diffLines, &currentHunk, tmpFile.Name(), isNewFile)
+			if err != nil {
+				continue
 			}
 			
 			if len(hunkContent) == 0 {
