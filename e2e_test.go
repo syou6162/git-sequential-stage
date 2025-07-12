@@ -468,16 +468,10 @@ if __name__ == "__main__":
 		}
 	}
 
-	// 検証3: ワーキングディレクトリにハンク1の変更が残っているか
-	workingDiff, err := runCommand(t, dir, "git", "diff")
-	if err != nil {
-		t.Fatalf("Failed to get working diff: %v", err)
-	}
-
 	// ハンク1の変更がワーキングディレクトリに残っていることを確認
 	for _, expected := range unexpectedChangesHunk1 {
 		if !strings.Contains(workingDiff, expected) {
-			t.Errorf("Expected working diff to contain remaining hunk 1 change '%s', but it didn't.\nActual diff:\n%s", expected, workingDiff)
+			t.Errorf("Expected working diff to contain remaining hunk 1 change '%s', but it didn't.\nActual working diff:\n%s", expected, workingDiff)
 		}
 	}
 }
@@ -710,10 +704,359 @@ class DataValidator:
 		t.Fatalf("Failed to get working diff: %v", err)
 	}
 
-	// user_manager.pyで除外したハンク1の変更がワーキングディレクトリに残っていることを確認
-	for _, expected := range unexpectedUserManagerChanges {
-		if !strings.Contains(workingDiff, expected) {
-			t.Errorf("Expected working diff to contain remaining change '%s', but it didn't.\nActual diff:\n%s", expected, workingDiff)
+	// スナップショットテスト: ステージングエリアの期待される差分
+	expectedStagedDiff := `diff --git a/user_manager.py b/user_manager.py
+index bd33e43..20b402c 100644
+--- a/user_manager.py
++++ b/user_manager.py
+@@ -14,5 +14,7 @@ class UserManager:
+     def delete_user(self, username):
+         if username in self.users:
+             del self.users[username]
++            if self.log_enabled:
++                print(f"User {username} deleted successfully")
+             return True
+         return False
+diff --git a/validator.py b/validator.py
+index 7eaf039..acbb7a6 100644
+--- a/validator.py
++++ b/validator.py
+@@ -5,9 +5,22 @@ import re
+ class DataValidator:
+     @staticmethod
+     def validate_email(email):
++        # Improved email validation with better error handling
++        if not email or not isinstance(email, str):
++            return False
+         pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+         return re.match(pattern, email) is not None
+     
+     @staticmethod
+     def validate_username(username):
+-        return len(username) >= 3 and username.isalnum()
++        # Enhanced username validation
++        if not username or not isinstance(username, str):
++            return False
++        return len(username) >= 3 and len(username) <= 20 and username.isalnum()
++    
++    @staticmethod
++    def validate_password(password):
++        # New password validation method
++        if not password or not isinstance(password, str):
++            return False
++        return len(password) >= 8 and any(c.isupper() for c in password) and any(c.islower() for c in password)
+`
+
+	// スナップショットテスト: ワーキングディレクトリの期待される差分  
+	expectedWorkingDiff := `diff --git a/user_manager.py b/user_manager.py
+index 20b402c..be9ace8 100644
+--- a/user_manager.py
++++ b/user_manager.py
+@@ -3,9 +3,17 @@
+ class UserManager:
+     def __init__(self):
+         self.users = {}
++        # Add logging capability
++        self.log_enabled = True
+     
+     def add_user(self, username, email):
++        # Add input validation
++        if not username or not email:
++            raise ValueError("Username and email are required")
++        
+         self.users[username] = {"email": email}
++        if self.log_enabled:
++            print(f"User {username} added successfully")
+         return True
+     
+     def get_user(self, username):
+`
+
+	// 実際の差分と期待される差分を比較
+	if strings.TrimSpace(stagedDiff) != strings.TrimSpace(expectedStagedDiff) {
+		t.Errorf("Staged diff does not match expected snapshot.\nExpected:\n%s\n\nActual:\n%s", expectedStagedDiff, stagedDiff)
+	}
+
+	if strings.TrimSpace(workingDiff) != strings.TrimSpace(expectedWorkingDiff) {
+		t.Errorf("Working diff does not match expected snapshot.\nExpected:\n%s\n\nActual:\n%s", expectedWorkingDiff, workingDiff)
+	}
+}
+
+// TestMixedSemanticChanges は異なる意味を持つ変更が混在するケースをテストします
+// これはgit-sequential-stageの最も重要な機能：セマンティックなコミット分割を実証します
+func TestMixedSemanticChanges(t *testing.T) {
+	dir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	// 初期ファイルを作成（Webサーバーのコード）
+	initialWebServerCode := `#!/usr/bin/env python3
+
+import os
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
+
+@app.route('/api/users', methods=['GET'])
+def get_users():
+    # TODO: Get users from database
+    users = [
+        {"id": 1, "name": "Alice", "email": "alice@example.com"},
+        {"id": 2, "name": "Bob", "email": "bob@example.com"}
+    ]
+    return jsonify(users)
+
+@app.route('/api/users', methods=['POST'])
+def create_user():
+    data = request.get_json()
+    # TODO: Save user to database
+    new_user = {
+        "id": 3,
+        "name": data.get("name"),
+        "email": data.get("email")
+    }
+    return jsonify(new_user), 201
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    return {"status": "ok"}
+
+if __name__ == '__main__':
+    app.run(debug=True, port=5000)
+`
+	createFile(t, dir, "web_server.py", initialWebServerCode)
+	commitChanges(t, dir, "Initial commit")
+
+	// ファイルを修正（3つの異なる意味の変更を含む）
+	modifiedWebServerCode := `#!/usr/bin/env python3
+
+import os
+import logging
+from flask import Flask, request, jsonify
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+app = Flask(__name__)
+
+@app.route('/api/users', methods=['GET'])
+def get_users():
+    # TODO: Get users from database
+    logger.info("Fetching users from database")
+    users = [
+        {"id": 1, "name": "Alice", "email": "alice@example.com"},
+        {"id": 2, "name": "Bob", "email": "bob@example.com"}
+    ]
+    return jsonify(users)
+
+@app.route('/api/users', methods=['POST'])
+def create_user():
+    data = request.get_json()
+    
+    # Add input validation
+    if not data or not data.get("name") or not data.get("email"):
+        return jsonify({"error": "Name and email are required"}), 400
+    
+    # TODO: Save user to database
+    new_user = {
+        "id": 3,
+        "name": data.get("name"),
+        "email": data.get("email")
+    }
+    return jsonify(new_user), 201
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    return {"status": "ok", "timestamp": "2024-01-01T00:00:00Z"}
+
+if __name__ == '__main__':
+    # Use environment variable for port configuration
+    port = int(os.environ.get('PORT', 5000))
+    app.run(debug=True, port=port)
+`
+	modifyFile(t, dir, "web_server.py", modifiedWebServerCode)
+
+	// パッチファイルを生成
+	patchPath := filepath.Join(dir, "changes.patch")
+	output, err := runCommand(t, dir, "sh", "-c", "git diff > changes.patch")
+	if err != nil {
+		t.Fatalf("Failed to create patch file: %v\nOutput: %s", err, output)
+	}
+
+	// パッチファイルが作成されたことを確認
+	if _, err := os.Stat(patchPath); os.IsNotExist(err) {
+		t.Fatalf("Patch file was not created: %v", err)
+	}
+
+	absPatchPath, err := filepath.Abs(patchPath)
+	if err != nil {
+		t.Fatalf("Failed to get absolute path: %v", err)
+	}
+	
+	// 一時的にディレクトリを変更してrunGitSequentialStageを実行
+	originalDir, _ := os.Getwd()
+	err = os.Chdir(dir)
+	if err != nil {
+		t.Fatalf("Failed to change directory: %v", err)
+	}
+	defer os.Chdir(originalDir)
+
+	// シナリオ1: ロギング機能の追加のみをコミット（ハンク1のみ）
+	// これは新機能追加のセマンティックなコミット
+	err = runGitSequentialStage([]string{"web_server.py:1"}, absPatchPath)
+	if err != nil {
+		t.Fatalf("git-sequential-stage failed for logging commit: %v", err)
+	}
+
+	// 検証1: ロギング関連の変更のみがステージングされているか
+	stagedDiff, err := runCommand(t, dir, "git", "diff", "--cached")
+	if err != nil {
+		t.Fatalf("Failed to get staged diff: %v", err)
+	}
+
+	// デバッグ用：シナリオ1のスナップショット表示
+	t.Logf("=== SCENARIO 1: LOGGING COMMIT (web_server.py:1) ===")
+	t.Logf("STAGED DIFF:\n%s", stagedDiff)
+
+	// ロギング機能（ハンク1）の変更が含まれているか確認
+	expectedLoggingChanges := []string{
+		"+import logging",
+		"+# Configure logging",
+		"+logging.basicConfig(level=logging.INFO)",
+		"+logger = logging.getLogger(__name__)",
+		"+    logger.info(\"Fetching users from database\")",
+	}
+
+	// バリデーション機能（ハンク2）とヘルスチェック改善（ハンク3）とポート設定（ハンク4）が含まれていないことを確認
+	unexpectedChanges := []string{
+		"+    # Add input validation",
+		"+    if not data or not data.get(\"name\") or not data.get(\"email\"):",
+		"+        return jsonify({\"error\": \"Name and email are required\"}), 400",
+		"+    return {\"status\": \"ok\", \"timestamp\": \"2024-01-01T00:00:00Z\"}",
+		"+    # Use environment variable for port configuration",
+		"+    port = int(os.environ.get('PORT', 5000))",
+		"+    app.run(debug=True, port=port)",
+	}
+
+	for _, expected := range expectedLoggingChanges {
+		if !strings.Contains(stagedDiff, expected) {
+			t.Errorf("Expected staged diff to contain logging change '%s', but it didn't.\nActual diff:\n%s", expected, stagedDiff)
 		}
+	}
+
+	for _, unexpected := range unexpectedChanges {
+		if strings.Contains(stagedDiff, unexpected) {
+			t.Errorf("Staged diff should not contain non-logging change '%s', but it did.\nActual diff:\n%s", unexpected, stagedDiff)
+		}
+	}
+
+	// 最初のコミットを作成（ロギング機能追加）
+	_, err = runCommand(t, dir, "git", "commit", "-m", "feat: add logging infrastructure for request tracking")
+	if err != nil {
+		t.Fatalf("Failed to commit logging changes: %v", err)
+	}
+
+	// シナリオ2: バリデーション機能の追加のみをコミット（ハンク2のみ）
+	// これはセキュリティ向上のセマンティックなコミット
+	err = runGitSequentialStage([]string{"web_server.py:2"}, absPatchPath)
+	if err != nil {
+		t.Fatalf("git-sequential-stage failed for validation commit: %v", err)
+	}
+
+	// 検証2: バリデーション関連の変更のみがステージングされているか
+	stagedDiff, err = runCommand(t, dir, "git", "diff", "--cached")
+	if err != nil {
+		t.Fatalf("Failed to get staged diff: %v", err)
+	}
+
+	// デバッグ用：シナリオ2のスナップショット表示
+	t.Logf("=== SCENARIO 2: VALIDATION COMMIT (web_server.py:2) ===")
+	t.Logf("STAGED DIFF:\n%s", stagedDiff)
+
+	// バリデーション機能（ハンク2）の変更が含まれているか確認
+	expectedValidationChanges := []string{
+		"+    # Add input validation",
+		"+    if not data or not data.get(\"name\") or not data.get(\"email\"):",
+		"+        return jsonify({\"error\": \"Name and email are required\"}), 400",
+	}
+
+	// ヘルスチェック改善（ハンク3）とポート設定（ハンク4）が含まれていないことを確認
+	unexpectedValidationChanges := []string{
+		"+    return {\"status\": \"ok\", \"timestamp\": \"2024-01-01T00:00:00Z\"}",
+		"+    # Use environment variable for port configuration",
+		"+    port = int(os.environ.get('PORT', 5000))",
+		"+    app.run(debug=True, port=port)",
+	}
+
+	for _, expected := range expectedValidationChanges {
+		if !strings.Contains(stagedDiff, expected) {
+			t.Errorf("Expected staged diff to contain validation change '%s', but it didn't.\nActual diff:\n%s", expected, stagedDiff)
+		}
+	}
+
+	for _, unexpected := range unexpectedValidationChanges {
+		if strings.Contains(stagedDiff, unexpected) {
+			t.Errorf("Staged diff should not contain non-validation change '%s', but it did.\nActual diff:\n%s", unexpected, stagedDiff)
+		}
+	}
+
+	// 2番目のコミットを作成（バリデーション機能追加）
+	_, err = runCommand(t, dir, "git", "commit", "-m", "feat: add input validation for user creation endpoint")
+	if err != nil {
+		t.Fatalf("Failed to commit validation changes: %v", err)
+	}
+
+	// シナリオ3: 残りの変更をまとめてコミット（ハンク3のみ）
+	// これは設定とAPIの改善のセマンティックなコミット
+	err = runGitSequentialStage([]string{"web_server.py:3"}, absPatchPath)
+	if err != nil {
+		t.Fatalf("git-sequential-stage failed for config/api improvements commit: %v", err)
+	}
+
+	// 検証3: 設定とAPI改善の変更がステージングされているか
+	stagedDiff, err = runCommand(t, dir, "git", "diff", "--cached")
+	if err != nil {
+		t.Fatalf("Failed to get staged diff: %v", err)
+	}
+
+	// デバッグ用：シナリオ3のスナップショット表示
+	t.Logf("=== SCENARIO 3: CONFIG/API IMPROVEMENTS COMMIT (web_server.py:3) ===")
+	t.Logf("STAGED DIFF:\n%s", stagedDiff)
+
+	// ヘルスチェック改善（ハンク3）とポート設定（ハンク4）の変更が含まれているか確認
+	expectedConfigChanges := []string{
+		"+    return {\"status\": \"ok\", \"timestamp\": \"2024-01-01T00:00:00Z\"}",
+		"+    # Use environment variable for port configuration",
+		"+    port = int(os.environ.get('PORT', 5000))",
+		"+    app.run(debug=True, port=port)",
+	}
+
+	for _, expected := range expectedConfigChanges {
+		if !strings.Contains(stagedDiff, expected) {
+			t.Errorf("Expected staged diff to contain config/api change '%s', but it didn't.\nActual diff:\n%s", expected, stagedDiff)
+		}
+	}
+
+	// 3番目のコミットを作成（設定とAPI改善）
+	_, err = runCommand(t, dir, "git", "commit", "-m", "improve: enhance health check endpoint and add configurable port")
+	if err != nil {
+		t.Fatalf("Failed to commit config/api improvements: %v", err)
+	}
+
+	// 最終検証: ワーキングディレクトリにもうステージングするものがないか
+	workingDiff, err := runCommand(t, dir, "git", "diff")
+	if err != nil {
+		t.Fatalf("Failed to get working diff: %v", err)
+	}
+
+	if strings.TrimSpace(workingDiff) != "" {
+		t.Errorf("Expected no remaining changes in working directory, but got:\n%s", workingDiff)
+	}
+
+	// 最終検証: 3つのコミットが作成されたか確認
+	finalCommitCount := getCommitCount(t, dir)
+	expectedCommits := 4 // 初期コミット + 3つの機能コミット
+	if finalCommitCount != expectedCommits {
+		t.Errorf("Expected %d commits, but got %d", expectedCommits, finalCommitCount)
 	}
 }
