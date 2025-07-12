@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/syou6162/git-sequential-stage/internal/executor"
@@ -20,6 +19,41 @@ func (h *hunkList) String() string {
 
 func (h *hunkList) Set(value string) error {
 	*h = append(*h, value)
+	return nil
+}
+
+// runGitSequentialStage は git-sequential-stage の主要なロジックを実行します
+// テストから直接呼び出せるように分離されています
+func runGitSequentialStage(hunks []string, patchFile string) error {
+	// Create real command executor
+	exec := executor.NewRealCommandExecutor()
+	s := stager.NewStager(exec)
+	
+	// Check dependencies
+	v := validator.NewValidator(exec)
+	if err := v.CheckDependencies(); err != nil {
+		return fmt.Errorf("dependency check failed: %v", err)
+	}
+	
+	// Validate arguments
+	if len(hunks) == 0 {
+		return fmt.Errorf("at least one hunk specification is required")
+	}
+	
+	if patchFile == "" {
+		return fmt.Errorf("patch file is required")
+	}
+	
+	// Validate arguments
+	if err := v.ValidateArgsNew(hunks, patchFile); err != nil {
+		return fmt.Errorf("argument validation failed: %v", err)
+	}
+	
+	// Stage hunks
+	if err := s.StageHunks(hunks, patchFile); err != nil {
+		return fmt.Errorf("failed to stage hunks: %v", err)
+	}
+	
 	return nil
 }
 
@@ -49,16 +83,6 @@ func main() {
 		os.Exit(1)
 	}
 	
-	// Create real command executor
-	exec := executor.NewRealCommandExecutor()
-	s := stager.NewStager(exec)
-	
-	// Check dependencies
-	v := validator.NewValidator(exec)
-	if err := v.CheckDependencies(); err != nil {
-		log.Fatalf("Dependency check failed: %v", err)
-	}
-	
 	// Validate arguments
 	if len(hunks) == 0 {
 		fmt.Fprintf(os.Stderr, "Error: at least one -hunk flag is required\n\n")
@@ -66,15 +90,8 @@ func main() {
 		os.Exit(1)
 	}
 	
-	// Validate arguments
-	if err := v.ValidateArgsNew(hunks, *patchFile); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n\n", err)
-		flag.Usage()
-		os.Exit(1)
-	}
-	
-	// Stage hunks
-	if err := s.StageHunks(hunks, *patchFile); err != nil {
+	// Run the main logic
+	if err := runGitSequentialStage(hunks, *patchFile); err != nil {
 		handleStageError(err)
 	}
 	
