@@ -200,30 +200,38 @@ func TestSingleFileSingleHunk(t *testing.T) {
 	dir, cleanup := setupTestRepo(t)
 	defer cleanup()
 
-	// 初期ファイルを作成（シンプルなGoファイル）
-	initialCode := `package main
+	// 初期ファイルを作成（シンプルなPythonファイル）
+	initialCode := `#!/usr/bin/env python3
 
-import "fmt"
+def calculate_sum(a, b):
+    return a + b
 
-func main() {
-	fmt.Println("Hello, World!")
-}
+def main():
+    result = calculate_sum(2, 3)
+    print(f"Result: {result}")
+
+if __name__ == "__main__":
+    main()
 `
-	createFile(t, dir, "main.go", initialCode)
+	createFile(t, dir, "calculator.py", initialCode)
 	commitChanges(t, dir, "Initial commit")
 
 	// ファイルを修正（1つのハンクの変更）
-	modifiedCode := `package main
+	modifiedCode := `#!/usr/bin/env python3
 
-import "fmt"
+def calculate_sum(a, b):
+    return a + b
 
-func main() {
-	// Adding a greeting message
-	greeting := "Hello, Sequential Stage!"
-	fmt.Println(greeting)
-}
+def main():
+    # Add input validation and better output
+    x, y = 5, 7
+    result = calculate_sum(x, y)
+    print(f"Calculating {x} + {y} = {result}")
+
+if __name__ == "__main__":
+    main()
 `
-	modifyFile(t, dir, "main.go", modifiedCode)
+	modifyFile(t, dir, "calculator.py", modifiedCode)
 
 	// パッチファイルを生成
 	patchPath := filepath.Join(dir, "changes.patch")
@@ -241,19 +249,30 @@ func main() {
 		t.Fatalf("Patch file was not created: %v", err)
 	}
 
-	// git-sequential-stageコマンドを実行
-	// 現在のワーキングディレクトリから実行ファイルのパスを取得
-	wd, _ := os.Getwd()
-	gitSeqStagePath := filepath.Join(wd, "git-sequential-stage")
-	output, err = runCommand(t, dir, gitSeqStagePath, "-patch=changes.patch", "-hunk=main.go:1")
+	// git-sequential-stageの主要ロジックを直接実行
+	// パッチファイルの絶対パスを取得
+	absPatchPath, err := filepath.Abs(patchPath)
 	if err != nil {
-		t.Fatalf("git-sequential-stage failed: %v\nOutput: %s", err, output)
+		t.Fatalf("Failed to get absolute path: %v", err)
+	}
+	
+	// 一時的にディレクトリを変更してrunGitSequentialStageを実行
+	originalDir, _ := os.Getwd()
+	err = os.Chdir(dir)
+	if err != nil {
+		t.Fatalf("Failed to change directory: %v", err)
+	}
+	defer os.Chdir(originalDir)
+	
+	err = runGitSequentialStage([]string{"calculator.py:1"}, absPatchPath)
+	if err != nil {
+		t.Fatalf("git-sequential-stage failed: %v", err)
 	}
 
 	// 検証1: ステージングエリアにファイルがあるか
 	stagedFiles := getStagedFiles(t, dir)
-	if len(stagedFiles) != 1 || stagedFiles[0] != "main.go" {
-		t.Errorf("Expected main.go to be staged, got: %v", stagedFiles)
+	if len(stagedFiles) != 1 || stagedFiles[0] != "calculator.py" {
+		t.Errorf("Expected calculator.py to be staged, got: %v", stagedFiles)
 	}
 
 	// 検証2: ステージングエリアの内容が正しいか
