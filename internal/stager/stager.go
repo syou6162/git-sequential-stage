@@ -23,55 +23,6 @@ func NewStager(exec executor.CommandExecutor) *Stager {
 	}
 }
 
-// StageHunks stages the specified hunks sequentially using patch IDs internally
-func (s *Stager) StageHunks(hunks string, patchFile string) error {
-	hunkNumbers, err := s.parseHunks(hunks)
-	if err != nil {
-		return err
-	}
-	
-	// Stage each requested hunk using filterdiff + git patch-id workflow
-	for _, hunkNum := range hunkNumbers {
-		// Extract single hunk using filterdiff
-		hunkPatch, err := s.executor.Execute("filterdiff", fmt.Sprintf("--hunks=%d", hunkNum), patchFile)
-		if err != nil {
-			return fmt.Errorf("failed to extract hunk %d: %v", hunkNum, err)
-		}
-		
-		// Check if filterdiff returned empty output (hunk not found)
-		if len(hunkPatch) == 0 {
-			return fmt.Errorf("failed to extract hunk %d: hunk not found in patch file", hunkNum)
-		}
-		
-		// Calculate patch ID for this hunk
-		patchID, err := s.calculatePatchIDForHunk(hunkPatch)
-		if err != nil {
-			// Continue without patch ID
-			patchID = fmt.Sprintf("unknown-%d", hunkNum)
-		}
-		
-		// Apply the hunk to staging area
-		_, err = s.executor.ExecuteWithStdin("git", bytes.NewReader(hunkPatch), "apply", "--cached")
-		if err != nil {
-			stderr := s.getStderrFromError(err)
-			
-			// Try to provide more helpful error information
-			_, checkErr := s.executor.ExecuteWithStdin("git", bytes.NewReader(hunkPatch), "apply", "--cached", "--check")
-			var checkMsg string
-			if checkErr != nil {
-				checkMsg = s.getStderrFromError(checkErr)
-			}
-			
-			// Extract file path from patch for error message
-			filePath := extractFilePathFromPatch(string(hunkPatch))
-			
-			return fmt.Errorf("failed to apply hunk %d (patch ID: %s):\nFile: %s\nError: %s\n\nDetailed check: %s\n\nPossible causes:\n1. The file has been modified since the patch was created\n2. This hunk has already been staged\n3. There are conflicts with existing changes\n\nTry running 'git status' to check the current state", 
-				hunkNum, patchID, filePath, stderr, checkMsg)
-		}
-	}
-	
-	return nil
-}
 
 // isNewFileHunk checks if a hunk represents a new file by looking for @@ -0,0 in the hunk header
 func isNewFileHunk(patchLines []string, hunk *HunkInfo) bool {
