@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -192,10 +193,13 @@ func getStagedFiles(t *testing.T, dir string) []string {
 		}
 	}
 
+	sort.Strings(stagedFiles)
 	return stagedFiles
 }
 
 // TestSingleFileSingleHunk は1ファイル1ハンクのケースをテストします
+// このテストは、最も基本的なケース（1つのファイルの1つのハンクのみを選択的にステージング）が
+// 正常に動作することを保証するために重要です。git-sequential-stageの核心機能の最小単位を検証します。
 func TestSingleFileSingleHunk(t *testing.T) {
 	dir, cleanup := setupTestRepo(t)
 	defer cleanup()
@@ -311,6 +315,8 @@ if __name__ == "__main__":
 }
 
 // TestSingleFileMultipleHunks は1ファイル複数ハンクのケースをテストします
+// このテストは、同一ファイル内の複数ハンクから特定のハンクのみを選択的にステージングする部分選択機能が
+// 正常に動作することを保証するために重要です。関連する変更と無関係な変更を適切に分離する能力を検証します。
 func TestSingleFileMultipleHunks(t *testing.T) {
 	dir, cleanup := setupTestRepo(t)
 	defer cleanup()
@@ -477,6 +483,9 @@ if __name__ == "__main__":
 }
 
 // TestMultipleFilesMultipleHunks は複数ファイル複数ハンクのケースをテストします
+// このテストは、複数ファイルにまたがる変更から特定のハンクのみを選択的にステージングする
+// 複数ファイル横断機能が正常に動作することを保証するために重要です。プロジェクト全体の変更を
+// 論理的な単位で分割する能力を検証します。
 func TestMultipleFilesMultipleHunks(t *testing.T) {
 	dir, cleanup := setupTestRepo(t)
 	defer cleanup()
@@ -784,6 +793,9 @@ index 20b402c..be9ace8 100644
 
 // TestMixedSemanticChanges は異なる意味を持つ変更が混在するケースをテストします
 // これはgit-sequential-stageの最も重要な機能：セマンティックなコミット分割を実証します
+// このテストは、異なる目的・意味を持つ変更（ログ追加、バリデーション追加、設定改善など）を
+// 適切に分離してコミットできることを保証するために重要です。セマンティックなコミット分割という
+// git-sequential-stageの核心価値を検証します。
 func TestMixedSemanticChanges(t *testing.T) {
 	dir, cleanup := setupTestRepo(t)
 	defer cleanup()
