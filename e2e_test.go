@@ -169,16 +169,30 @@ func getCommitCount(t *testing.T, dir string) int {
 
 // getStagedFiles はステージングエリアのファイル一覧を取得します
 func getStagedFiles(t *testing.T, dir string) []string {
-	output, err := runCommand(t, dir, "git", "diff", "--cached", "--name-only")
+	repo, err := git.PlainOpen(dir)
 	if err != nil {
-		t.Fatalf("Failed to get staged files: %v", err)
+		t.Fatalf("Failed to open repository: %v", err)
 	}
-	
-	if output == "" {
-		return []string{}
+
+	w, err := repo.Worktree()
+	if err != nil {
+		t.Fatalf("Failed to get worktree: %v", err)
 	}
-	
-	return strings.Split(strings.TrimSpace(output), "\n")
+
+	status, err := w.Status()
+	if err != nil {
+		t.Fatalf("Failed to get status: %v", err)
+	}
+
+	var stagedFiles []string
+	for file, fileStatus := range status {
+		// ステージングエリアに変更があるファイルを取得
+		if fileStatus.Staging != git.Untracked && fileStatus.Staging != git.Unmodified {
+			stagedFiles = append(stagedFiles, file)
+		}
+	}
+
+	return stagedFiles
 }
 
 // TestSingleFileSingleHunk は1ファイル1ハンクのケースをテストします
