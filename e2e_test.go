@@ -467,3 +467,239 @@ if __name__ == "__main__":
 		}
 	}
 }
+
+// TestMultipleFilesMultipleHunks は複数ファイル複数ハンクのケースをテストします
+func TestMultipleFilesMultipleHunks(t *testing.T) {
+	dir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	// 初期ファイル1を作成（ユーザー管理システム）
+	userManagerCode := `#!/usr/bin/env python3
+
+class UserManager:
+    def __init__(self):
+        self.users = {}
+    
+    def add_user(self, username, email):
+        self.users[username] = {"email": email}
+        return True
+    
+    def get_user(self, username):
+        return self.users.get(username)
+    
+    def delete_user(self, username):
+        if username in self.users:
+            del self.users[username]
+            return True
+        return False
+`
+	createFile(t, dir, "user_manager.py", userManagerCode)
+
+	// 初期ファイル2を作成（データバリデーター）
+	validatorCode := `#!/usr/bin/env python3
+
+import re
+
+class DataValidator:
+    @staticmethod
+    def validate_email(email):
+        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        return re.match(pattern, email) is not None
+    
+    @staticmethod
+    def validate_username(username):
+        return len(username) >= 3 and username.isalnum()
+`
+	createFile(t, dir, "validator.py", validatorCode)
+
+	commitChanges(t, dir, "Initial commit")
+
+	// ファイル1を修正（複数のハンクが生成される変更）
+	modifiedUserManagerCode := `#!/usr/bin/env python3
+
+class UserManager:
+    def __init__(self):
+        self.users = {}
+        # Add logging capability
+        self.log_enabled = True
+    
+    def add_user(self, username, email):
+        # Add input validation
+        if not username or not email:
+            raise ValueError("Username and email are required")
+        
+        self.users[username] = {"email": email}
+        if self.log_enabled:
+            print(f"User {username} added successfully")
+        return True
+    
+    def get_user(self, username):
+        return self.users.get(username)
+    
+    def delete_user(self, username):
+        if username in self.users:
+            del self.users[username]
+            if self.log_enabled:
+                print(f"User {username} deleted successfully")
+            return True
+        return False
+`
+	modifyFile(t, dir, "user_manager.py", modifiedUserManagerCode)
+
+	// ファイル2を修正（複数のハンクが生成される変更）
+	modifiedValidatorCode := `#!/usr/bin/env python3
+
+import re
+
+class DataValidator:
+    @staticmethod
+    def validate_email(email):
+        # Improved email validation with better error handling
+        if not email or not isinstance(email, str):
+            return False
+        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        return re.match(pattern, email) is not None
+    
+    @staticmethod
+    def validate_username(username):
+        # Enhanced username validation
+        if not username or not isinstance(username, str):
+            return False
+        return len(username) >= 3 and len(username) <= 20 and username.isalnum()
+    
+    @staticmethod
+    def validate_password(password):
+        # New password validation method
+        if not password or not isinstance(password, str):
+            return False
+        return len(password) >= 8 and any(c.isupper() for c in password) and any(c.islower() for c in password)
+`
+	modifyFile(t, dir, "validator.py", modifiedValidatorCode)
+
+	// パッチファイルを生成
+	patchPath := filepath.Join(dir, "changes.patch")
+	output, err := runCommand(t, dir, "git", "diff", ">", patchPath)
+	if err != nil {
+		// シェルのリダイレクトを使うために sh -c を使用
+		output, err = runCommand(t, dir, "sh", "-c", "git diff > changes.patch")
+		if err != nil {
+			t.Fatalf("Failed to create patch file: %v\nOutput: %s", err, output)
+		}
+	}
+
+	// パッチファイルが作成されたことを確認
+	if _, err := os.Stat(patchPath); os.IsNotExist(err) {
+		t.Fatalf("Patch file was not created: %v", err)
+	}
+
+	// 複数ファイルから特定のハンクのみをステージング
+	// user_manager.py: ハンク2（delete_user関数のログ追加）のみをステージング
+	// validator.py: ハンク1（全ての変更）をステージング
+	absPatchPath, err := filepath.Abs(patchPath)
+	if err != nil {
+		t.Fatalf("Failed to get absolute path: %v", err)
+	}
+	
+	// 一時的にディレクトリを変更してrunGitSequentialStageを実行
+	originalDir, _ := os.Getwd()
+	err = os.Chdir(dir)
+	if err != nil {
+		t.Fatalf("Failed to change directory: %v", err)
+	}
+	defer os.Chdir(originalDir)
+	
+	err = runGitSequentialStage([]string{"user_manager.py:2", "validator.py:1"}, absPatchPath)
+	if err != nil {
+		t.Fatalf("git-sequential-stage failed: %v", err)
+	}
+
+	// 検証1: ステージングエリアに両方のファイルがあるか
+	stagedFiles := getStagedFiles(t, dir)
+	if len(stagedFiles) != 2 {
+		t.Errorf("Expected 2 files to be staged, got: %d files %v", len(stagedFiles), stagedFiles)
+	}
+	
+	expectedFiles := []string{"user_manager.py", "validator.py"}
+	for _, expectedFile := range expectedFiles {
+		found := false
+		for _, stagedFile := range stagedFiles {
+			if stagedFile == expectedFile {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected %s to be staged, but it wasn't. Staged files: %v", expectedFile, stagedFiles)
+		}
+	}
+
+	// 検証2: ステージングエリアに特定のハンクのみが含まれているか
+	stagedDiff, err := runCommand(t, dir, "git", "diff", "--cached")
+	if err != nil {
+		t.Fatalf("Failed to get staged diff: %v", err)
+	}
+
+	// user_manager.py のハンク2（delete_user関数のログ追加）が含まれているか確認
+	expectedUserManagerChanges := []string{
+		"+            if self.log_enabled:",
+		"+                print(f\"User {username} deleted successfully\")",
+	}
+
+	// validator.py のハンク1（全ての変更）が含まれているか確認
+	expectedValidatorChanges := []string{
+		"+        # Improved email validation with better error handling",
+		"+        if not email or not isinstance(email, str):",
+		"+        # Enhanced username validation",
+		"+    def validate_password(password):",
+		"+        # New password validation method",
+	}
+
+	// user_manager.py のハンク1（コンストラクタとadd_user関数の変更）が含まれていないことを確認
+	unexpectedUserManagerChanges := []string{
+		"+        # Add logging capability",
+		"+        self.log_enabled = True",
+		"+        # Add input validation",
+		"+        if not username or not email:",
+		"+            raise ValueError(\"Username and email are required\")",
+	}
+
+	// validator.pyは全ハンクをステージングするため、除外される変更はなし
+	unexpectedValidatorChanges := []string{}
+
+	for _, expected := range expectedUserManagerChanges {
+		if !strings.Contains(stagedDiff, expected) {
+			t.Errorf("Expected staged diff to contain user_manager.py change '%s', but it didn't.\nActual diff:\n%s", expected, stagedDiff)
+		}
+	}
+
+	for _, expected := range expectedValidatorChanges {
+		if !strings.Contains(stagedDiff, expected) {
+			t.Errorf("Expected staged diff to contain validator.py change '%s', but it didn't.\nActual diff:\n%s", expected, stagedDiff)
+		}
+	}
+
+	for _, unexpected := range unexpectedUserManagerChanges {
+		if strings.Contains(stagedDiff, unexpected) {
+			t.Errorf("Staged diff should not contain user_manager.py change '%s', but it did.\nActual diff:\n%s", unexpected, stagedDiff)
+		}
+	}
+
+	for _, unexpected := range unexpectedValidatorChanges {
+		if strings.Contains(stagedDiff, unexpected) {
+			t.Errorf("Staged diff should not contain validator.py change '%s', but it did.\nActual diff:\n%s", unexpected, stagedDiff)
+		}
+	}
+
+	// 検証3: ワーキングディレクトリに残りの変更があるか
+	workingDiff, err := runCommand(t, dir, "git", "diff")
+	if err != nil {
+		t.Fatalf("Failed to get working diff: %v", err)
+	}
+
+	// user_manager.pyで除外したハンク1の変更がワーキングディレクトリに残っていることを確認
+	for _, expected := range unexpectedUserManagerChanges {
+		if !strings.Contains(workingDiff, expected) {
+			t.Errorf("Expected working diff to contain remaining change '%s', but it didn't.\nActual diff:\n%s", expected, workingDiff)
+		}
+	}
+}
