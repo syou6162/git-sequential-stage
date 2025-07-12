@@ -427,6 +427,16 @@ if __name__ == "__main__":
 		t.Fatalf("Failed to get staged diff: %v", err)
 	}
 
+	// 検証3: ワーキングディレクトリにハンク1の変更が残っているか
+	workingDiff, err := runCommand(t, dir, "git", "diff")
+	if err != nil {
+		t.Fatalf("Failed to get working diff: %v", err)
+	}
+
+	// デバッグ用：実際の差分を表示
+	t.Logf("=== STAGED DIFF (git diff --cached) - Should contain ONLY hunk 2 ===\n%s", stagedDiff)
+	t.Logf("=== WORKING DIFF (git diff) - Should contain remaining hunk 1 ===\n%s", workingDiff)
+
 	// ハンク2の変更（main関数の出力改善）が含まれているか確認
 	expectedChangesHunk2 := []string{
 		"+    # Improved output formatting",
