@@ -95,6 +95,8 @@ func commitChanges(t *testing.T, dir, message string) {
 }
 
 // TestBasicSetup は基本的なセットアップが動作することを確認します
+// このテストは、テスト環境の基本動作（リポジトリ作成、ファイル作成、コミット）が正常に機能していることを
+// 保証するために重要です。他のすべてのテストの前提条件となる基盤機能の動作を検証します。
 func TestBasicSetup(t *testing.T) {
 	dir, cleanup := setupTestRepo(t)
 	defer cleanup()
