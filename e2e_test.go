@@ -283,10 +283,10 @@ if __name__ == "__main__":
 
 	// 期待される変更が含まれているか確認
 	expectedChanges := []string{
-		"+\t// Adding a greeting message",
-		"+\tgreeting := \"Hello, Sequential Stage!\"",
-		"+\tfmt.Println(greeting)",
-		"-\tfmt.Println(\"Hello, World!\")",
+		"+    # Add input validation and better output",
+		"+    x, y = 5, 7",
+		"+    print(f\"Calculating {x} + {y} = {result}\")",
+		"-    print(f\"Result: {result}\")",
 	}
 
 	for _, expected := range expectedChanges {
