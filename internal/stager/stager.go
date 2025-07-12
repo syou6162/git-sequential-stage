@@ -160,8 +160,8 @@ func buildTargetIDs(hunkSpecs []string, allHunks []HunkInfo) ([]string, error) {
 	return targetIDs, nil
 }
 
-// StageHunksNew stages the specified hunks using the new file:hunk format
-func (s *Stager) StageHunksNew(hunkSpecs []string, patchFile string) error {
+// StageHunks stages the specified hunks using the file:hunk format
+func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
 	// Preparation phase: Parse master patch and build HunkInfo list
 	patchContent, err := s.readFile(patchFile)
 	if err != nil {
