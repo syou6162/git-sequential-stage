@@ -281,6 +281,16 @@ if __name__ == "__main__":
 		t.Fatalf("Failed to get staged diff: %v", err)
 	}
 
+	// 検証3: ワーキングディレクトリに変更が残っていないか
+	workingDiff, err := runCommand(t, dir, "git", "diff")
+	if err != nil {
+		t.Fatalf("Failed to get working diff: %v", err)
+	}
+
+	// デバッグ用：実際の差分を表示
+	t.Logf("=== STAGED DIFF (git diff --cached) ===\n%s", stagedDiff)
+	t.Logf("=== WORKING DIFF (git diff) ===\n%s", workingDiff)
+
 	// 期待される変更が含まれているか確認
 	expectedChanges := []string{
 		"+    # Add input validation and better output",
@@ -293,12 +303,6 @@ if __name__ == "__main__":
 		if !strings.Contains(stagedDiff, expected) {
 			t.Errorf("Expected staged diff to contain '%s', but it didn't.\nActual diff:\n%s", expected, stagedDiff)
 		}
-	}
-
-	// 検証3: ワーキングディレクトリに変更が残っていないか
-	workingDiff, err := runCommand(t, dir, "git", "diff")
-	if err != nil {
-		t.Fatalf("Failed to get working diff: %v", err)
 	}
 
 	if strings.TrimSpace(workingDiff) != "" {
