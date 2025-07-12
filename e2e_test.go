@@ -305,3 +305,165 @@ if __name__ == "__main__":
 		t.Errorf("Expected no changes in working directory, but got:\n%s", workingDiff)
 	}
 }
+
+// TestSingleFileMultipleHunks は1ファイル複数ハンクのケースをテストします
+func TestSingleFileMultipleHunks(t *testing.T) {
+	dir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	// 初期ファイルを作成（複数の関数を持つPythonファイル）
+	initialCode := `#!/usr/bin/env python3
+
+def add_numbers(a, b):
+    return a + b
+
+def multiply_numbers(a, b):
+    return a * b
+
+def divide_numbers(a, b):
+    return a / b
+
+def main():
+    x, y = 10, 5
+    sum_result = add_numbers(x, y)
+    mul_result = multiply_numbers(x, y)
+    div_result = divide_numbers(x, y)
+    
+    print(f"Addition: {sum_result}")
+    print(f"Multiplication: {mul_result}")
+    print(f"Division: {div_result}")
+
+if __name__ == "__main__":
+    main()
+`
+	createFile(t, dir, "math_operations.py", initialCode)
+	commitChanges(t, dir, "Initial commit")
+
+	// ファイルを修正（複数のハンクが生成される変更）
+	modifiedCode := `#!/usr/bin/env python3
+
+def add_numbers(a, b):
+    # Add input validation for addition
+    if not isinstance(a, (int, float)) or not isinstance(b, (int, float)):
+        raise TypeError("Both arguments must be numbers")
+    return a + b
+
+def multiply_numbers(a, b):
+    return a * b
+
+def divide_numbers(a, b):
+    # Add zero division check
+    if b == 0:
+        raise ValueError("Cannot divide by zero")
+    return a / b
+
+def main():
+    x, y = 10, 5
+    sum_result = add_numbers(x, y)
+    mul_result = multiply_numbers(x, y)
+    div_result = divide_numbers(x, y)
+    
+    # Improved output formatting
+    print(f"Results for {x} and {y}:")
+    print(f"  Addition: {sum_result}")
+    print(f"  Multiplication: {mul_result}")
+    print(f"  Division: {div_result}")
+
+if __name__ == "__main__":
+    main()
+`
+	modifyFile(t, dir, "math_operations.py", modifiedCode)
+
+	// パッチファイルを生成
+	patchPath := filepath.Join(dir, "changes.patch")
+	output, err := runCommand(t, dir, "git", "diff", ">", patchPath)
+	if err != nil {
+		// シェルのリダイレクトを使うために sh -c を使用
+		output, err = runCommand(t, dir, "sh", "-c", "git diff > changes.patch")
+		if err != nil {
+			t.Fatalf("Failed to create patch file: %v\nOutput: %s", err, output)
+		}
+	}
+
+	// パッチファイルが作成されたことを確認
+	if _, err := os.Stat(patchPath); os.IsNotExist(err) {
+		t.Fatalf("Patch file was not created: %v", err)
+	}
+
+	// 複数のハンクのうち、特定のハンク（2のみ）をステージング
+	// ハンク1: add_numbers + divide_numbers関数の修正（このハンクは除外）
+	// ハンク2: main関数の出力改善（このハンクのみをステージング）
+	absPatchPath, err := filepath.Abs(patchPath)
+	if err != nil {
+		t.Fatalf("Failed to get absolute path: %v", err)
+	}
+	
+	// 一時的にディレクトリを変更してrunGitSequentialStageを実行
+	originalDir, _ := os.Getwd()
+	err = os.Chdir(dir)
+	if err != nil {
+		t.Fatalf("Failed to change directory: %v", err)
+	}
+	defer os.Chdir(originalDir)
+	
+	err = runGitSequentialStage([]string{"math_operations.py:2"}, absPatchPath)
+	if err != nil {
+		t.Fatalf("git-sequential-stage failed: %v", err)
+	}
+
+	// 検証1: ステージングエリアにファイルがあるか
+	stagedFiles := getStagedFiles(t, dir)
+	if len(stagedFiles) != 1 || stagedFiles[0] != "math_operations.py" {
+		t.Errorf("Expected math_operations.py to be staged, got: %v", stagedFiles)
+	}
+
+	// 検証2: ステージングエリアにハンク2の変更のみが含まれているか
+	stagedDiff, err := runCommand(t, dir, "git", "diff", "--cached")
+	if err != nil {
+		t.Fatalf("Failed to get staged diff: %v", err)
+	}
+
+	// ハンク2の変更（main関数の出力改善）が含まれているか確認
+	expectedChangesHunk2 := []string{
+		"+    # Improved output formatting",
+		"+    print(f\"Results for {x} and {y}:\")",
+		"+    print(f\"  Addition: {sum_result}\")",
+		"+    print(f\"  Multiplication: {mul_result}\")",
+		"+    print(f\"  Division: {div_result}\")",
+	}
+
+	// ハンク1の変更（add_numbers + divide_numbers関数の修正）が含まれていないことを確認
+	unexpectedChangesHunk1 := []string{
+		"+    # Add input validation for addition",
+		"+    if not isinstance(a, (int, float)) or not isinstance(b, (int, float)):",
+		"+        raise TypeError(\"Both arguments must be numbers\")",
+		"+    # Add zero division check",
+		"+    if b == 0:",
+		"+        raise ValueError(\"Cannot divide by zero\")",
+	}
+
+	for _, expected := range expectedChangesHunk2 {
+		if !strings.Contains(stagedDiff, expected) {
+			t.Errorf("Expected staged diff to contain hunk 2 change '%s', but it didn't.\nActual diff:\n%s", expected, stagedDiff)
+		}
+	}
+
+	for _, unexpected := range unexpectedChangesHunk1 {
+		if strings.Contains(stagedDiff, unexpected) {
+			t.Errorf("Staged diff should not contain hunk 1 change '%s', but it did.\nActual diff:\n%s", unexpected, stagedDiff)
+		}
+	}
+
+	// 検証3: ワーキングディレクトリにハンク1の変更が残っているか
+	workingDiff, err := runCommand(t, dir, "git", "diff")
+	if err != nil {
+		t.Fatalf("Failed to get working diff: %v", err)
+	}
+
+	// ハンク1の変更がワーキングディレクトリに残っていることを確認
+	for _, expected := range unexpectedChangesHunk1 {
+		if !strings.Contains(workingDiff, expected) {
+			t.Errorf("Expected working diff to contain remaining hunk 1 change '%s', but it didn't.\nActual diff:\n%s", expected, workingDiff)
+		}
+	}
+}
