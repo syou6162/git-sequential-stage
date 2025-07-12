@@ -131,9 +131,10 @@ func (s *Stager) extractHunkContentFromTempFile(diffLines []string, hunk *HunkIn
 		return extractFileDiff(diffLines, hunk), nil
 	}
 	
-	// Use filterdiff to extract single hunk from current diff
+	// Use filterdiff to extract single hunk from current diff with file filter
 	filterCmd := fmt.Sprintf("--hunks=%d", hunk.IndexInFile)
-	return s.executor.Execute("filterdiff", filterCmd, tmpFileName)
+	filePattern := fmt.Sprintf("*%s", hunk.FilePath)
+	return s.executor.Execute("filterdiff", "-i", filePattern, filterCmd, tmpFileName)
 }
 
 // calculatePatchIDsForHunks calculates patch IDs for all hunks in the list
