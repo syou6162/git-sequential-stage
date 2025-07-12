@@ -74,7 +74,7 @@ func main() {
 	}
 	
 	// Stage hunks
-	if err := s.StageHunksNew(hunks, *patchFile); err != nil {
+	if err := s.StageHunks(hunks, *patchFile); err != nil {
 		handleStageError(err)
 	}
 	
