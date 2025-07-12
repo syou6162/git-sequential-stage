@@ -241,13 +241,9 @@ if __name__ == "__main__":
 
 	// パッチファイルを生成
 	patchPath := filepath.Join(dir, "changes.patch")
-	output, err := runCommand(t, dir, "git", "diff", ">", patchPath)
+	output, err := runCommand(t, dir, "sh", "-c", "git diff > changes.patch")
 	if err != nil {
-		// シェルのリダイレクトを使うために sh -c を使用
-		output, err = runCommand(t, dir, "sh", "-c", "git diff > changes.patch")
-		if err != nil {
-			t.Fatalf("Failed to create patch file: %v\nOutput: %s", err, output)
-		}
+		t.Fatalf("Failed to create patch file: %v\nOutput: %s", err, output)
 	}
 
 	// パッチファイルが作成されたことを確認
@@ -388,13 +384,9 @@ if __name__ == "__main__":
 
 	// パッチファイルを生成
 	patchPath := filepath.Join(dir, "changes.patch")
-	output, err := runCommand(t, dir, "git", "diff", ">", patchPath)
+	output, err := runCommand(t, dir, "sh", "-c", "git diff > changes.patch")
 	if err != nil {
-		// シェルのリダイレクトを使うために sh -c を使用
-		output, err = runCommand(t, dir, "sh", "-c", "git diff > changes.patch")
-		if err != nil {
-			t.Fatalf("Failed to create patch file: %v\nOutput: %s", err, output)
-		}
+		t.Fatalf("Failed to create patch file: %v\nOutput: %s", err, output)
 	}
 
 	// パッチファイルが作成されたことを確認
@@ -597,13 +589,9 @@ class DataValidator:
 
 	// パッチファイルを生成
 	patchPath := filepath.Join(dir, "changes.patch")
-	output, err := runCommand(t, dir, "git", "diff", ">", patchPath)
+	output, err := runCommand(t, dir, "sh", "-c", "git diff > changes.patch")
 	if err != nil {
-		// シェルのリダイレクトを使うために sh -c を使用
-		output, err = runCommand(t, dir, "sh", "-c", "git diff > changes.patch")
-		if err != nil {
-			t.Fatalf("Failed to create patch file: %v\nOutput: %s", err, output)
-		}
+		t.Fatalf("Failed to create patch file: %v\nOutput: %s", err, output)
 	}
 
 	// パッチファイルが作成されたことを確認
