@@ -22,6 +22,15 @@ When having LLM agents create commits, we encountered the following issues:
 
 This tool enables LLM agents to create "semantically cohesive and clean commits" just like humans do.
 
+## Intended Use Cases
+
+This tool is primarily designed for integration with LLM agents (such as Claude Code) to automatically split large, complex changes into semantically meaningful commits. While it can be used standalone, its true value emerges when combined with AI-powered development workflows.
+
+**Primary scenarios:**
+- LLM agents making large changes that need to be broken down
+- Automated semantic commit creation from complex diffs
+- Programmatic control over staging for AI development workflows
+
 ## Purpose
 
 This tool solves the problem of selectively staging multiple hunks from a patch file one by one, ensuring each hunk is applied in sequence. It's particularly useful when you need fine-grained control over which changes to stage.
@@ -82,6 +91,57 @@ The tool uses patch IDs internally to ensure reliable hunk identification:
 
 This makes the tool perfect for LLM agent workflows where semantic commit splitting is required.
 
+## Integration with Claude Code
+
+This tool works seamlessly with Claude Code custom slash commands, particularly the `semantic_commit` command that provides automated semantic commit workflows.
+
+### Installation via Claude Code Custom Slash Commands (CCCSC)
+
+First, install [CCCSC (Claude Code Custom Slash Commands)](https://github.com/hiragram/cccsc), then add the semantic_commit command:
+
+```bash
+# Install the semantic_commit command
+npx cccsc add syou6162/claude-code-commands/semantic_commit
+
+# Usage in Claude Code
+/cccsc:syou6162:claude-code-commands:semantic_commit
+```
+
+### Recommended Claude Code Configuration
+
+To enforce semantic commit workflows, add this to your `settings.json`:
+
+```json
+{
+  "permissions": {
+    "deny": [
+      "Bash(git add:*)",
+      "Bash(git commit -am:*)",
+      "Bash(git commit --all:*)"
+    ],
+    "allow": [
+      "Bash(git add -N:*)",
+      "Bash(git diff:*)",
+      "Bash(git apply:*)"
+    ]
+  }
+}
+```
+
+This prevents manual `git add` commands while allowing necessary git operations for the semantic commit workflow.
+
+## AI-Powered Workflow
+
+When integrated with LLM agents, the typical workflow becomes:
+
+1. **Analysis**: LLM analyzes the current diff and identifies semantic units
+2. **Planning**: LLM determines optimal commit structure 
+3. **Staging**: `git-sequential-stage` applies changes incrementally using patch IDs
+4. **Committing**: Each semantic unit becomes a focused, meaningful commit
+5. **Iteration**: Process repeats until all changes are committed
+
+This approach ensures that even large, complex changes result in clean, reviewable commit history.
+
 ## How it works
 
 1. Validates that `git` and `filterdiff` commands are available
@@ -110,6 +170,14 @@ git-sequential-stage/
 │   ├── stager/            # Core staging logic
 │   └── validator/         # Dependency and argument validation
 ```
+
+## References
+
+- Related Tools
+  - [CCCSC (Claude Code Custom Slash Commands)](https://github.com/hiragram/cccsc) - Framework for creating custom Claude Code slash commands
+  - [semantic_commit Claude Code command](https://github.com/syou6162/claude-code-commands/blob/main/semantic_commit.md) - Custom slash command for automated semantic commits
+- Documentation
+  - [LLMエージェントに意味のあるコミットを強制させる](https://www.yasuhisay.info/entry/2025/07/12/131421) - Detailed workflow explanation and use cases
 
 ## License
 
