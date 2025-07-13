@@ -68,6 +68,9 @@ func assertHunkProperties(t *testing.T, hunk HunkInfo, expectedFile string, expe
 	}
 }
 
+// TestExtractFileDiff tests the extractFileDiff function which extracts the entire
+// file diff (including headers) for a given hunk. This is crucial for handling
+// new file creation where the entire file content must be staged as one unit.
 func TestExtractFileDiff(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -196,6 +199,10 @@ index 0000000..999888
 	}
 }
 
+// TestIsNewFileHunk tests the isNewFileHunk function which determines whether
+// a hunk represents a new file creation by checking for the "@@ -0,0" pattern
+// in the hunk header. This distinction is important because new files require
+// different handling than modifications to existing files.
 func TestIsNewFileHunk(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -277,6 +284,10 @@ index 1234567..0000000
 	}
 }
 
+// TestParsePatchFile_NewFiles tests the parsePatchFile function specifically for
+// new file creation scenarios. It verifies that the parser correctly identifies
+// new files, assigns proper hunk indices, and maintains the correct file-to-hunk
+// relationships in both single and multi-file patches.
 func TestParsePatchFile_NewFiles(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -390,6 +401,10 @@ index 0000000..999888
 	}
 }
 
+// TestStager_ExtractHunkContent_NewFile tests the extractHunkContent method of Stager
+// for both new file creation and existing file modification scenarios. For new files,
+// it verifies that the entire file diff is extracted without using filterdiff. For
+// existing files, it ensures that filterdiff is called with the correct parameters.
 func TestStager_ExtractHunkContent_NewFile(t *testing.T) {
 	// Define expected mock response for readability and consistency
 	const mockFilterdiffResponse = "mocked filterdiff output with sufficient length to meet test expectations"
