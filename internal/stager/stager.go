@@ -201,6 +201,10 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
 		diffOutput, err := s.executor.Execute("git", diffArgs...)
 		
 		if err != nil {
+			errorMsg := s.getStderrFromError(err)
+			if errorMsg != "" {
+				return fmt.Errorf("failed to get current diff: exit status %v - %s", err, errorMsg)
+			}
 			return fmt.Errorf("failed to get current diff: %v", err)
 		}
 		
