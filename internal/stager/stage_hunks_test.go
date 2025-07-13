@@ -13,7 +13,7 @@ func TestStager_StageHunks_ErrorCases(t *testing.T) {
 		name      string
 		hunkSpecs []string
 		patchFile string
-		mockSetup func(*executor.MockCommandExecutor) string
+		mockSetup func(t *testing.T, mock *executor.MockCommandExecutor) (string, error)
 		expectErr bool
 		errMsg    string
 	}{
@@ -21,8 +21,8 @@ func TestStager_StageHunks_ErrorCases(t *testing.T) {
 			name:      "non-existent patch file",
 			hunkSpecs: []string{"file.go:1"},
 			patchFile: "/non/existent/file.patch",
-			mockSetup: func(mock *executor.MockCommandExecutor) string {
-				return "/non/existent/file.patch"
+			mockSetup: func(t *testing.T, mock *executor.MockCommandExecutor) (string, error) {
+				return "/non/existent/file.patch", nil
 			},
 			expectErr: true,
 			errMsg:    "failed to read patch file",
@@ -31,13 +31,16 @@ func TestStager_StageHunks_ErrorCases(t *testing.T) {
 			name:      "git diff command failure",
 			hunkSpecs: []string{"file.go:1"},
 			patchFile: "/tmp/test.patch",
-			mockSetup: func(mock *executor.MockCommandExecutor) string {
+			mockSetup: func(t *testing.T, mock *executor.MockCommandExecutor) (string, error) {
 				// Setup valid patch file
 				f, err := os.CreateTemp("", "test_*.patch")
 				if err != nil {
-					t.Fatalf("Failed to create temp file: %v", err)
+					return "", fmt.Errorf("failed to create temp file: %w", err)
 				}
-				defer f.Close()
+				t.Cleanup(func() {
+					f.Close()
+					os.Remove(f.Name())
+				})
 				
 				validPatch := `diff --git a/file.go b/file.go
 index abc1234..def5678 100644
@@ -68,7 +71,7 @@ index abc1234..def5678 100644
 					Error:  fmt.Errorf("git diff failed"),
 				}
 				
-				return f.Name()
+				return f.Name(), nil
 			},
 			expectErr: true,
 			errMsg:    "failed to get current diff",
@@ -77,13 +80,16 @@ index abc1234..def5678 100644
 			name:      "hunk not found",
 			hunkSpecs: []string{"file.go:999"},
 			patchFile: "/tmp/test.patch",
-			mockSetup: func(mock *executor.MockCommandExecutor) string {
+			mockSetup: func(t *testing.T, mock *executor.MockCommandExecutor) (string, error) {
 				// Setup valid patch file
 				f, err := os.CreateTemp("", "test_*.patch")
 				if err != nil {
-					t.Fatalf("Failed to create temp file: %v", err)
+					return "", fmt.Errorf("failed to create temp file: %w", err)
 				}
-				defer f.Close()
+				t.Cleanup(func() {
+					f.Close()
+					os.Remove(f.Name())
+				})
 				
 				validPatch := `diff --git a/file.go b/file.go
 index abc1234..def5678 100644
@@ -96,7 +102,7 @@ index abc1234..def5678 100644
  func main() {}`
 				f.WriteString(validPatch)
 				
-				return f.Name()
+				return f.Name(), nil
 			},
 			expectErr: true,
 			errMsg:    "hunk 999 not found in file file.go",
@@ -106,7 +112,10 @@ index abc1234..def5678 100644
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mock := executor.NewMockCommandExecutor()
-			patchFile := tt.mockSetup(mock)
+			patchFile, setupErr := tt.mockSetup(t, mock)
+			if setupErr != nil {
+				t.Fatalf("Failed to setup test: %v", setupErr)
+			}
 			
 			stager := NewStager(mock)
 			
