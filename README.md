@@ -30,10 +30,20 @@ This tool is primarily designed for integration with LLM agents (such as Claude 
 - LLM agents making large changes that need to be broken down
 - Automated semantic commit creation from complex diffs
 - Programmatic control over staging for AI development workflows
+- Selectively staging multiple hunks from a patch file one by one, ensuring each hunk is applied in sequence
+- Fine-grained control over which changes to stage
 
-## Purpose
+## AI-Powered Workflow
 
-This tool solves the problem of selectively staging multiple hunks from a patch file one by one, ensuring each hunk is applied in sequence. It's particularly useful when you need fine-grained control over which changes to stage.
+When integrated with LLM agents, the typical workflow becomes:
+
+1. **Analysis**: LLM analyzes the current diff and identifies semantic units
+2. **Planning**: LLM determines optimal commit structure 
+3. **Staging**: `git-sequential-stage` applies changes incrementally using patch IDs
+4. **Committing**: Each semantic unit becomes a focused, meaningful commit
+5. **Iteration**: Process repeats until all changes are committed
+
+This approach ensures that even large, complex changes result in clean, reviewable commit history.
 
 ## Prerequisites
 
@@ -75,19 +85,30 @@ git diff > changes.patch
 git-sequential-stage -hunks=1,3,5 -patch=changes.patch
 ```
 
-### How It Works Internally
+## How It Works
 
-The tool uses patch IDs internally to ensure reliable hunk identification:
+The tool uses patch IDs internally to ensure reliable hunk identification and sequential staging:
 
-1. When you specify hunk numbers (e.g., 1,3,5), the tool:
+### Internal Process
+
+1. **Validation**: Checks that `git` and `filterdiff` commands are available
+2. **Parsing**: Parses the hunk numbers from the command line
+3. **Patch ID Assignment**: When you specify hunk numbers (e.g., 1,3,5), the tool:
    - Parses the entire patch file
    - Assigns a unique patch ID to each hunk based on its content
    - Uses these IDs internally to track and apply hunks
-   
-2. This approach solves the "hunk number drift" problem:
-   - Even if applying hunk 1 would change line numbers for subsequent hunks
-   - The tool can still correctly identify and apply hunks 3 and 5
-   - Because it uses content-based IDs, not line numbers
+4. **Sequential Staging**: For each requested hunk number:
+   - Extracts the single hunk using `filterdiff --hunks=N`
+   - Calculates its patch ID using `git patch-id`
+   - Applies it to the staging area using `git apply --cached`
+5. **Error Handling**: If any hunk fails to apply, the tool stops and reports the error with detailed information
+
+### Solving the "Hunk Number Drift" Problem
+
+This approach solves the common issue where applying early hunks changes line numbers for subsequent hunks:
+- Even if applying hunk 1 would change line numbers for subsequent hunks
+- The tool can still correctly identify and apply hunks 3 and 5
+- Because it uses content-based IDs, not line numbers
 
 This makes the tool perfect for LLM agent workflows where semantic commit splitting is required.
 
@@ -129,28 +150,6 @@ To enforce semantic commit workflows, add this to your `settings.json`:
 ```
 
 This prevents manual `git add` commands while allowing necessary git operations for the semantic commit workflow.
-
-## AI-Powered Workflow
-
-When integrated with LLM agents, the typical workflow becomes:
-
-1. **Analysis**: LLM analyzes the current diff and identifies semantic units
-2. **Planning**: LLM determines optimal commit structure 
-3. **Staging**: `git-sequential-stage` applies changes incrementally using patch IDs
-4. **Committing**: Each semantic unit becomes a focused, meaningful commit
-5. **Iteration**: Process repeats until all changes are committed
-
-This approach ensures that even large, complex changes result in clean, reviewable commit history.
-
-## How it works
-
-1. Validates that `git` and `filterdiff` commands are available
-2. Parses the hunk numbers from the command line
-3. For each requested hunk number:
-   - Extracts the single hunk using `filterdiff --hunks=N`
-   - Calculates its patch ID using `git patch-id`
-   - Applies it to the staging area using `git apply --cached`
-4. If any hunk fails to apply, the tool stops and reports the error with detailed information
 
 ## Development
 
