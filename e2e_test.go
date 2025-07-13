@@ -1402,8 +1402,8 @@ func TestBinaryFileHandling(t *testing.T) {
 	}
 }
 
-// TestFileRenameAndMove tests handling of file modifications combined with renames and moves
-func TestFileRenameAndMove(t *testing.T) {
+// TestFileModificationAndMove tests handling of file modifications combined with moves
+func TestFileModificationAndMove(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping e2e test in short mode")
 	}
@@ -1531,11 +1531,11 @@ if __name__ == "__main__":
 	// This is a more complex test case showing how to handle both modifications and moves
 	
 	// First, apply modifications to the file
-	renamedContent := `#!/usr/bin/env python3
+	modifiedContentForMove := `#!/usr/bin/env python3
 
 def old_function():
-    print("This is the renamed function")
-    print("Now in a new location")
+    print("This is the function ready for move")
+    print("Now with new modifications")
 
 def new_helper():
     print("A helper function")
