@@ -1551,19 +1551,8 @@ def main():
 if __name__ == "__main__":
     main()
 `
-	if err := os.WriteFile(oldFile, []byte(renamedContent), 0644); err != nil {
-		t.Fatalf("Failed to write renamed content: %v", err)
-	}
-
-	// Generate patch for the modifications before moving
-	patchFile2 := "pre_move_changes.patch"
-	gitDiffCmd3 := exec.Command("git", "diff", "HEAD")
-	patchContent2, err := gitDiffCmd3.Output()
-	if err != nil {
-		t.Fatalf("Failed to generate pre-move diff: %v", err)
-	}
-	if err := os.WriteFile(patchFile2, patchContent2, 0644); err != nil {
-		t.Fatalf("Failed to write pre-move patch file: %v", err)
+	if err := os.WriteFile(oldFile, []byte(modifiedContentForMove), 0644); err != nil {
+		t.Fatalf("Failed to write content for move: %v", err)
 	}
 
 	// Move file to new location
