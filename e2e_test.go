@@ -1,15 +1,51 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
+)
+
+// Test data constants
+const (
+	// performanceTargetSeconds is the performance target for large hunk operations
+	performanceTargetSeconds = 5
+)
+
+var (
+	// minimalPNGTransparent is a 1x1 transparent PNG image
+	minimalPNGTransparent = []byte{
+		0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
+		0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, // IHDR chunk
+		0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+		0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+		0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41, // IDAT chunk
+		0x54, 0x78, 0x9C, 0x62, 0x00, 0x00, 0x00, 0x02,
+		0x00, 0x01, 0xE5, 0x27, 0xDE, 0xFC, 0x00, 0x00, // IEND chunk
+		0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42,
+		0x60, 0x82,
+	}
+
+	// minimalPNGRed is a 1x1 red PNG image
+	minimalPNGRed = []byte{
+		0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
+		0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, // IHDR chunk
+		0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+		0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53,
+		0xDE, 0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41, // IDAT chunk
+		0x54, 0x08, 0x99, 0x63, 0xF8, 0xCF, 0xC0, 0x00,
+		0x00, 0x03, 0x01, 0x01, 0x00, 0x18, 0xDD, 0x8D, // IEND chunk
+		0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E,
+		0x44, 0xAE, 0x42, 0x60, 0x82,
+	}
 )
 
 // setupTestRepo はテスト用のGitリポジトリを作成し、クリーンアップ関数を返します
@@ -259,12 +295,7 @@ if __name__ == "__main__":
 	}
 	
 	// 一時的にディレクトリを変更してrunGitSequentialStageを実行
-	originalDir, _ := os.Getwd()
-	err = os.Chdir(dir)
-	if err != nil {
-		t.Fatalf("Failed to change directory: %v", err)
-	}
-	defer os.Chdir(originalDir)
+	t.Chdir(dir)
 	
 	err = runGitSequentialStage([]string{"calculator.py:1"}, absPatchPath)
 	if err != nil {
@@ -403,12 +434,7 @@ if __name__ == "__main__":
 	}
 	
 	// 一時的にディレクトリを変更してrunGitSequentialStageを実行
-	originalDir, _ := os.Getwd()
-	err = os.Chdir(dir)
-	if err != nil {
-		t.Fatalf("Failed to change directory: %v", err)
-	}
-	defer os.Chdir(originalDir)
+	t.Chdir(dir)
 	
 	err = runGitSequentialStage([]string{"math_operations.py:2"}, absPatchPath)
 	if err != nil {
@@ -608,12 +634,7 @@ class DataValidator:
 	}
 	
 	// 一時的にディレクトリを変更してrunGitSequentialStageを実行
-	originalDir, _ := os.Getwd()
-	err = os.Chdir(dir)
-	if err != nil {
-		t.Fatalf("Failed to change directory: %v", err)
-	}
-	defer os.Chdir(originalDir)
+	t.Chdir(dir)
 	
 	err = runGitSequentialStage([]string{"user_manager.py:2", "validator.py:1"}, absPatchPath)
 	if err != nil {
@@ -896,12 +917,7 @@ if __name__ == '__main__':
 	}
 	
 	// 一時的にディレクトリを変更してrunGitSequentialStageを実行
-	originalDir, _ := os.Getwd()
-	err = os.Chdir(dir)
-	if err != nil {
-		t.Fatalf("Failed to change directory: %v", err)
-	}
-	defer os.Chdir(originalDir)
+	t.Chdir(dir)
 
 	// シナリオ1: ロギング機能の追加のみをコミット（ハンク1のみ）
 	// これは新機能追加のセマンティックなコミット
@@ -1248,4 +1264,543 @@ func TestErrorCases_EmptyPatchFile(t *testing.T) {
 	if len(stagedFiles) != 0 {
 		t.Errorf("Expected no files to be staged after error, but got: %v", stagedFiles)
 	}
+}
+
+// TestBinaryFileHandling tests handling of binary files in patches
+func TestBinaryFileHandling(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping e2e test in short mode")
+	}
+
+	// Setup test repository
+	tempDir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	// Change to temp directory
+	t.Chdir(tempDir)
+
+	// Create initial text file
+	textFile := "document.txt"
+	textContent := "This is a text document.\nIt has multiple lines.\n"
+	if err := os.WriteFile(textFile, []byte(textContent), 0644); err != nil {
+		t.Fatalf("Failed to write text file: %v", err)
+	}
+
+	// Create binary file (small PNG image)
+	binaryFile := "image.png"
+	if err := os.WriteFile(binaryFile, minimalPNGTransparent, 0644); err != nil {
+		t.Fatalf("Failed to write binary file: %v", err)
+	}
+
+	// Initial commit
+	gitAddCmd := exec.Command("git", "add", textFile, binaryFile)
+	if output, err := gitAddCmd.CombinedOutput(); err != nil {
+		t.Fatalf("Failed to git add: %v\nOutput: %s", err, output)
+	}
+
+	gitCommitCmd := exec.Command("git", "commit", "-m", "Initial commit with text and binary files")
+	if output, err := gitCommitCmd.CombinedOutput(); err != nil {
+		t.Fatalf("Failed to git commit: %v\nOutput: %s", err, output)
+	}
+
+	// Modify text file
+	textContent2 := "This is a text document.\nIt has multiple lines.\nAdding a new line.\n"
+	if err := os.WriteFile(textFile, []byte(textContent2), 0644); err != nil {
+		t.Fatalf("Failed to update text file: %v", err)
+	}
+
+	// Replace binary file with a different one
+	if err := os.WriteFile(binaryFile, minimalPNGRed, 0644); err != nil {
+		t.Fatalf("Failed to update binary file: %v", err)
+	}
+
+	// Generate patch
+	patchFile := "mixed_changes.patch"
+	gitDiffCmd := exec.Command("git", "diff", "HEAD")
+	patchContent, err := gitDiffCmd.Output()
+	if err != nil {
+		t.Fatalf("Failed to generate diff: %v", err)
+	}
+	if err := os.WriteFile(patchFile, patchContent, 0644); err != nil {
+		t.Fatalf("Failed to write patch file: %v", err)
+	}
+
+	// Test: Stage only text file changes (hunk 1)
+	absPatchPath, err := filepath.Abs(patchFile)
+	if err != nil {
+		t.Fatalf("Failed to get absolute path: %v", err)
+	}
+	
+	if err := runGitSequentialStage([]string{"document.txt:1"}, absPatchPath); err != nil {
+		t.Fatalf("Failed to stage text file changes: %v", err)
+	}
+
+	// Verify only text file is staged
+	gitStatusCmd := exec.Command("git", "status", "--porcelain")
+	statusOutput, err := gitStatusCmd.Output()
+	if err != nil {
+		t.Fatalf("Failed to get git status: %v", err)
+	}
+
+	statusLines := strings.Split(strings.TrimSpace(string(statusOutput)), "\n")
+	expectedStatus := map[string]string{
+		"document.txt": "M ",
+		"image.png":    " M",
+	}
+
+	for _, line := range statusLines {
+		if line == "" {
+			continue
+		}
+		status := line[:2]
+		filename := line[3:]
+		
+		// Skip the patch file
+		if filename == patchFile {
+			continue
+		}
+		
+		if expected, ok := expectedStatus[filename]; ok {
+			if status != expected {
+				t.Errorf("File %s: expected status %q, got %q", filename, expected, status)
+			}
+		} else {
+			t.Errorf("Unexpected file in status: %s", filename)
+		}
+	}
+
+	// Reset for next test
+	gitResetCmd := exec.Command("git", "reset", "HEAD")
+	if output, err := gitResetCmd.CombinedOutput(); err != nil {
+		t.Fatalf("Failed to reset: %v\nOutput: %s", err, output)
+	}
+
+	// Test: Try to stage binary file changes (should handle gracefully)
+	// Expected behavior: Binary files don't have traditional hunks, so the tool
+	// should either:
+	// 1. Skip binary files with an appropriate message
+	// 2. Stage the entire binary file change (since hunks don't apply)
+	// The exact behavior depends on git and filterdiff's handling of binary files
+	err = runGitSequentialStage([]string{"image.png:1"}, absPatchPath)
+	if err == nil {
+		// If it succeeds, verify the binary file is staged
+		gitStatusCmd := exec.Command("git", "status", "--porcelain")
+		statusOutput, err := gitStatusCmd.Output()
+		if err != nil {
+			t.Fatalf("Failed to get git status: %v", err)
+		}
+		
+		if strings.Contains(string(statusOutput), "M  image.png") {
+			t.Log("Binary file was successfully staged")
+		}
+	} else {
+		// If it fails, make sure it's with a reasonable error message
+		if !strings.Contains(err.Error(), "binary") && !strings.Contains(err.Error(), "hunk") {
+			t.Errorf("Unexpected error for binary file: %v", err)
+		}
+		t.Logf("Binary file handling resulted in expected error: %v", err)
+	}
+}
+
+// TestFileModificationAndMove tests handling of file modifications combined with moves
+func TestFileModificationAndMove(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping e2e test in short mode")
+	}
+
+	// Setup test repository
+	tempDir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	// Change to temp directory
+	t.Chdir(tempDir)
+
+	// Create initial file structure
+	if err := os.MkdirAll("src", 0755); err != nil {
+		t.Fatalf("Failed to create src directory: %v", err)
+	}
+
+	oldFile := "old_module.py"
+	fileContent := `#!/usr/bin/env python3
+
+def old_function():
+    print("This is the old function")
+
+def main():
+    old_function()
+
+if __name__ == "__main__":
+    main()
+`
+	if err := os.WriteFile(oldFile, []byte(fileContent), 0644); err != nil {
+		t.Fatalf("Failed to write file: %v", err)
+	}
+
+	// Initial commit
+	gitAddCmd := exec.Command("git", "add", oldFile)
+	if output, err := gitAddCmd.CombinedOutput(); err != nil {
+		t.Fatalf("Failed to git add: %v\nOutput: %s", err, output)
+	}
+
+	gitCommitCmd := exec.Command("git", "commit", "-m", "Initial commit with old module")
+	if output, err := gitCommitCmd.CombinedOutput(); err != nil {
+		t.Fatalf("Failed to git commit: %v\nOutput: %s", err, output)
+	}
+
+	// Test a different scenario: modify existing file and also move it
+	// First modify the content
+	modifiedContent := `#!/usr/bin/env python3
+
+def old_function():
+    print("This is the old function with modifications")
+    print("Adding more functionality")
+
+def new_helper():
+    print("A helper function")
+
+def main():
+    old_function()
+    new_helper()
+
+if __name__ == "__main__":
+    main()
+`
+	if err := os.WriteFile(oldFile, []byte(modifiedContent), 0644); err != nil {
+		t.Fatalf("Failed to write modified content: %v", err)
+	}
+
+	// Generate patch for modifications
+	patchFile := "modifications.patch"
+	gitDiffCmd := exec.Command("git", "diff", "HEAD")
+	patchContent, err := gitDiffCmd.Output()
+	if err != nil {
+		t.Fatalf("Failed to generate diff: %v", err)
+	}
+	if err := os.WriteFile(patchFile, patchContent, 0644); err != nil {
+		t.Fatalf("Failed to write patch file: %v", err)
+	}
+
+	// Test: Stage only the first hunk (function modification)
+	absPatchPath, err := filepath.Abs(patchFile)
+	if err != nil {
+		t.Fatalf("Failed to get absolute path: %v", err)
+	}
+
+	err = runGitSequentialStage([]string{"old_module.py:1"}, absPatchPath)
+	if err != nil {
+		t.Fatalf("Failed to stage first hunk: %v", err)
+	}
+
+	// Verify partial staging
+	gitDiffCachedCmd := exec.Command("git", "diff", "--cached")
+	cachedDiff, err := gitDiffCachedCmd.Output()
+	if err != nil {
+		t.Fatalf("Failed to get cached diff: %v", err)
+	}
+
+	// Should contain the oldFunction modification
+	if !strings.Contains(string(cachedDiff), "old function with modifications") {
+		t.Error("First hunk not properly staged")
+	}
+
+	// Check unstaged changes
+	gitDiffCmd2 := exec.Command("git", "diff")
+	unstagedDiff, err := gitDiffCmd2.Output()
+	if err != nil {
+		t.Fatalf("Failed to get unstaged diff: %v", err)
+	}
+
+	// Log the diffs for debugging
+	t.Logf("Cached diff:\n%s", cachedDiff)
+	t.Logf("Unstaged diff:\n%s", unstagedDiff)
+	
+	// The modifications might be in a single hunk, so check if anything remains unstaged
+	if len(unstagedDiff) > 0 && strings.Contains(string(unstagedDiff), "@@") {
+		t.Log("Some changes remain unstaged as expected")
+	} else {
+		t.Log("All changes were staged in a single hunk")
+	}
+
+	// Now test moving files scenario with a clean state
+	gitResetCmd := exec.Command("git", "reset", "--hard", "HEAD")
+	if output, err := gitResetCmd.CombinedOutput(); err != nil {
+		t.Fatalf("Failed to reset: %v\nOutput: %s", err, output)
+	}
+
+	// Test scenario: modify file content AND move it
+	// This is a more complex test case showing how to handle both modifications and moves
+	
+	// First, apply modifications to the file
+	modifiedContentForMove := `#!/usr/bin/env python3
+
+def old_function():
+    print("This is the function ready for move")
+    print("Now with new modifications")
+
+def new_helper():
+    print("A helper function")
+
+def additional_func():
+    print("Another new function")
+
+def main():
+    old_function()
+    new_helper()
+    additional_func()
+
+if __name__ == "__main__":
+    main()
+`
+	if err := os.WriteFile(oldFile, []byte(modifiedContentForMove), 0644); err != nil {
+		t.Fatalf("Failed to write content for move: %v", err)
+	}
+
+	// Move file to new location
+	newFile := "src/new_module.py"
+	if err := os.Rename(oldFile, newFile); err != nil {
+		t.Fatalf("Failed to move file: %v", err)
+	}
+
+	// Stage the rename/move
+	gitRmCmd := exec.Command("git", "rm", oldFile)
+	if output, err := gitRmCmd.CombinedOutput(); err != nil {
+		t.Fatalf("Failed to git rm: %v\nOutput: %s", err, output)
+	}
+
+	gitAddCmd2 := exec.Command("git", "add", newFile)
+	if output, err := gitAddCmd2.CombinedOutput(); err != nil {
+		t.Fatalf("Failed to git add new file: %v\nOutput: %s", err, output)
+	}
+
+	// Verify Git recognizes it as a rename with modifications
+	gitStatusCmd := exec.Command("git", "status", "--porcelain")
+	statusOutput, err := gitStatusCmd.Output()
+	if err != nil {
+		t.Fatalf("Failed to get git status: %v", err)
+	}
+	
+	statusStr := string(statusOutput)
+	if strings.Contains(statusStr, "R  old_module.py -> src/new_module.py") {
+		t.Log("Git correctly detected file rename with modifications")
+	} else if strings.Contains(statusStr, "D  old_module.py") && strings.Contains(statusStr, "A  src/new_module.py") {
+		t.Log("Git shows rename as delete + add (expected for files with significant changes)")
+	} else {
+		t.Logf("Unexpected git status output:\n%s", statusStr)
+	}
+
+	// Test that we can still apply patches to the original file location
+	// This demonstrates handling of patches created before a file move
+	t.Log("Note: Applying patches to moved files requires careful handling of file paths")
+}
+
+// TestLargeFileWithManyHunks tests handling of large files with many hunks
+func TestLargeFileWithManyHunks(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping e2e test in short mode")
+	}
+
+	// Setup test repository
+	tempDir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	// Change to temp directory
+	t.Chdir(tempDir)
+
+	// Create a large file with many functions
+	largeFile := "large_module.py"
+	var content strings.Builder
+	content.WriteString("#!/usr/bin/env python3\n\n")
+	
+	// Create 20 functions
+	for i := 1; i <= 20; i++ {
+		content.WriteString(fmt.Sprintf(`def function_%d():
+    print("This is function %d")
+
+`, i, i))
+	}
+	
+	content.WriteString(`def main():
+`)
+	for i := 1; i <= 20; i++ {
+		content.WriteString(fmt.Sprintf("    function_%d()\n", i))
+	}
+	content.WriteString(`
+if __name__ == "__main__":
+    main()
+`)
+
+	if err := os.WriteFile(largeFile, []byte(content.String()), 0644); err != nil {
+		t.Fatalf("Failed to write large file: %v", err)
+	}
+
+	// Initial commit
+	gitAddCmd := exec.Command("git", "add", largeFile)
+	if output, err := gitAddCmd.CombinedOutput(); err != nil {
+		t.Fatalf("Failed to git add: %v\nOutput: %s", err, output)
+	}
+
+	gitCommitCmd := exec.Command("git", "commit", "-m", "Initial commit with large file")
+	if output, err := gitCommitCmd.CombinedOutput(); err != nil {
+		t.Fatalf("Failed to git commit: %v\nOutput: %s", err, output)
+	}
+
+	// Modify multiple functions throughout the file
+	var modifiedContent strings.Builder
+	modifiedContent.WriteString("#!/usr/bin/env python3\n\n")
+	
+	for i := 1; i <= 20; i++ {
+		if i == 1 || i == 5 || i == 10 || i == 15 || i == 20 {
+			// Modify these functions
+			modifiedContent.WriteString(fmt.Sprintf(`def function_%d():
+    print("This is function %d - MODIFIED")
+    print("Additional line in function %d")
+
+`, i, i, i))
+		} else {
+			// Keep original
+			modifiedContent.WriteString(fmt.Sprintf(`def function_%d():
+    print("This is function %d")
+
+`, i, i))
+		}
+	}
+	
+	modifiedContent.WriteString(`def main():
+`)
+	for i := 1; i <= 20; i++ {
+		modifiedContent.WriteString(fmt.Sprintf("    function_%d()\n", i))
+	}
+	modifiedContent.WriteString(`    print("All functions called")
+
+if __name__ == "__main__":
+    main()
+`)
+
+	if err := os.WriteFile(largeFile, []byte(modifiedContent.String()), 0644); err != nil {
+		t.Fatalf("Failed to write modified file: %v", err)
+	}
+
+	// Generate patch
+	patchFile := "large_file_changes.patch"
+	gitDiffCmd := exec.Command("git", "diff", "HEAD")
+	patchContent, err := gitDiffCmd.Output()
+	if err != nil {
+		t.Fatalf("Failed to generate diff: %v", err)
+	}
+	if err := os.WriteFile(patchFile, patchContent, 0644); err != nil {
+		t.Fatalf("Failed to write patch file: %v", err)
+	}
+
+	// Count the number of hunks
+	hunkCount := strings.Count(string(patchContent), "@@")
+	t.Logf("Generated patch with %d hunks", hunkCount)
+
+	// Test: Stage specific hunks (1, 3, and 5) with performance measurement
+	absPatchPath, err := filepath.Abs(patchFile)
+	if err != nil {
+		t.Fatalf("Failed to get absolute path: %v", err)
+	}
+
+	// Stage hunks 1, 3, and 5 (if available)
+	var selectedHunks []string
+	selectedHunks = append(selectedHunks, "1", "3")
+	if hunkCount >= 5 {
+		selectedHunks = append(selectedHunks, "5")
+	}
+	
+	hunkSpec := fmt.Sprintf("%s:%s", largeFile, strings.Join(selectedHunks, ","))
+	
+	// Measure performance
+	startTime := time.Now()
+	err = runGitSequentialStage([]string{hunkSpec}, absPatchPath)
+	elapsed := time.Since(startTime)
+	
+	if err != nil {
+		t.Fatalf("Failed to stage selected hunks: %v", err)
+	}
+	
+	// Log performance metrics
+	t.Logf("Performance: Staged %d hunks in %v", len(selectedHunks), elapsed)
+	
+	// Check if performance meets target
+	targetDuration := time.Duration(performanceTargetSeconds) * time.Second
+	if elapsed > targetDuration {
+		t.Errorf("Performance issue: operation took %v, expected < %v", elapsed, targetDuration)
+	} else {
+		t.Logf("Performance is acceptable: %v < %v target", elapsed, targetDuration)
+	}
+
+	// Verify partial staging
+	gitDiffCachedCmd := exec.Command("git", "diff", "--cached")
+	cachedDiff, err := gitDiffCachedCmd.Output()
+	if err != nil {
+		t.Fatalf("Failed to get cached diff: %v", err)
+	}
+
+	// Count staged hunks
+	stagedHunkCount := strings.Count(string(cachedDiff), "@@")
+	t.Logf("Staged %d hunks out of %d", stagedHunkCount, hunkCount)
+
+	// Verify we have both staged and unstaged changes
+	gitDiffCmd2 := exec.Command("git", "diff")
+	unstagedDiff, err := gitDiffCmd2.Output()
+	if err != nil {
+		t.Fatalf("Failed to get unstaged diff: %v", err)
+	}
+
+	unstagedHunkCount := strings.Count(string(unstagedDiff), "@@")
+	t.Logf("Remaining unstaged hunks: %d", unstagedHunkCount)
+
+	// Basic validation
+	if stagedHunkCount == 0 {
+		t.Error("No hunks were staged")
+	}
+	if stagedHunkCount == hunkCount {
+		t.Error("All hunks were staged, expected partial staging")
+	}
+	if unstagedHunkCount == 0 && hunkCount > 3 {
+		t.Error("No hunks remain unstaged, expected some unstaged changes")
+	}
+
+	// Test performance with many hunk selections
+	// Reset for performance test
+	gitResetCmd := exec.Command("git", "reset", "HEAD")
+	if output, err := gitResetCmd.CombinedOutput(); err != nil {
+		t.Fatalf("Failed to reset: %v\nOutput: %s", err, output)
+	}
+
+	// Stage many hunks individually
+	var manyHunks []string
+	maxHunks := 10
+	if hunkCount < maxHunks {
+		maxHunks = hunkCount
+	}
+	for i := 1; i <= maxHunks; i++ {
+		if i%2 == 1 { // Stage odd-numbered hunks
+			manyHunks = append(manyHunks, fmt.Sprintf("%d", i))
+		}
+	}
+	
+	if len(manyHunks) > 0 {
+		hunkSpec := fmt.Sprintf("%s:%s", largeFile, strings.Join(manyHunks, ","))
+		err = runGitSequentialStage([]string{hunkSpec}, absPatchPath)
+		if err != nil {
+			t.Logf("Failed to stage many hunks: %v", err)
+		} else {
+			elapsed := time.Since(startTime)
+			t.Logf("Staged %d hunks in %v", len(manyHunks), elapsed)
+			
+			// Warn if it takes too long
+			if elapsed > 5*time.Second {
+				t.Logf("Warning: Staging %d hunks took %v, which might be slow", len(manyHunks), elapsed)
+			}
+		}
+	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

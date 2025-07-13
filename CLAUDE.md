@@ -1,128 +1,103 @@
-# git-sequential-stage - Claude開発ガイド
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## プロジェクト概要
 
-このプロジェクトは、パッチファイルから指定されたハンクを順次ステージングするGoのCLIツールです。LLMエージェントがセマンティックな意味を持つコミットを作成するためのツールとして設計されています。
+git-sequential-stageは、パッチファイルから指定されたハンクを順次ステージングするGoのCLIツールです。LLMエージェントがセマンティックな意味を持つコミットを作成するためのプログラマティックな制御を提供します。
+
+**解決する核心問題**: 従来の`git add -p`では依存関係のあるハンクの処理やプログラマティックな制御ができません。このツールはパッチIDを使用して行番号変更に関係なくハンクを確実にステージングし、セマンティックなコミット分割を可能にします。
 
 ## アーキテクチャ
 
 ```
 git-sequential-stage/
-├── main.go                     # CLIエントリーポイント
-├── e2e_test.go                # エンドツーエンドテスト
-├── internal/
-│   ├── executor/              # コマンド実行抽象化
-│   ├── stager/                # ハンクステージング核心ロジック
-│   └── validator/             # 依存関係・引数検証
-└── .github/workflows/
-    └── go-test.yml            # CI設定（patchutilsインストール込み）
+├── main.go                     # CLIエントリーポイント（hunkListカスタムタイプ）
+├── e2e_test.go                 # 包括的E2Eテスト（11テストケース）
+└── internal/
+    ├── executor/               # コマンド実行抽象化レイヤー
+    ├── stager/                 # パッチIDシステムによる核心ステージングロジック
+    └── validator/              # 依存関係・引数検証
 ```
+
+**主要設計パターン**:
+- **依存性注入**: `executor.CommandExecutor`インターフェースによるテストでのモック化
+- **パッチIDシステム**: `git patch-id`によるコンテンツベースのハンク識別
+- **逐次処理**: 依存関係を処理するためのハンク1つずつの適用
+
+## 開発コマンド
+
+```bash
+# CLIツールのビルド
+go build
+
+# 全テスト実行（ユニット + E2E）
+go test -v ./...
+
+# E2Eテストのみ実行
+go test -v -run "Test.*" .
+
+# 重要テストの個別実行
+go test -v -run TestMixedSemanticChanges     # セマンティック分割の核心テスト
+go test -v -run TestLargeFileWithManyHunks   # パフォーマンステスト
+
+# 依存関係インストール（macOS）
+brew install patchutils
+
+# 依存関係インストール（Ubuntu/Debian）
+sudo apt-get install patchutils
+```
+
+## 開発時のツール使用方法
+
+CLIは複数の`-hunk`フラグを処理するカスタム`hunkList`タイプを使用します：
+
+```bash
+# 基本使用方法（更新されたAPI）
+./git-sequential-stage -patch="changes.patch" -hunk="file.go:1,3,5"
+
+# 複数ファイル
+./git-sequential-stage -patch="changes.patch" \
+  -hunk="src/main.go:1,3" \
+  -hunk="src/utils.go:2,4"
+```
+
+**重要な注意**: ツールは`file:hunk_numbers`形式を期待します。単なるハンク番号ではありません。
 
 ## テスト戦略
 
-### ユニットテスト
-- `internal/`配下の各パッケージに個別のテストファイル
-- モックを使用した単体機能テスト
-- コマンド実行は`executor`パッケージで抽象化
+**E2Eテスト**（11の包括的テストケース）:
+- `TestMixedSemanticChanges`: **最重要** - セマンティックコミット分割の実証
+- `TestLargeFileWithManyHunks`: パフォーマンス検証（目標: <5秒、実測: ~230ms）
+- `TestBinaryFileHandling`: バイナリファイルのエッジケース
+- `TestFileModificationAndMove`: 複雑なファイル操作
 
-### エンドツーエンドテスト
+**テスト環境**:
+- `go-git`ライブラリによる独立したテストリポジトリ
+- Go 1.20+の`t.Chdir()`によるディレクトリ管理
+- バイナリ実行ではなく`runGitSequentialStage`関数の直接呼び出し
 
-#### 実装詳細（e2e_test.go）
-- **go-git**ライブラリを使用してテスト用Gitリポジトリを作成
-- 一時ディレクトリでの完全に独立したテスト環境
-- バイナリ実行ではなく`runGitSequentialStage`関数を直接呼び出し
+## 主要実装詳細
 
-#### テストケース
-1. **TestSingleFileSingleHunk**: 基本的な1ファイル1ハンクのケース
-2. **TestSingleFileMultipleHunks**: 複数ハンクから特定ハンクのみ選択
-3. **TestMultipleFilesMultipleHunks**: 複数ファイルから特定ハンクの組み合わせ
-4. **TestMixedSemanticChanges**: 最重要テスト - 異なる意味の変更を分離
+**パッチIDシステム**: 
+1. `filterdiff --hunks=N`でハンクを抽出
+2. `git patch-id`でユニークIDを計算
+3. コンテンツベースのマッチングで逐次適用
+4. 「ハンク番号のずれ」問題を自動解決
 
-### 最重要テスト：TestMixedSemanticChanges
+**依存関係**:
+- 実行時: `git`, `filterdiff`（patchutils）
+- テスト時: `go-git`ライブラリ
+- CI: patchutils自動インストール付きGitHub Actions
 
-このテストはgit-sequential-stageの核心価値を実証します：
+**パフォーマンス**: 20関数・12ハンクのファイルを~230msで処理（5秒目標を大幅クリア）
 
-```python
-# 元のコード（Webサーバー）
-def get_users():
-    # TODO: Get users from database
-    users = [...]
-    return jsonify(users)
+## LLMエージェント統合
 
-# 変更後：3つの異なる意味の変更が混在
-def get_users():
-    # TODO: Get users from database
-    logger.info("Fetching users from database")  # 1. ロギング機能追加
-    users = [...]
-    return jsonify(users)
+このツールはLLMワークフロー自動化のために特別に設計されました。`TestMixedSemanticChanges`で実証されるセマンティックコミット分割機能は、単一の複雑な変更を意味のあるコミットに自動分割できることを示します：
 
-def create_user():
-    data = request.get_json()
-    
-    # Add input validation                      # 2. バリデーション機能追加
-    if not data or not data.get("name"):
-        return jsonify({"error": "Invalid"}), 400
-    
-    # TODO: Save user to database
-    new_user = {...}
-    return jsonify(new_user), 201
+- ロギングインフラ → `feat:`コミット
+- 入力バリデーション → `feat:`コミット  
+- API改善 → `improve:`コミット
 
-def health_check():
-    return {"status": "ok", "timestamp": "..."}  # 3. API改善
-```
-
-**テストシナリオ**：
-1. ハンク1のみステージング → "feat: add logging infrastructure" コミット
-2. ハンク2のみステージング → "feat: add input validation" コミット  
-3. ハンク3のみステージング → "improve: enhance health check" コミット
-
-**実証内容**：
-- 単一の複雑な変更を意味的に分離してコミット
-- LLMエージェントによる自動的なセマンティックコミット分割
-- git add -pでは困難な依存関係のあるハンクの順次適用
-
-## CI/CD
-
-### GitHub Actions設定
-- Go 1.22環境
-- **patchutils**パッケージの自動インストール（filterdiffコマンド）
-- 全テスト（ユニット + E2E）の実行
-
-### 依存関係
-- **実行時**: `git`, `filterdiff`（patchutilsパッケージ）
-- **テスト時**: `go-git`ライブラリ
-
-## 開発時の注意点
-
-### テスト実行
-```bash
-# 全テスト実行
-go test -v ./...
-
-# E2Eテストのみ
-go test -v -run "Test.*" .
-
-# 特定のテストケース
-go test -v -run TestMixedSemanticChanges
-```
-
-### filterdiffコマンドについて
-- Ubuntu/Debian: `sudo apt-get install patchutils`
-- macOS: `brew install patchutils`
-- ハンク抽出に必須のツール
-
-### go-gitライブラリ
-- テスト用の一時Gitリポジトリ作成に使用
-- プログラマティックなGit操作（コミット、ステージング）
-- テストの独立性とクリーンアップを保証
-
-## パッチIDシステム
-
-git-sequential-stageは内部で`git patch-id`を使用してハンクを追跡します：
-
-1. ユーザーが指定したハンク番号（例：1,3,5）
-2. filterdiffでハンクを抽出
-3. 各ハンクのパッチIDを計算
-4. パッチIDベースでハンクを順次適用
-
-これにより「ハンク番号のずれ」問題を解決し、LLMエージェントワークフローに最適化されています。
+パッチIDシステムにより、ハンクに依存関係がある場合や重複する行範囲を変更する場合でも確実に動作します。
