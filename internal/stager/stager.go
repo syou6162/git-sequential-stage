@@ -193,7 +193,7 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
 		}
 		
 		// Build diff command with specific files
-		diffArgs := []string{"diff", "HEAD"}
+		diffArgs := []string{"diff", "HEAD", "--"}
 		for file := range targetFiles {
 			diffArgs = append(diffArgs, file)
 		}
