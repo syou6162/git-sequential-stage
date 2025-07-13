@@ -290,12 +290,7 @@ if __name__ == "__main__":
 	}
 	
 	// 一時的にディレクトリを変更してrunGitSequentialStageを実行
-	originalDir, _ := os.Getwd()
-	err = os.Chdir(dir)
-	if err != nil {
-		t.Fatalf("Failed to change directory: %v", err)
-	}
-	defer os.Chdir(originalDir)
+	t.Chdir(dir)
 	
 	err = runGitSequentialStage([]string{"calculator.py:1"}, absPatchPath)
 	if err != nil {
@@ -434,12 +429,7 @@ if __name__ == "__main__":
 	}
 	
 	// 一時的にディレクトリを変更してrunGitSequentialStageを実行
-	originalDir, _ := os.Getwd()
-	err = os.Chdir(dir)
-	if err != nil {
-		t.Fatalf("Failed to change directory: %v", err)
-	}
-	defer os.Chdir(originalDir)
+	t.Chdir(dir)
 	
 	err = runGitSequentialStage([]string{"math_operations.py:2"}, absPatchPath)
 	if err != nil {
@@ -639,12 +629,7 @@ class DataValidator:
 	}
 	
 	// 一時的にディレクトリを変更してrunGitSequentialStageを実行
-	originalDir, _ := os.Getwd()
-	err = os.Chdir(dir)
-	if err != nil {
-		t.Fatalf("Failed to change directory: %v", err)
-	}
-	defer os.Chdir(originalDir)
+	t.Chdir(dir)
 	
 	err = runGitSequentialStage([]string{"user_manager.py:2", "validator.py:1"}, absPatchPath)
 	if err != nil {
@@ -927,12 +912,7 @@ if __name__ == '__main__':
 	}
 	
 	// 一時的にディレクトリを変更してrunGitSequentialStageを実行
-	originalDir, _ := os.Getwd()
-	err = os.Chdir(dir)
-	if err != nil {
-		t.Fatalf("Failed to change directory: %v", err)
-	}
-	defer os.Chdir(originalDir)
+	t.Chdir(dir)
 
 	// シナリオ1: ロギング機能の追加のみをコミット（ハンク1のみ）
 	// これは新機能追加のセマンティックなコミット
@@ -1550,13 +1530,55 @@ func main() {
 		t.Fatalf("Failed to reset: %v\nOutput: %s", err, output)
 	}
 
+	// Test scenario: modify file content AND move it
+	// This is a more complex test case showing how to handle both modifications and moves
+	
+	// First, apply modifications to the file
+	renamedContent := `package main
+
+import "fmt"
+
+func oldFunction() {
+	fmt.Println("This is the renamed function")
+	fmt.Println("Now in a new location")
+}
+
+func newHelper() {
+	fmt.Println("A helper function")
+}
+
+func additionalFunc() {
+	fmt.Println("Another new function")
+}
+
+func main() {
+	oldFunction()
+	newHelper()
+	additionalFunc()
+}
+`
+	if err := os.WriteFile(oldFile, []byte(renamedContent), 0644); err != nil {
+		t.Fatalf("Failed to write renamed content: %v", err)
+	}
+
+	// Generate patch for the modifications before moving
+	patchFile2 := "pre_move_changes.patch"
+	gitDiffCmd3 := exec.Command("git", "diff", "HEAD")
+	patchContent2, err := gitDiffCmd3.Output()
+	if err != nil {
+		t.Fatalf("Failed to generate pre-move diff: %v", err)
+	}
+	if err := os.WriteFile(patchFile2, patchContent2, 0644); err != nil {
+		t.Fatalf("Failed to write pre-move patch file: %v", err)
+	}
+
 	// Move file to new location
 	newFile := "src/new_module.go"
 	if err := os.Rename(oldFile, newFile); err != nil {
 		t.Fatalf("Failed to move file: %v", err)
 	}
 
-	// Stage the rename
+	// Stage the rename/move
 	gitRmCmd := exec.Command("git", "rm", oldFile)
 	if output, err := gitRmCmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to git rm: %v\nOutput: %s", err, output)
@@ -1567,7 +1589,7 @@ func main() {
 		t.Fatalf("Failed to git add new file: %v\nOutput: %s", err, output)
 	}
 
-	// Verify Git recognizes it as a rename
+	// Verify Git recognizes it as a rename with modifications
 	gitStatusCmd := exec.Command("git", "status", "--porcelain")
 	statusOutput, err := gitStatusCmd.Output()
 	if err != nil {
