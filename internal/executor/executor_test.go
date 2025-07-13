@@ -169,7 +169,7 @@ func TestMockCommandExecutorExecuteWithStdin(t *testing.T) {
 		wantStdin   []byte
 	}{
 		{
-			name: "successful command with stdin",
+			name: "mock successful command with stdin",
 			setup: func(m *MockCommandExecutor) {
 				m.Commands["git [patch-id --stable]"] = MockResponse{
 					Output: []byte("abc12345 commit-id\n"),
@@ -247,8 +247,21 @@ func TestMockCommandExecutorExecutedCommandsTracking(t *testing.T) {
 	mock.Commands["filterdiff [--version]"] = MockResponse{Output: []byte("filterdiff version"), Error: nil}
 
 	// Execute multiple commands
-	_, _ = mock.Execute("git", "--version")
-	_, _ = mock.ExecuteWithStdin("filterdiff", strings.NewReader("input"), "--version")
+	output1, err1 := mock.Execute("git", "--version")
+	if err1 != nil {
+		t.Fatalf("Unexpected error from Execute: %v", err1)
+	}
+	if output1 == nil {
+		t.Error("Expected non-nil output from Execute")
+	}
+	
+	output2, err2 := mock.ExecuteWithStdin("filterdiff", strings.NewReader("input"), "--version")
+	if err2 != nil {
+		t.Fatalf("Unexpected error from ExecuteWithStdin: %v", err2)
+	}
+	if output2 == nil {
+		t.Error("Expected non-nil output from ExecuteWithStdin")
+	}
 
 	// Check that all commands were tracked
 	if len(mock.ExecutedCommands) != 2 {
