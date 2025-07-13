@@ -1,0 +1,449 @@
+package stager
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/syou6162/git-sequential-stage/internal/executor"
+)
+
+func TestExtractFileDiff(t *testing.T) {
+	tests := []struct {
+		name           string
+		patchContent   string
+		hunkIndex      int // which hunk to test (0-based)
+		expectedOutput string
+	}{
+		{
+			name: "single new file",
+			patchContent: `diff --git a/new_file.go b/new_file.go
+new file mode 100644
+index 0000000..1234567
+--- /dev/null
++++ b/new_file.go
+@@ -0,0 +1,3 @@
++package main
++
++func main() {}`,
+			hunkIndex: 0,
+			expectedOutput: `diff --git a/new_file.go b/new_file.go
+new file mode 100644
+index 0000000..1234567
+--- /dev/null
++++ b/new_file.go
+@@ -0,0 +1,3 @@
++package main
++
++func main() {}`,
+		},
+		{
+			name: "multiple new files - extract first",
+			patchContent: `diff --git a/file1.go b/file1.go
+new file mode 100644
+index 0000000..abc1234
+--- /dev/null
++++ b/file1.go
+@@ -0,0 +1,2 @@
++package main
++func main() {}
+diff --git a/file2.go b/file2.go
+new file mode 100644
+index 0000000..def5678
+--- /dev/null
++++ b/file2.go
+@@ -0,0 +1,1 @@
++package test`,
+			hunkIndex: 0, // first file
+			expectedOutput: `diff --git a/file1.go b/file1.go
+new file mode 100644
+index 0000000..abc1234
+--- /dev/null
++++ b/file1.go
+@@ -0,0 +1,2 @@
++package main
++func main() {}`,
+		},
+		{
+			name: "multiple new files - extract second",
+			patchContent: `diff --git a/file1.go b/file1.go
+new file mode 100644
+index 0000000..abc1234
+--- /dev/null
++++ b/file1.go
+@@ -0,0 +1,2 @@
++package main
++func main() {}
+diff --git a/file2.go b/file2.go
+new file mode 100644
+index 0000000..def5678
+--- /dev/null
++++ b/file2.go
+@@ -0,0 +1,1 @@
++package test`,
+			hunkIndex: 1, // second file
+			expectedOutput: `diff --git a/file2.go b/file2.go
+new file mode 100644
+index 0000000..def5678
+--- /dev/null
++++ b/file2.go
+@@ -0,0 +1,1 @@
++package test`,
+		},
+		{
+			name: "new file with mixed patch",
+			patchContent: `diff --git a/existing.go b/existing.go
+index abc1234..def5678 100644
+--- a/existing.go
++++ b/existing.go
+@@ -1,3 +1,4 @@
+ package main
+ 
++import "fmt"
+ func main() {}
+diff --git a/new_file.go b/new_file.go
+new file mode 100644
+index 0000000..999888
+--- /dev/null
++++ b/new_file.go
+@@ -0,0 +1,1 @@
++package new`,
+			hunkIndex: 1, // new file (second hunk)
+			expectedOutput: `diff --git a/new_file.go b/new_file.go
+new file mode 100644
+index 0000000..999888
+--- /dev/null
++++ b/new_file.go
+@@ -0,0 +1,1 @@
++package new`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Parse patch file to get hunks
+			hunks, err := parsePatchFile(tt.patchContent)
+			if err != nil {
+				t.Fatalf("Failed to parse patch: %v", err)
+			}
+
+			if tt.hunkIndex >= len(hunks) {
+				t.Fatalf("Hunk index %d out of range, only %d hunks found", tt.hunkIndex, len(hunks))
+			}
+
+			hunk := hunks[tt.hunkIndex]
+			patchLines := strings.Split(tt.patchContent, "\n")
+
+			// Call the function under test
+			result := extractFileDiff(patchLines, &hunk)
+
+			// Compare results
+			resultStr := string(result)
+			if resultStr != tt.expectedOutput {
+				t.Errorf("extractFileDiff() result mismatch\nExpected:\n%s\n\nGot:\n%s", tt.expectedOutput, resultStr)
+			}
+		})
+	}
+}
+
+func TestIsNewFileHunk(t *testing.T) {
+	tests := []struct {
+		name         string
+		patchContent string
+		hunkIndex    int
+		expected     bool
+	}{
+		{
+			name: "new file hunk with @@ -0,0",
+			patchContent: `diff --git a/new_file.go b/new_file.go
+new file mode 100644
+index 0000000..1234567
+--- /dev/null
++++ b/new_file.go
+@@ -0,0 +1,3 @@
++package main
++
++func main() {}`,
+			hunkIndex: 0,
+			expected:  true,
+		},
+		{
+			name: "regular file modification hunk",
+			patchContent: `diff --git a/existing.go b/existing.go
+index abc1234..def5678 100644
+--- a/existing.go
++++ b/existing.go
+@@ -1,3 +1,4 @@
+ package main
+ 
++import "fmt"
+ func main() {}`,
+			hunkIndex: 0,
+			expected:  false,
+		},
+		{
+			name: "new file hunk with different format",
+			patchContent: `diff --git a/test.txt b/test.txt
+new file mode 100644
+index 0000000..e69de29
+--- /dev/null
++++ b/test.txt
+@@ -0,0 +1 @@
++Hello world`,
+			hunkIndex: 0,
+			expected:  true,
+		},
+		{
+			name: "file deletion hunk",
+			patchContent: `diff --git a/deleted.go b/deleted.go
+deleted file mode 100644
+index 1234567..0000000
+--- a/deleted.go
++++ /dev/null
+@@ -1,3 +0,0 @@
+-package main
+-
+-func main() {}`,
+			hunkIndex: 0,
+			expected:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hunks, err := parsePatchFile(tt.patchContent)
+			if err != nil {
+				t.Fatalf("Failed to parse patch: %v", err)
+			}
+
+			if tt.hunkIndex >= len(hunks) {
+				t.Fatalf("Hunk index %d out of range, only %d hunks found", tt.hunkIndex, len(hunks))
+			}
+
+			hunk := hunks[tt.hunkIndex]
+			patchLines := strings.Split(tt.patchContent, "\n")
+
+			result := isNewFileHunk(patchLines, &hunk)
+
+			if result != tt.expected {
+				hunkHeaderLine := ""
+				if hunk.StartLine < len(patchLines) {
+					hunkHeaderLine = patchLines[hunk.StartLine]
+				}
+				t.Errorf("isNewFileHunk() = %v, expected %v for hunk header: %s", result, tt.expected, hunkHeaderLine)
+			}
+		})
+	}
+}
+
+func TestParsePatchFile_NewFiles(t *testing.T) {
+	tests := []struct {
+		name           string
+		patchContent   string
+		expectedHunks  int
+		expectedFiles  []string
+		validateHunks  func(t *testing.T, hunks []HunkInfo)
+	}{
+		{
+			name: "single new file",
+			patchContent: `diff --git a/new_file.go b/new_file.go
+new file mode 100644
+index 0000000..1234567
+--- /dev/null
++++ b/new_file.go
+@@ -0,0 +1,3 @@
++package main
++
++func main() {}`,
+			expectedHunks: 1,
+			expectedFiles: []string{"new_file.go"},
+			validateHunks: func(t *testing.T, hunks []HunkInfo) {
+				if hunks[0].GlobalIndex != 1 {
+					t.Errorf("Expected GlobalIndex 1, got %d", hunks[0].GlobalIndex)
+				}
+				if hunks[0].IndexInFile != 1 {
+					t.Errorf("Expected IndexInFile 1, got %d", hunks[0].IndexInFile)
+				}
+			},
+		},
+		{
+			name: "multiple new files",
+			patchContent: `diff --git a/file1.go b/file1.go
+new file mode 100644
+index 0000000..abc1234
+--- /dev/null
++++ b/file1.go
+@@ -0,0 +1,2 @@
++package main
++func main() {}
+diff --git a/file2.go b/file2.go
+new file mode 100644
+index 0000000..def5678
+--- /dev/null
++++ b/file2.go
+@@ -0,0 +1,1 @@
++package test`,
+			expectedHunks: 2,
+			expectedFiles: []string{"file1.go", "file2.go"},
+			validateHunks: func(t *testing.T, hunks []HunkInfo) {
+				// First hunk
+				if hunks[0].GlobalIndex != 1 || hunks[0].IndexInFile != 1 {
+					t.Errorf("First hunk: expected GlobalIndex=1, IndexInFile=1, got %d, %d", 
+						hunks[0].GlobalIndex, hunks[0].IndexInFile)
+				}
+				// Second hunk
+				if hunks[1].GlobalIndex != 2 || hunks[1].IndexInFile != 1 {
+					t.Errorf("Second hunk: expected GlobalIndex=2, IndexInFile=1, got %d, %d", 
+						hunks[1].GlobalIndex, hunks[1].IndexInFile)
+				}
+			},
+		},
+		{
+			name: "mixed new and existing files",
+			patchContent: `diff --git a/existing.go b/existing.go
+index abc1234..def5678 100644
+--- a/existing.go
++++ b/existing.go
+@@ -1,3 +1,4 @@
+ package main
+ 
++import "fmt"
+ func main() {}
+diff --git a/new_file.go b/new_file.go
+new file mode 100644
+index 0000000..999888
+--- /dev/null
++++ b/new_file.go
+@@ -0,0 +1,1 @@
++package new`,
+			expectedHunks: 2,
+			expectedFiles: []string{"existing.go", "new_file.go"},
+			validateHunks: func(t *testing.T, hunks []HunkInfo) {
+				// Existing file hunk
+				if hunks[0].FilePath != "existing.go" {
+					t.Errorf("First hunk file path: expected 'existing.go', got '%s'", hunks[0].FilePath)
+				}
+				// New file hunk
+				if hunks[1].FilePath != "new_file.go" {
+					t.Errorf("Second hunk file path: expected 'new_file.go', got '%s'", hunks[1].FilePath)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hunks, err := parsePatchFile(tt.patchContent)
+			if err != nil {
+				t.Fatalf("Failed to parse patch: %v", err)
+			}
+
+			if len(hunks) != tt.expectedHunks {
+				t.Errorf("Expected %d hunks, got %d", tt.expectedHunks, len(hunks))
+			}
+
+			// Check file paths
+			actualFiles := make([]string, len(hunks))
+			for i, hunk := range hunks {
+				actualFiles[i] = hunk.FilePath
+			}
+
+			for i, expectedFile := range tt.expectedFiles {
+				if i >= len(actualFiles) || actualFiles[i] != expectedFile {
+					t.Errorf("Expected file[%d] = %s, got %v", i, expectedFile, actualFiles)
+				}
+			}
+
+			// Run custom validation
+			if tt.validateHunks != nil {
+				tt.validateHunks(t, hunks)
+			}
+		})
+	}
+}
+
+func TestStager_ExtractHunkContent_NewFile(t *testing.T) {
+	tests := []struct {
+		name         string
+		patchContent string
+		hunkIndex    int
+		isNewFile    bool
+		expectError  bool
+		expectedLen  int // expected length of result (approximate)
+	}{
+		{
+			name: "new file extraction",
+			patchContent: `diff --git a/new_file.go b/new_file.go
+new file mode 100644
+index 0000000..1234567
+--- /dev/null
++++ b/new_file.go
+@@ -0,0 +1,3 @@
++package main
++
++func main() {}`,
+			hunkIndex:   0,
+			isNewFile:   true,
+			expectError: false,
+			expectedLen: 100, // Approximate size
+		},
+		{
+			name: "existing file with filterdiff (mock)",
+			patchContent: `diff --git a/existing.go b/existing.go
+index abc1234..def5678 100644
+--- a/existing.go
++++ b/existing.go
+@@ -1,3 +1,4 @@
+ package main
+ 
++import "fmt"
+ func main() {}`,
+			hunkIndex:   0,
+			isNewFile:   false,
+			expectError: false,
+			expectedLen: 70, // Mocked response size
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup mock executor
+			mock := executor.NewMockCommandExecutor()
+			if !tt.isNewFile {
+				// Mock filterdiff response for existing files
+				mock.Commands["filterdiff [-i *existing.go --hunks=1 /tmp/test.patch]"] = executor.MockResponse{
+					Output: []byte("mocked filterdiff output with sufficient length to meet test expectations"),
+					Error:  nil,
+				}
+			}
+
+			stager := NewStager(mock)
+
+			// Parse patch to get hunk info
+			hunks, err := parsePatchFile(tt.patchContent)
+			if err != nil {
+				t.Fatalf("Failed to parse patch: %v", err)
+			}
+
+			if tt.hunkIndex >= len(hunks) {
+				t.Fatalf("Hunk index %d out of range", tt.hunkIndex)
+			}
+
+			hunk := hunks[tt.hunkIndex]
+			patchLines := strings.Split(tt.patchContent, "\n")
+
+			// Call the method under test
+			result, err := stager.extractHunkContent(patchLines, &hunk, "/tmp/test.patch", tt.isNewFile)
+
+			if tt.expectError && err == nil {
+				t.Error("Expected error but got none")
+			}
+			if !tt.expectError && err != nil {
+				t.Errorf("Unexpected error: %v", err)
+			}
+
+			if !tt.expectError && len(result) < tt.expectedLen {
+				t.Errorf("Result too short: expected at least %d bytes, got %d", tt.expectedLen, len(result))
+			}
+		})
+	}
+}
