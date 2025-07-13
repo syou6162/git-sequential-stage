@@ -10,7 +10,48 @@ import (
 	"testing"
 )
 
-func TestMockCommandExecutor_Execute(t *testing.T) {
+// Helper function to validate mock command execution results
+func validateMockExecution(t *testing.T, mock *MockCommandExecutor, output []byte, err error, 
+	command string, args []string, wantOutput []byte, wantError bool, wantErrMsg string) {
+	// Check error expectation
+	if (err != nil) != wantError {
+		t.Errorf("Execute() error = %v, wantError %v", err, wantError)
+		return
+	}
+
+	// Check error message
+	if wantError && wantErrMsg != "" {
+		if err.Error() != wantErrMsg {
+			t.Errorf("Execute() error message = %v, want %v", err.Error(), wantErrMsg)
+		}
+	}
+
+	// Check output
+	if !bytes.Equal(output, wantOutput) {
+		t.Errorf("Execute() output = %v, want %v", output, wantOutput)
+	}
+
+	// Check that command was recorded
+	if len(mock.ExecutedCommands) != 1 {
+		t.Errorf("Expected 1 executed command, got %d", len(mock.ExecutedCommands))
+		return
+	}
+
+	executedCmd := mock.ExecutedCommands[0]
+	if executedCmd.Name != command {
+		t.Errorf("Executed command name = %v, want %v", executedCmd.Name, command)
+	}
+	if len(executedCmd.Args) != len(args) {
+		t.Errorf("Executed command args length = %v, want %v", len(executedCmd.Args), len(args))
+	}
+	for i, arg := range args {
+		if executedCmd.Args[i] != arg {
+			t.Errorf("Executed command args[%d] = %v, want %v", i, executedCmd.Args[i], arg)
+		}
+	}
+}
+
+func TestMockCommandExecutorExecute(t *testing.T) {
 	tests := []struct {
 		name        string
 		setup       func(*MockCommandExecutor)
@@ -48,7 +89,7 @@ func TestMockCommandExecutor_Execute(t *testing.T) {
 			wantErrMsg: "command not found",
 		},
 		{
-			name: "unexpected command",
+			name: "mock unexpected command",
 			setup: func(m *MockCommandExecutor) {
 				// Setup no commands
 			},
@@ -59,7 +100,7 @@ func TestMockCommandExecutor_Execute(t *testing.T) {
 			wantErrMsg: "unexpected command: unexpected [arg1 arg2]",
 		},
 		{
-			name: "command with multiple arguments",
+			name: "mock command with multiple arguments",
 			setup: func(m *MockCommandExecutor) {
 				m.Commands["filterdiff [-i *test.go --hunks=1]"] = MockResponse{
 					Output: []byte("diff content"),
@@ -79,48 +120,44 @@ func TestMockCommandExecutor_Execute(t *testing.T) {
 			tt.setup(mock)
 
 			output, err := mock.Execute(tt.command, tt.args...)
-
-			// Check error expectation
-			if (err != nil) != tt.wantError {
-				t.Errorf("Execute() error = %v, wantError %v", err, tt.wantError)
-				return
-			}
-
-			// Check error message
-			if tt.wantError && tt.wantErrMsg != "" {
-				if err.Error() != tt.wantErrMsg {
-					t.Errorf("Execute() error message = %v, want %v", err.Error(), tt.wantErrMsg)
-				}
-			}
-
-			// Check output
-			if !bytes.Equal(output, tt.wantOutput) {
-				t.Errorf("Execute() output = %v, want %v", output, tt.wantOutput)
-			}
-
-			// Check that command was recorded
-			if len(mock.ExecutedCommands) != 1 {
-				t.Errorf("Expected 1 executed command, got %d", len(mock.ExecutedCommands))
-				return
-			}
-
-			executedCmd := mock.ExecutedCommands[0]
-			if executedCmd.Name != tt.command {
-				t.Errorf("Executed command name = %v, want %v", executedCmd.Name, tt.command)
-			}
-			if len(executedCmd.Args) != len(tt.args) {
-				t.Errorf("Executed command args length = %v, want %v", len(executedCmd.Args), len(tt.args))
-			}
-			for i, arg := range tt.args {
-				if executedCmd.Args[i] != arg {
-					t.Errorf("Executed command args[%d] = %v, want %v", i, executedCmd.Args[i], arg)
-				}
-			}
+			validateMockExecution(t, mock, output, err, tt.command, tt.args, 
+				tt.wantOutput, tt.wantError, tt.wantErrMsg)
 		})
 	}
 }
 
-func TestMockCommandExecutor_ExecuteWithStdin(t *testing.T) {
+// Helper function to validate mock command execution with stdin
+func validateMockExecutionWithStdin(t *testing.T, mock *MockCommandExecutor, output []byte, err error,
+	command string, args []string, wantOutput []byte, wantError bool, wantStdin []byte) {
+	// Check error expectation
+	if (err != nil) != wantError {
+		t.Errorf("ExecuteWithStdin() error = %v, wantError %v", err, wantError)
+		return
+	}
+
+	// Check output
+	if !bytes.Equal(output, wantOutput) {
+		t.Errorf("ExecuteWithStdin() output = %v, want %v", output, wantOutput)
+	}
+
+	// Check that command was recorded
+	if len(mock.ExecutedCommands) != 1 {
+		t.Errorf("Expected 1 executed command, got %d", len(mock.ExecutedCommands))
+		return
+	}
+
+	executedCmd := mock.ExecutedCommands[0]
+	if executedCmd.Name != command {
+		t.Errorf("Executed command name = %v, want %v", executedCmd.Name, command)
+	}
+
+	// Check stdin was recorded correctly
+	if !bytes.Equal(executedCmd.Stdin, wantStdin) {
+		t.Errorf("Executed command stdin = %v, want %v", executedCmd.Stdin, wantStdin)
+	}
+}
+
+func TestMockCommandExecutorExecuteWithStdin(t *testing.T) {
 	tests := []struct {
 		name        string
 		setup       func(*MockCommandExecutor)
