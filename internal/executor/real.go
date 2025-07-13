@@ -2,8 +2,11 @@ package executor
 
 import (
 	"bytes"
+	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"strings"
 )
 
 // RealCommandExecutor is the real implementation of CommandExecutor
@@ -22,6 +25,11 @@ func (r *RealCommandExecutor) Execute(name string, args ...string) ([]byte, erro
 	
 	output, err := cmd.Output()
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] Command failed: %s %s\n", name, strings.Join(args, " "))
+		if stderr.Len() > 0 {
+			fmt.Fprintf(os.Stderr, "[ERROR] stderr: %s\n", stderr.String())
+		}
+		
 		// Return stderr content along with the error
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			exitErr.Stderr = stderr.Bytes()
@@ -41,6 +49,11 @@ func (r *RealCommandExecutor) ExecuteWithStdin(name string, stdin io.Reader, arg
 	
 	output, err := cmd.Output()
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] Command failed: %s %s (with stdin)\n", name, strings.Join(args, " "))
+		if stderr.Len() > 0 {
+			fmt.Fprintf(os.Stderr, "[ERROR] stderr: %s\n", stderr.String())
+		}
+		
 		// Return stderr content along with the error
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			exitErr.Stderr = stderr.Bytes()
