@@ -193,7 +193,7 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
 		}
 		
 		// Build diff command with specific files
-		diffArgs := []string{"diff", "HEAD"}
+		diffArgs := []string{"diff", "HEAD", "--"}
 		for file := range targetFiles {
 			diffArgs = append(diffArgs, file)
 		}
@@ -201,6 +201,10 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
 		diffOutput, err := s.executor.Execute("git", diffArgs...)
 		
 		if err != nil {
+			errorMsg := s.getStderrFromError(err)
+			if errorMsg != "" {
+				return fmt.Errorf("failed to get current diff: exit status %v - %s", err, errorMsg)
+			}
 			return fmt.Errorf("failed to get current diff: %v", err)
 		}
 		
