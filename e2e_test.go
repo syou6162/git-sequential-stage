@@ -1420,18 +1420,17 @@ func TestFileRenameAndMove(t *testing.T) {
 		t.Fatalf("Failed to create src directory: %v", err)
 	}
 
-	oldFile := "old_module.go"
-	fileContent := `package main
+	oldFile := "old_module.py"
+	fileContent := `#!/usr/bin/env python3
 
-import "fmt"
+def old_function():
+    print("This is the old function")
 
-func oldFunction() {
-	fmt.Println("This is the old function")
-}
+def main():
+    old_function()
 
-func main() {
-	oldFunction()
-}
+if __name__ == "__main__":
+    main()
 `
 	if err := os.WriteFile(oldFile, []byte(fileContent), 0644); err != nil {
 		t.Fatalf("Failed to write file: %v", err)
@@ -1450,23 +1449,21 @@ func main() {
 
 	// Test a different scenario: modify existing file and also move it
 	// First modify the content
-	modifiedContent := `package main
+	modifiedContent := `#!/usr/bin/env python3
 
-import "fmt"
+def old_function():
+    print("This is the old function with modifications")
+    print("Adding more functionality")
 
-func oldFunction() {
-	fmt.Println("This is the old function with modifications")
-	fmt.Println("Adding more functionality")
-}
+def new_helper():
+    print("A helper function")
 
-func newHelper() {
-	fmt.Println("A helper function")
-}
+def main():
+    old_function()
+    new_helper()
 
-func main() {
-	oldFunction()
-	newHelper()
-}
+if __name__ == "__main__":
+    main()
 `
 	if err := os.WriteFile(oldFile, []byte(modifiedContent), 0644); err != nil {
 		t.Fatalf("Failed to write modified content: %v", err)
@@ -1489,7 +1486,7 @@ func main() {
 		t.Fatalf("Failed to get absolute path: %v", err)
 	}
 
-	err = runGitSequentialStage([]string{"old_module.go:1"}, absPatchPath)
+	err = runGitSequentialStage([]string{"old_module.py:1"}, absPatchPath)
 	if err != nil {
 		t.Fatalf("Failed to stage first hunk: %v", err)
 	}
@@ -1534,28 +1531,25 @@ func main() {
 	// This is a more complex test case showing how to handle both modifications and moves
 	
 	// First, apply modifications to the file
-	renamedContent := `package main
+	renamedContent := `#!/usr/bin/env python3
 
-import "fmt"
+def old_function():
+    print("This is the renamed function")
+    print("Now in a new location")
 
-func oldFunction() {
-	fmt.Println("This is the renamed function")
-	fmt.Println("Now in a new location")
-}
+def new_helper():
+    print("A helper function")
 
-func newHelper() {
-	fmt.Println("A helper function")
-}
+def additional_func():
+    print("Another new function")
 
-func additionalFunc() {
-	fmt.Println("Another new function")
-}
+def main():
+    old_function()
+    new_helper()
+    additional_func()
 
-func main() {
-	oldFunction()
-	newHelper()
-	additionalFunc()
-}
+if __name__ == "__main__":
+    main()
 `
 	if err := os.WriteFile(oldFile, []byte(renamedContent), 0644); err != nil {
 		t.Fatalf("Failed to write renamed content: %v", err)
@@ -1573,7 +1567,7 @@ func main() {
 	}
 
 	// Move file to new location
-	newFile := "src/new_module.go"
+	newFile := "src/new_module.py"
 	if err := os.Rename(oldFile, newFile); err != nil {
 		t.Fatalf("Failed to move file: %v", err)
 	}
@@ -1597,9 +1591,9 @@ func main() {
 	}
 	
 	statusStr := string(statusOutput)
-	if strings.Contains(statusStr, "R  old_module.go -> src/new_module.go") {
+	if strings.Contains(statusStr, "R  old_module.py -> src/new_module.py") {
 		t.Log("Git correctly detected file rename with modifications")
-	} else if strings.Contains(statusStr, "D  old_module.go") && strings.Contains(statusStr, "A  src/new_module.go") {
+	} else if strings.Contains(statusStr, "D  old_module.py") && strings.Contains(statusStr, "A  src/new_module.py") {
 		t.Log("Git shows rename as delete + add (expected for files with significant changes)")
 	} else {
 		t.Logf("Unexpected git status output:\n%s", statusStr)
@@ -1624,25 +1618,27 @@ func TestLargeFileWithManyHunks(t *testing.T) {
 	t.Chdir(tempDir)
 
 	// Create a large file with many functions
-	largeFile := "large_module.go"
+	largeFile := "large_module.py"
 	var content strings.Builder
-	content.WriteString("package main\n\nimport \"fmt\"\n\n")
+	content.WriteString("#!/usr/bin/env python3\n\n")
 	
 	// Create 20 functions
 	for i := 1; i <= 20; i++ {
-		content.WriteString(fmt.Sprintf(`func function%d() {
-	fmt.Println("This is function %d")
-}
+		content.WriteString(fmt.Sprintf(`def function_%d():
+    print("This is function %d")
 
 `, i, i))
 	}
 	
-	content.WriteString(`func main() {
+	content.WriteString(`def main():
 `)
 	for i := 1; i <= 20; i++ {
-		content.WriteString(fmt.Sprintf("\tfunction%d()\n", i))
+		content.WriteString(fmt.Sprintf("    function_%d()\n", i))
 	}
-	content.WriteString("}\n")
+	content.WriteString(`
+if __name__ == "__main__":
+    main()
+`)
 
 	if err := os.WriteFile(largeFile, []byte(content.String()), 0644); err != nil {
 		t.Fatalf("Failed to write large file: %v", err)
@@ -1661,34 +1657,35 @@ func TestLargeFileWithManyHunks(t *testing.T) {
 
 	// Modify multiple functions throughout the file
 	var modifiedContent strings.Builder
-	modifiedContent.WriteString("package main\n\nimport \"fmt\"\n\n")
+	modifiedContent.WriteString("#!/usr/bin/env python3\n\n")
 	
 	for i := 1; i <= 20; i++ {
 		if i == 1 || i == 5 || i == 10 || i == 15 || i == 20 {
 			// Modify these functions
-			modifiedContent.WriteString(fmt.Sprintf(`func function%d() {
-	fmt.Println("This is function %d - MODIFIED")
-	fmt.Println("Additional line in function %d")
-}
+			modifiedContent.WriteString(fmt.Sprintf(`def function_%d():
+    print("This is function %d - MODIFIED")
+    print("Additional line in function %d")
 
 `, i, i, i))
 		} else {
 			// Keep original
-			modifiedContent.WriteString(fmt.Sprintf(`func function%d() {
-	fmt.Println("This is function %d")
-}
+			modifiedContent.WriteString(fmt.Sprintf(`def function_%d():
+    print("This is function %d")
 
 `, i, i))
 		}
 	}
 	
-	modifiedContent.WriteString(`func main() {
+	modifiedContent.WriteString(`def main():
 `)
 	for i := 1; i <= 20; i++ {
-		modifiedContent.WriteString(fmt.Sprintf("\tfunction%d()\n", i))
+		modifiedContent.WriteString(fmt.Sprintf("    function_%d()\n", i))
 	}
-	modifiedContent.WriteString("\tfmt.Println(\"All functions called\")\n")
-	modifiedContent.WriteString("}\n")
+	modifiedContent.WriteString(`    print("All functions called")
+
+if __name__ == "__main__":
+    main()
+`)
 
 	if err := os.WriteFile(largeFile, []byte(modifiedContent.String()), 0644); err != nil {
 		t.Fatalf("Failed to write modified file: %v", err)
