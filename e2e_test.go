@@ -1062,3 +1062,190 @@ if __name__ == '__main__':
 		t.Errorf("Expected %d commits, but got %d", expectedCommits, finalCommitCount)
 	}
 }
+
+// TestErrorCases_NonExistentFile は存在しないファイルを指定した場合のエラーハンドリングをテストします
+// このテストは、不正な引数に対する適切なエラーハンドリングが機能していることを保証するために重要です
+func TestErrorCases_NonExistentFile(t *testing.T) {
+	dir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	// 初期ファイルを作成
+	createFile(t, dir, "existing.py", "print('Hello, World!')")
+	commitChanges(t, dir, "Initial commit")
+
+	// ファイルを修正
+	modifyFile(t, dir, "existing.py", "print('Hello, Updated World!')")
+
+	// パッチファイルを生成
+	patchPath := filepath.Join(dir, "changes.patch")
+	output, err := runCommand(t, dir, "sh", "-c", "git diff > changes.patch")
+	if err != nil {
+		t.Fatalf("Failed to create patch file: %v\nOutput: %s", err, output)
+	}
+
+	// パッチファイルの絶対パスを取得
+	absPatchPath, err := filepath.Abs(patchPath)
+	if err != nil {
+		t.Fatalf("Failed to get absolute path: %v", err)
+	}
+
+	// 一時的にディレクトリを変更
+	originalDir, _ := os.Getwd()
+	err = os.Chdir(dir)
+	if err != nil {
+		t.Fatalf("Failed to change directory: %v", err)
+	}
+	defer os.Chdir(originalDir)
+
+	// 存在しないファイルを指定してgit-sequential-stageを実行
+	err = runGitSequentialStage([]string{"non_existent_file.py:1"}, absPatchPath)
+	if err == nil {
+		t.Error("Expected error for non-existent file, but got none")
+		return
+	}
+
+	// エラーメッセージを確認
+	expectedErrorPatterns := []string{"no such file", "not found", "does not exist"}
+	errorMessage := err.Error()
+	foundPattern := false
+	for _, pattern := range expectedErrorPatterns {
+		if strings.Contains(strings.ToLower(errorMessage), pattern) {
+			foundPattern = true
+			break
+		}
+	}
+
+	if !foundPattern {
+		t.Errorf("Expected error message to contain file not found indication, got: %v", err)
+	}
+
+	// ステージングエリアが空であることを確認
+	stagedFiles := getStagedFiles(t, dir)
+	if len(stagedFiles) != 0 {
+		t.Errorf("Expected no files to be staged after error, but got: %v", stagedFiles)
+	}
+}
+
+// TestErrorCases_InvalidHunkNumber は存在しないハンク番号を指定した場合のエラーハンドリングをテストします
+// このテストは、パッチ内の無効な参照に対する適切なエラーハンドリングが機能していることを保証するために重要です
+func TestErrorCases_InvalidHunkNumber(t *testing.T) {
+	dir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	// 初期ファイルを作成
+	createFile(t, dir, "simple.py", "print('First line')")
+	commitChanges(t, dir, "Initial commit")
+
+	// ファイルを修正（1つのハンクのみ生成される変更）
+	modifyFile(t, dir, "simple.py", "print('Modified line')")
+
+	// パッチファイルを生成
+	patchPath := filepath.Join(dir, "changes.patch")
+	output, err := runCommand(t, dir, "sh", "-c", "git diff > changes.patch")
+	if err != nil {
+		t.Fatalf("Failed to create patch file: %v\nOutput: %s", err, output)
+	}
+
+	// パッチファイルの絶対パスを取得
+	absPatchPath, err := filepath.Abs(patchPath)
+	if err != nil {
+		t.Fatalf("Failed to get absolute path: %v", err)
+	}
+
+	// 一時的にディレクトリを変更
+	originalDir, _ := os.Getwd()
+	err = os.Chdir(dir)
+	if err != nil {
+		t.Fatalf("Failed to change directory: %v", err)
+	}
+	defer os.Chdir(originalDir)
+
+	// 存在しないハンク番号（ハンク2）を指定してgit-sequential-stageを実行
+	// パッチファイルには1つのハンクしかないはず
+	err = runGitSequentialStage([]string{"simple.py:2"}, absPatchPath)
+	if err == nil {
+		t.Error("Expected error for invalid hunk number, but got none")
+		return
+	}
+
+	// エラーメッセージを確認
+	expectedErrorPatterns := []string{"hunk", "not found", "invalid", "does not exist"}
+	errorMessage := err.Error()
+	foundPattern := false
+	for _, pattern := range expectedErrorPatterns {
+		if strings.Contains(strings.ToLower(errorMessage), pattern) {
+			foundPattern = true
+			break
+		}
+	}
+
+	if !foundPattern {
+		t.Errorf("Expected error message to contain hunk-related error indication, got: %v", err)
+	}
+
+	// ステージングエリアが空であることを確認
+	stagedFiles := getStagedFiles(t, dir)
+	if len(stagedFiles) != 0 {
+		t.Errorf("Expected no files to be staged after error, but got: %v", stagedFiles)
+	}
+}
+
+// TestErrorCases_EmptyPatchFile は空のパッチファイルを指定した場合のエラーハンドリングをテストします
+// このテストは、不正なパッチファイルに対する適切なエラーハンドリングが機能していることを保証するために重要です
+func TestErrorCases_EmptyPatchFile(t *testing.T) {
+	dir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	// 初期ファイルを作成
+	createFile(t, dir, "test.py", "print('Hello, World!')")
+	commitChanges(t, dir, "Initial commit")
+
+	// 空のパッチファイルを作成
+	emptyPatchPath := filepath.Join(dir, "empty.patch")
+	err := os.WriteFile(emptyPatchPath, []byte(""), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create empty patch file: %v", err)
+	}
+
+	// パッチファイルの絶対パスを取得
+	absEmptyPatchPath, err := filepath.Abs(emptyPatchPath)
+	if err != nil {
+		t.Fatalf("Failed to get absolute path: %v", err)
+	}
+
+	// 一時的にディレクトリを変更
+	originalDir, _ := os.Getwd()
+	err = os.Chdir(dir)
+	if err != nil {
+		t.Fatalf("Failed to change directory: %v", err)
+	}
+	defer os.Chdir(originalDir)
+
+	// 空のパッチファイルを指定してgit-sequential-stageを実行
+	err = runGitSequentialStage([]string{"test.py:1"}, absEmptyPatchPath)
+	if err == nil {
+		t.Error("Expected error for empty patch file, but got none")
+		return
+	}
+
+	// エラーメッセージを確認
+	expectedErrorPatterns := []string{"empty", "no hunks", "invalid patch", "no changes", "not found"}
+	errorMessage := err.Error()
+	foundPattern := false
+	for _, pattern := range expectedErrorPatterns {
+		if strings.Contains(strings.ToLower(errorMessage), pattern) {
+			foundPattern = true
+			break
+		}
+	}
+
+	if !foundPattern {
+		t.Errorf("Expected error message to contain empty patch indication, got: %v", err)
+	}
+
+	// ステージングエリアが空であることを確認
+	stagedFiles := getStagedFiles(t, dir)
+	if len(stagedFiles) != 0 {
+		t.Errorf("Expected no files to be staged after error, but got: %v", stagedFiles)
+	}
+}
