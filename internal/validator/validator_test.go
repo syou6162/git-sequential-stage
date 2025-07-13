@@ -162,7 +162,7 @@ func TestValidator_ValidateArgs(t *testing.T) {
 	}
 }
 
-func TestValidatorValidateArgsNew(t *testing.T) {
+func TestValidator_ValidateArgsNew(t *testing.T) {
 	tests := []struct {
 		name      string
 		hunkSpecs []string
