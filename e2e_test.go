@@ -15,6 +15,11 @@ import (
 )
 
 // Test data constants
+const (
+	// performanceTargetSeconds is the performance target for large hunk operations
+	performanceTargetSeconds = 5
+)
+
 var (
 	// minimalPNGTransparent is a 1x1 transparent PNG image
 	minimalPNGTransparent = []byte{
@@ -1397,7 +1402,7 @@ func TestBinaryFileHandling(t *testing.T) {
 	}
 }
 
-// TestFileRenameAndMove tests handling of file renames and moves
+// TestFileRenameAndMove tests handling of file modifications combined with renames and moves
 func TestFileRenameAndMove(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping e2e test in short mode")
@@ -1731,11 +1736,12 @@ func TestLargeFileWithManyHunks(t *testing.T) {
 	// Log performance metrics
 	t.Logf("Performance: Staged %d hunks in %v", len(selectedHunks), elapsed)
 	
-	// Check if performance meets target (5 seconds)
-	if elapsed > 5*time.Second {
-		t.Errorf("Performance issue: operation took %v, expected < 5s", elapsed)
+	// Check if performance meets target
+	targetDuration := time.Duration(performanceTargetSeconds) * time.Second
+	if elapsed > targetDuration {
+		t.Errorf("Performance issue: operation took %v, expected < %v", elapsed, targetDuration)
 	} else {
-		t.Logf("Performance is acceptable: %v < 5s target", elapsed)
+		t.Logf("Performance is acceptable: %v < %v target", elapsed, targetDuration)
 	}
 
 	// Verify partial staging
