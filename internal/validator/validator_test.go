@@ -124,6 +124,26 @@ func TestValidator_ValidateArgs(t *testing.T) {
 			wantErr:   true,
 			errMsg:    "hunk number must be positive: 0",
 		},
+		// エッジケース追加
+		{
+			name:      "whitespace in hunks",
+			hunks:     " 1 , 2 , 3 ",
+			patchFile: "test.patch",
+			wantErr:   false, // strings.TrimSpace()により正常処理される
+		},
+		{
+			name:      "empty hunk after trim",
+			hunks:     "1, ,3",
+			patchFile: "test.patch",
+			wantErr:   true,
+			errMsg:    "invalid hunk number: ", // 空文字列は無効
+		},
+		{
+			name:      "very large hunk number in old format",
+			hunks:     "1,999999,3",
+			patchFile: "test.patch",
+			wantErr:   false,
+		},
 	}
 
 	for _, tt := range tests {
