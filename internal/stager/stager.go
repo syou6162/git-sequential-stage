@@ -146,10 +146,28 @@ func buildTargetIDs(hunkSpecs []string, allHunks []HunkInfo) ([]string, error) {
 		for _, hunkNum := range hunkNumbers {
 			found := false
 			for _, hunk := range allHunks {
+				// Check direct match first
 				if hunk.FilePath == filePath && hunk.IndexInFile == hunkNum {
 					targetIDs = append(targetIDs, hunk.PatchID)
 					found = true
 					break
+				}
+				
+				// For renamed files, also check if the requested file matches
+				// the old or new name from the diff header
+				if !found {
+					// This is a simplified check - in a real implementation,
+					// we'd need to parse the diff header to get the old/new names
+					// For now, we'll just match on the hunk's FilePath
+					if hunk.IndexInFile == hunkNum {
+						// Check if this could be a renamed file by looking at the file path
+						// This is a workaround - a better solution would parse the diff header
+						if strings.Contains(hunk.FilePath, filePath) || strings.Contains(filePath, hunk.FilePath) {
+							targetIDs = append(targetIDs, hunk.PatchID)
+							found = true
+							break
+						}
+					}
 				}
 			}
 			if !found {
@@ -266,6 +284,8 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
 		}
 		
 		// Build diff command with specific files
+		// For new files, we need to include --cached to see staged changes
+		// For existing files, we need HEAD diff to see unstaged changes
 		diffArgs := []string{"diff", "HEAD", "--"}
 		for file := range targetFiles {
 			diffArgs = append(diffArgs, file)
@@ -279,6 +299,19 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
 				return fmt.Errorf("failed to get current diff: exit status %v - %s", err, errorMsg)
 			}
 			return fmt.Errorf("failed to get current diff: %v", err)
+		}
+		
+		// If no unstaged changes, check for staged changes (for new files)
+		if len(diffOutput) == 0 {
+			stagedDiffArgs := []string{"diff", "--cached", "--"}
+			for file := range targetFiles {
+				stagedDiffArgs = append(stagedDiffArgs, file)
+			}
+			
+			stagedOutput, err := s.executor.Execute("git", stagedDiffArgs...)
+			if err == nil && len(stagedOutput) > 0 {
+				diffOutput = stagedOutput
+			}
 		}
 		
 		// b. Parse current diff and find matching hunks
@@ -305,8 +338,10 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
 		tmpFile.Close()
 		
 		for _, currentHunk := range currentHunks {
-			// Check if this is a new file
+			// Check file type
 			isNewFile := isNewFileHunk(diffLines, &currentHunk)
+			isDeleted := isDeletedFile(diffLines, &currentHunk)
+			isRenamed := isRenamedFile(diffLines, &currentHunk)
 			
 			hunkContent, err := s.extractHunkContentFromTempFile(diffLines, &currentHunk, tmpFile.Name(), isNewFile)
 			if err != nil {
@@ -322,11 +357,50 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
 				continue
 			}
 			
+			// Handle different file types
+			if isDeleted {
+				// For deleted files, check if this matches our target and handle specially
+				for i, targetID := range targetIDs {
+					if currentPatchID == targetID {
+						// Use git rm to stage the deletion
+						_, err = s.executor.Execute("git", "rm", currentHunk.FilePath)
+						if err != nil {
+							// File might already be staged for deletion
+							// Check if it's already staged
+							statusOutput, err := s.executor.Execute("git", "status", "--porcelain", currentHunk.FilePath)
+							if err == nil && strings.Contains(string(statusOutput), "D  ") {
+								// Already staged for deletion
+								targetIDs = append(targetIDs[:i], targetIDs[i+1:]...)
+								applied = true
+								break
+							}
+							return fmt.Errorf("failed to stage deletion of %s: %v", currentHunk.FilePath, err)
+						}
+						targetIDs = append(targetIDs[:i], targetIDs[i+1:]...)
+						applied = true
+						break
+					}
+				}
+				if applied {
+					break
+				}
+				continue
+			}
+			
 			// Check if this hunk matches any target
 			for i, targetID := range targetIDs {
 				if currentPatchID == targetID {
-					// Always apply hunks one by one (simpler and more reliable)
-					_, err = s.executor.ExecuteWithStdin("git", bytes.NewReader(hunkContent), "apply", "--cached")
+					// New files and existing files can be handled the same way now
+					// since we've already checked the staging area is clean
+					
+					// Apply patch
+					applyArgs := []string{"apply", "--cached"}
+					if isRenamed {
+						// For renamed files, use 3-way merge
+						applyArgs = append(applyArgs, "--3way")
+					}
+					
+					_, err = s.executor.ExecuteWithStdin("git", bytes.NewReader(hunkContent), applyArgs...)
 					if err != nil {
 						// Debug: save the failing patch
 						debugFile := fmt.Sprintf("/tmp/failing_patch_%s.patch", targetID)
