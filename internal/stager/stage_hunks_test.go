@@ -22,6 +22,11 @@ func TestStager_StageHunks_ErrorCases(t *testing.T) {
 			hunkSpecs: []string{"file.go:1"},
 			patchFile: "/non/existent/file.patch",
 			mockSetup: func(t *testing.T, mock *executor.MockCommandExecutor) (string, error) {
+				// Mock staging area check
+				mock.Commands["git [diff --cached --name-only]"] = executor.MockResponse{
+					Output: []byte(""),
+					Error:  nil,
+				}
 				return "/non/existent/file.patch", nil
 			},
 			expectErr: true,
