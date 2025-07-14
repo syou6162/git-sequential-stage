@@ -160,8 +160,81 @@ func buildTargetIDs(hunkSpecs []string, allHunks []HunkInfo) ([]string, error) {
 	return targetIDs, nil
 }
 
+// isDeletedFile checks if a file diff represents a deleted file
+func isDeletedFile(patchLines []string, hunk *HunkInfo) bool {
+	// Look for deleted file markers before the hunk
+	for i := hunk.StartLine - 1; i >= 0; i-- {
+		line := patchLines[i]
+		if strings.HasPrefix(line, "diff --git") {
+			break
+		}
+		if strings.HasPrefix(line, "deleted file mode") {
+			return true
+		}
+	}
+	return false
+}
+
+// isRenamedFile checks if a file diff represents a renamed file
+func isRenamedFile(patchLines []string, hunk *HunkInfo) bool {
+	// Look for rename markers before the hunk
+	for i := hunk.StartLine - 1; i >= 0; i-- {
+		line := patchLines[i]
+		if strings.HasPrefix(line, "diff --git") {
+			break
+		}
+		if strings.Contains(line, "similarity index") || strings.Contains(line, "rename from") {
+			return true
+		}
+	}
+	return false
+}
+
+// getRenamedFileInfo extracts old and new file names from a rename diff
+func getRenamedFileInfo(patchLines []string, hunk *HunkInfo) (string, string) {
+	var oldFile, newFile string
+	
+	// Find the diff --git line
+	for i := hunk.StartLine - 1; i >= 0; i-- {
+		line := patchLines[i]
+		if strings.HasPrefix(line, "diff --git") {
+			// Parse: diff --git a/old_name.py b/new_name.py
+			parts := strings.Fields(line)
+			if len(parts) >= 4 {
+				oldFile = strings.TrimPrefix(parts[2], "a/")
+				newFile = strings.TrimPrefix(parts[3], "b/")
+			}
+			break
+		}
+	}
+	
+	return oldFile, newFile
+}
+
+// checkStagingArea checks if there are any staged changes and returns an error if found
+func (s *Stager) checkStagingArea() error {
+	// Check for staged changes using git diff --cached
+	output, err := s.executor.Execute("git", "diff", "--cached", "--name-only")
+	if err != nil {
+		return fmt.Errorf("failed to check staging area: %v", err)
+	}
+	
+	stagedFiles := strings.TrimSpace(string(output))
+	if stagedFiles != "" {
+		files := strings.Split(stagedFiles, "\n")
+		return fmt.Errorf("staging area is not clean - found %d staged file(s): %s\n\nPlease commit or reset staged changes before using git-sequential-stage:\n  git commit -m \"your message\"\n  or\n  git reset HEAD", len(files), strings.Join(files, ", "))
+	}
+	
+	return nil
+}
+
 // StageHunks stages the specified hunks using the file:hunk format
 func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
+	// Pre-flight check: Ensure staging area is clean
+	if err := s.checkStagingArea(); err != nil {
+		return err
+	}
+	
 	// Preparation phase: Parse master patch and build HunkInfo list
 	patchContent, err := s.readFile(patchFile)
 	if err != nil {
