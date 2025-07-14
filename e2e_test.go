@@ -2369,6 +2369,485 @@ if __name__ == "__main__":
 	t.Logf("Staging area check test completed successfully")
 }
 
+// TestComplexStagingScenarios tests complex staging scenarios with mixed operations
+func TestComplexStagingScenarios(t *testing.T) {
+	dir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	// Create initial files
+	file1 := "original_file.py"
+	file1Code := `#!/usr/bin/env python3
+
+def original_function():
+    print("Original function")
+
+if __name__ == "__main__":
+    original_function()
+`
+	createFile(t, dir, file1, file1Code)
+
+	file2 := "file_to_delete.py"
+	file2Code := `#!/usr/bin/env python3
+
+def function_to_delete():
+    print("This will be deleted")
+`
+	createFile(t, dir, file2, file2Code)
+
+	commitChanges(t, dir, "Initial commit")
+
+	// Modify original file
+	modifiedFile1Code := `#!/usr/bin/env python3
+
+def original_function():
+    print("Original function - modified")
+    print("Added new functionality")
+
+if __name__ == "__main__":
+    original_function()
+`
+	modifyFile(t, dir, file1, modifiedFile1Code)
+
+	// Delete the second file
+	err := os.Remove(filepath.Join(dir, file2))
+	if err != nil {
+		t.Fatalf("Failed to delete file: %v", err)
+	}
+
+	// Stage the deletion
+	_, err = runCommand(t, dir, "git", "add", file2)
+	if err != nil {
+		t.Fatalf("Failed to stage deletion: %v", err)
+	}
+
+	// Test: Try to stage changes with dirty staging area (deletion already staged)
+	patchPath := filepath.Join(dir, "complex_changes.patch")
+	_, err = runCommand(t, dir, "sh", "-c", "git diff HEAD > complex_changes.patch")
+	if err != nil {
+		t.Fatalf("Failed to create patch file: %v", err)
+	}
+
+	absPatchPath, err := filepath.Abs(patchPath)
+	if err != nil {
+		t.Fatalf("Failed to get absolute path: %v", err)
+	}
+
+	t.Chdir(dir)
+
+	// This should fail due to dirty staging area
+	err = runGitSequentialStage([]string{"original_file.py:1"}, absPatchPath)
+	if err == nil {
+		t.Error("Expected error due to deletion being staged, but got none")
+		return
+	}
+
+	expectedErrorPatterns := []string{
+		"staging area is not clean",
+		"staged file(s)",
+		"file_to_delete.py",
+	}
+
+	errorMessage := err.Error()
+	for _, pattern := range expectedErrorPatterns {
+		if !strings.Contains(errorMessage, pattern) {
+			t.Errorf("Expected error message to contain '%s', but it didn't.\nActual error: %v", pattern, err)
+		}
+	}
+
+	t.Logf("Complex staging scenario test completed successfully")
+}
+
+// TestGitMvWithModification tests git mv followed by modification
+func TestGitMvWithModification(t *testing.T) {
+	dir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	// Create initial file
+	oldFile := "old_location.py"
+	initialCode := `#!/usr/bin/env python3
+
+def original_function():
+    print("Original function")
+    return "original"
+
+if __name__ == "__main__":
+    result = original_function()
+    print(f"Result: {result}")
+`
+	createFile(t, dir, oldFile, initialCode)
+
+	// Create another file for testing mixed operations
+	otherFile := "other_file.py"
+	otherCode := `#!/usr/bin/env python3
+
+def other_function():
+    print("Other function")
+`
+	createFile(t, dir, otherFile, otherCode)
+
+	commitChanges(t, dir, "Initial commit")
+
+	// Rename file using git mv
+	newFile := "new_location.py"
+	_, err := runCommand(t, dir, "git", "mv", oldFile, newFile)
+	if err != nil {
+		t.Fatalf("Failed to rename file: %v", err)
+	}
+
+	// Modify the renamed file
+	modifiedCode := `#!/usr/bin/env python3
+
+def original_function():
+    print("Original function - now renamed and modified")
+    print("Added logging functionality")
+    return "modified"
+
+def new_helper_function():
+    print("New helper function added after rename")
+    return "helper"
+
+if __name__ == "__main__":
+    result = original_function()
+    helper_result = new_helper_function()
+    print(f"Results: {result}, {helper_result}")
+`
+	modifyFile(t, dir, newFile, modifiedCode)
+
+	// Modify the other file too
+	modifiedOtherCode := `#!/usr/bin/env python3
+
+def other_function():
+    print("Other function - modified")
+    print("Independent modification")
+`
+	modifyFile(t, dir, otherFile, modifiedOtherCode)
+
+	// Create comprehensive patch that includes rename + modifications
+	patchPath := filepath.Join(dir, "mv_and_modify_changes.patch")
+	output, err := runCommand(t, dir, "sh", "-c", "git diff --cached; git diff")
+	if err != nil {
+		t.Fatalf("Failed to generate diff: %v", err)
+	}
+
+	err = os.WriteFile(patchPath, []byte(output), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write patch file: %v", err)
+	}
+
+	// Reset staging area to test clean state behavior
+	_, err = runCommand(t, dir, "git", "reset", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to reset staging area: %v", err)
+	}
+
+	// Test: Try to stage specific hunks of the renamed file's modifications
+	absPatchPath, err := filepath.Abs(patchPath)
+	if err != nil {
+		t.Fatalf("Failed to get absolute path: %v", err)
+	}
+
+	t.Chdir(dir)
+
+	// Try different approaches to stage parts of the renamed file
+	err = runGitSequentialStage([]string{"new_location.py:1"}, absPatchPath)
+	if err != nil {
+		t.Logf("Staging renamed file with new name resulted in: %v", err)
+	}
+
+	// Check what was staged
+	stagedDiff, err := runCommand(t, dir, "git", "diff", "--cached")
+	if err != nil {
+		t.Fatalf("Failed to get staged diff: %v", err)
+	}
+
+	// Check for rename indicators in staged diff
+	if strings.Contains(stagedDiff, "renamed:") || strings.Contains(stagedDiff, "similarity index") || strings.Contains(stagedDiff, newFile) {
+		t.Logf("Renamed file changes were processed: %s", stagedDiff)
+	} else {
+		t.Logf("No renamed file changes staged. Staging behavior: %s", stagedDiff)
+	}
+
+	// Verify other file modifications remain unstaged
+	workingDiff, err := runCommand(t, dir, "git", "diff")
+	if err != nil {
+		t.Fatalf("Failed to get working diff: %v", err)
+	}
+
+	expectedOtherFileChanges := []string{
+		"+    print(\"Other function - modified\")",
+		"+    print(\"Independent modification\")",
+	}
+
+	for _, expected := range expectedOtherFileChanges {
+		if !strings.Contains(workingDiff, expected) {
+			t.Errorf("Expected working diff to contain other file change '%s', but it didn't.\nActual working diff:\n%s", expected, workingDiff)
+		}
+	}
+
+	t.Logf("Git mv with modification test completed")
+}
+
+// TestStagedGitMvWithLocalModification tests staging behavior when git mv is staged and local edits exist
+func TestStagedGitMvWithLocalModification(t *testing.T) {
+	dir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	// Create initial file
+	originalFile := "src_file.py"
+	originalCode := `#!/usr/bin/env python3
+
+def main_function():
+    print("Main function")
+    process_data()
+
+def process_data():
+    print("Processing data")
+    return True
+
+if __name__ == "__main__":
+    main_function()
+`
+	createFile(t, dir, originalFile, originalCode)
+
+	// Create another unrelated file
+	unrelatedFile := "unrelated.py"
+	unrelatedCode := `#!/usr/bin/env python3
+
+def unrelated_function():
+    print("Unrelated")
+`
+	createFile(t, dir, unrelatedFile, unrelatedCode)
+
+	commitChanges(t, dir, "Initial commit")
+
+	// Perform git mv and stage it
+	renamedFile := "dest_file.py"
+	_, err := runCommand(t, dir, "git", "mv", originalFile, renamedFile)
+	if err != nil {
+		t.Fatalf("Failed to perform git mv: %v", err)
+	}
+
+	// At this point, the rename is staged. Now make local modifications to the renamed file
+	localModifiedCode := `#!/usr/bin/env python3
+
+def main_function():
+    print("Main function - locally modified after rename")
+    print("Added local changes")
+    process_data()
+
+def process_data():
+    print("Processing data - enhanced")
+    print("Added logging")
+    return True
+
+def new_local_function():
+    print("New function added locally")
+
+if __name__ == "__main__":
+    main_function()
+    new_local_function()
+`
+	modifyFile(t, dir, renamedFile, localModifiedCode)
+
+	// Modify unrelated file too
+	modifiedUnrelatedCode := `#!/usr/bin/env python3
+
+def unrelated_function():
+    print("Unrelated - also modified")
+    print("Independent change")
+`
+	modifyFile(t, dir, unrelatedFile, modifiedUnrelatedCode)
+
+	// Test: Try to use git-sequential-stage when we have staged git mv + local modifications
+	patchPath := filepath.Join(dir, "staged_mv_with_local.patch")
+	_, err = runCommand(t, dir, "sh", "-c", "git diff HEAD > staged_mv_with_local.patch")
+	if err != nil {
+		t.Fatalf("Failed to create patch file: %v", err)
+	}
+
+	absPatchPath, err := filepath.Abs(patchPath)
+	if err != nil {
+		t.Fatalf("Failed to get absolute path: %v", err)
+	}
+
+	t.Chdir(dir)
+
+	// This should fail because there's already a staged rename
+	err = runGitSequentialStage([]string{"dest_file.py:1"}, absPatchPath)
+	if err == nil {
+		t.Error("Expected error due to staged git mv, but got none")
+		return
+	}
+
+	// Check that the error mentions staging area is not clean
+	expectedErrorPatterns := []string{
+		"staging area is not clean",
+		"staged file(s)",
+	}
+
+	errorMessage := err.Error()
+	for _, pattern := range expectedErrorPatterns {
+		if !strings.Contains(errorMessage, pattern) {
+			t.Errorf("Expected error message to contain '%s', but it didn't.\nActual error: %v", pattern, err)
+		}
+	}
+
+	// Verify the staging area contains the git mv
+	stagedFiles := getStagedFiles(t, dir)
+
+	// Git might show the rename differently, so check for both possibilities
+	if len(stagedFiles) == 0 {
+		t.Error("Expected staging area to contain files from git mv, but it's empty")
+	} else {
+		t.Logf("Staging area correctly detected as dirty with git mv: %v", stagedFiles)
+	}
+
+	// Verify local modifications exist in working directory
+	workingDiff, err := runCommand(t, dir, "git", "diff")
+	if err != nil {
+		t.Fatalf("Failed to get working diff: %v", err)
+	}
+
+	expectedLocalChanges := []string{
+		"+    print(\"Main function - locally modified after rename\")",
+		"+    print(\"Added local changes\")",
+		"+def new_local_function():",
+		"+    print(\"New function added locally\")",
+	}
+
+	for _, expected := range expectedLocalChanges {
+		if !strings.Contains(workingDiff, expected) {
+			t.Errorf("Expected working diff to contain local change '%s', but it didn't.\nActual working diff:\n%s", expected, workingDiff)
+		}
+	}
+
+	t.Logf("Staged git mv with local modification test completed successfully")
+}
+
+// TestStagedGitRmScenario tests behavior when git rm is staged
+func TestStagedGitRmScenario(t *testing.T) {
+	dir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	// Create initial files
+	fileToKeep := "keep_file.py"
+	keepCode := `#!/usr/bin/env python3
+
+def keep_function():
+    print("This file will be kept")
+    return "kept"
+
+if __name__ == "__main__":
+    result = keep_function()
+    print(f"Result: {result}")
+`
+	createFile(t, dir, fileToKeep, keepCode)
+
+	fileToDelete := "delete_file.py"
+	deleteCode := `#!/usr/bin/env python3
+
+def delete_function():
+    print("This file will be deleted")
+    return "deleted"
+
+if __name__ == "__main__":
+    result = delete_function()
+    print(f"Result: {result}")
+`
+	createFile(t, dir, fileToDelete, deleteCode)
+
+	commitChanges(t, dir, "Initial commit")
+
+	// Remove file using git rm and stage the deletion
+	_, err := runCommand(t, dir, "git", "rm", fileToDelete)
+	if err != nil {
+		t.Fatalf("Failed to perform git rm: %v", err)
+	}
+
+	// Modify the file we're keeping
+	modifiedKeepCode := `#!/usr/bin/env python3
+
+def keep_function():
+    print("This file will be kept - modified")
+    print("Added new functionality")
+    return "kept_modified"
+
+def new_helper_function():
+    print("New helper added")
+    return "helper"
+
+if __name__ == "__main__":
+    result = keep_function()
+    helper_result = new_helper_function()
+    print(f"Results: {result}, {helper_result}")
+`
+	modifyFile(t, dir, fileToKeep, modifiedKeepCode)
+
+	// Test: Try to use git-sequential-stage when we have staged git rm
+	patchPath := filepath.Join(dir, "staged_rm_scenario.patch")
+	_, err = runCommand(t, dir, "sh", "-c", "git diff HEAD > staged_rm_scenario.patch")
+	if err != nil {
+		t.Fatalf("Failed to create patch file: %v", err)
+	}
+
+	absPatchPath, err := filepath.Abs(patchPath)
+	if err != nil {
+		t.Fatalf("Failed to get absolute path: %v", err)
+	}
+
+	t.Chdir(dir)
+
+	// This should fail because there's already a staged deletion
+	err = runGitSequentialStage([]string{"keep_file.py:1"}, absPatchPath)
+	if err == nil {
+		t.Error("Expected error due to staged git rm, but got none")
+		return
+	}
+
+	// Check that the error mentions staging area is not clean
+	expectedErrorPatterns := []string{
+		"staging area is not clean",
+		"staged file(s)",
+	}
+
+	errorMessage := err.Error()
+	for _, pattern := range expectedErrorPatterns {
+		if !strings.Contains(errorMessage, pattern) {
+			t.Errorf("Expected error message to contain '%s', but it didn't.\nActual error: %v", pattern, err)
+		}
+	}
+
+	// Verify the staging area contains the deletion
+	stagedDiff, err := runCommand(t, dir, "git", "diff", "--cached")
+	if err != nil {
+		t.Fatalf("Failed to get staged diff: %v", err)
+	}
+
+	if !strings.Contains(stagedDiff, "deleted file mode") && !strings.Contains(stagedDiff, fileToDelete) {
+		t.Errorf("Expected staged diff to contain file deletion, but it didn't.\nActual staged diff:\n%s", stagedDiff)
+	}
+
+	// Verify local modifications to kept file exist in working directory
+	workingDiff, err := runCommand(t, dir, "git", "diff")
+	if err != nil {
+		t.Fatalf("Failed to get working diff: %v", err)
+	}
+
+	expectedLocalChanges := []string{
+		"+    print(\"This file will be kept - modified\")",
+		"+    print(\"Added new functionality\")",
+		"+def new_helper_function():",
+	}
+
+	for _, expected := range expectedLocalChanges {
+		if !strings.Contains(workingDiff, expected) {
+			t.Errorf("Expected working diff to contain local change '%s', but it didn't.\nActual working diff:\n%s", expected, workingDiff)
+		}
+	}
+
+	t.Logf("Staged git rm scenario test completed successfully")
+}
+
 func min(a, b int) int {
 	if a < b {
 		return a
