@@ -37,6 +37,12 @@ func TestStager_StageHunks_ErrorCases(t *testing.T) {
 			hunkSpecs: []string{"file.go:1"},
 			patchFile: "/tmp/test.patch",
 			mockSetup: func(t *testing.T, mock *executor.MockCommandExecutor) (string, error) {
+				// Mock staging area check
+				mock.Commands["git [diff --cached --name-only]"] = executor.MockResponse{
+					Output: []byte(""),
+					Error:  nil,
+				}
+				
 				// Setup valid patch file
 				f, err := os.CreateTemp("", "test_*.patch")
 				if err != nil {
@@ -86,6 +92,12 @@ index abc1234..def5678 100644
 			hunkSpecs: []string{"file.go:999"},
 			patchFile: "/tmp/test.patch",
 			mockSetup: func(t *testing.T, mock *executor.MockCommandExecutor) (string, error) {
+				// Mock staging area check
+				mock.Commands["git [diff --cached --name-only]"] = executor.MockResponse{
+					Output: []byte(""),
+					Error:  nil,
+				}
+				
 				// Setup valid patch file
 				f, err := os.CreateTemp("", "test_*.patch")
 				if err != nil {
