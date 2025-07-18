@@ -44,70 +44,68 @@ func isNewFileHunk(patchLines []string, hunk *HunkInfo) bool {
 
 // extractFileDiff extracts the entire file diff including headers for a given hunk
 func extractFileDiff(patchLines []string, hunk *HunkInfo) []byte {
-	// If we're in go-gitdiff mode (StartLine/EndLine are 0), search by file path
-	if hunk.StartLine == 0 && hunk.EndLine == 0 && hunk.FilePath != "" {
-		// Search for the file's diff section
-		fileStartLine := -1
-		fileEndLine := len(patchLines)
-		
-		for i, line := range patchLines {
-			if strings.HasPrefix(line, "diff --git") && strings.Contains(line, hunk.FilePath) {
-				// Check if this is actually our file (not just a substring match)
-				parts := strings.Fields(line)
-				if len(parts) >= 4 {
-					// Extract the b/ path
-					bPath := parts[3]
-					if strings.HasPrefix(bPath, "b/") {
-						bPath = strings.TrimPrefix(bPath, "b/")
-					}
-					if bPath == hunk.FilePath {
-						fileStartLine = i
-						// Find the end of this file's diff
-						for j := i + 1; j < len(patchLines); j++ {
-							if strings.HasPrefix(patchLines[j], "diff --git") {
-								fileEndLine = j
-								break
-							}
-						}
-						break
-					}
-				}
-			}
-		}
-		
-		if fileStartLine >= 0 {
-			var fileDiff []string
-			for j := fileStartLine; j < fileEndLine; j++ {
-				fileDiff = append(fileDiff, patchLines[j])
-			}
-			return []byte(strings.Join(fileDiff, "\n"))
-		}
-	}
-	
-	// Legacy mode: use StartLine and EndLine
-	fileStartLine := hunk.StartLine
-	for j := hunk.StartLine - 1; j >= 0; j-- {
-		if strings.HasPrefix(patchLines[j], "diff --git") {
-			fileStartLine = j
-			break
-		}
-	}
-	
-	// Find the end of the file (next diff or end of patch)
+	// Always search by file path - this works for both go-gitdiff and legacy modes
+	fileStartLine := -1
 	fileEndLine := len(patchLines)
-	for j := hunk.EndLine + 1; j < len(patchLines); j++ {
-		if strings.HasPrefix(patchLines[j], "diff --git") {
-			fileEndLine = j
-			break
+	
+	// If we have a valid StartLine from legacy mode, use it as a hint to search nearby first
+	if hunk.StartLine > 0 && hunk.StartLine < len(patchLines) {
+		// Search backwards from StartLine for efficiency
+		for i := hunk.StartLine; i >= 0; i-- {
+			if strings.HasPrefix(patchLines[i], "diff --git") && isFileMatch(patchLines[i], hunk.FilePath) {
+				fileStartLine = i
+				break
+			}
 		}
 	}
 	
-	// Extract the entire file diff
-	var fileDiff []string
-	for j := fileStartLine; j < fileEndLine; j++ {
-		fileDiff = append(fileDiff, patchLines[j])
+	// If not found with the hint, search the entire patch
+	if fileStartLine == -1 {
+		for i, line := range patchLines {
+			if strings.HasPrefix(line, "diff --git") && isFileMatch(line, hunk.FilePath) {
+				fileStartLine = i
+				break
+			}
+		}
 	}
-	return []byte(strings.Join(fileDiff, "\n"))
+	
+	// Find the end of this file's diff
+	if fileStartLine >= 0 {
+		for j := fileStartLine + 1; j < len(patchLines); j++ {
+			if strings.HasPrefix(patchLines[j], "diff --git") {
+				fileEndLine = j
+				break
+			}
+		}
+		
+		// Extract the entire file diff
+		var fileDiff []string
+		for j := fileStartLine; j < fileEndLine; j++ {
+			fileDiff = append(fileDiff, patchLines[j])
+		}
+		return []byte(strings.Join(fileDiff, "\n"))
+	}
+	
+	return nil
+}
+
+// isFileMatch checks if a diff --git line matches the given file path
+func isFileMatch(diffLine string, filePath string) bool {
+	if !strings.Contains(diffLine, filePath) {
+		return false
+	}
+	
+	// Check if this is actually our file (not just a substring match)
+	parts := strings.Fields(diffLine)
+	if len(parts) >= 4 {
+		// Extract the b/ path
+		bPath := parts[3]
+		if strings.HasPrefix(bPath, "b/") {
+			bPath = strings.TrimPrefix(bPath, "b/")
+		}
+		return bPath == filePath
+	}
+	return false
 }
 
 // extractHunkContent extracts the content for a specific hunk
