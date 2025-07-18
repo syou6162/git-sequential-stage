@@ -75,7 +75,7 @@ index abc1234..def5678 100644
 				return f.Name(), nil
 			},
 			expectErr: true,
-			errMsg:    "failed to get current diff",
+			errMsg:    "git command failed: git diff",
 		},
 		{
 			name:      "hunk not found",
@@ -106,7 +106,7 @@ index abc1234..def5678 100644
 				return f.Name(), nil
 			},
 			expectErr: true,
-			errMsg:    "hunk 999 not found in file file.go",
+			errMsg:    "not found: hunk 999 in file file.go",
 		},
 	}
 

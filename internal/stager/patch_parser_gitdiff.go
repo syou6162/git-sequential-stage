@@ -72,8 +72,12 @@ func parsePatchFileWithGitDiff(patchContent string) ([]HunkInfoNew, error) {
 			oldFilePath = file.OldName
 		}
 
+
 		// Handle binary files
-		if file.IsBinary {
+		// Note: go-gitdiff may not always detect binary files correctly from the patch format
+		// We also check if the file is empty (no text fragments) and patch contains "Binary files"
+		isBinary := file.IsBinary || (len(file.TextFragments) == 0 && containsBinaryMarker(patchContent, filePath))
+		if isBinary {
 			globalIndex++
 			hunks = append(hunks, HunkInfoNew{
 				GlobalIndex: globalIndex,
@@ -94,6 +98,7 @@ func parsePatchFileWithGitDiff(patchContent string) ([]HunkInfoNew, error) {
 			// This is an approximation since go-gitdiff doesn't provide original line numbers
 			startLine := calculateStartLine(patchContent, file, i)
 			endLine := calculateEndLine(patchContent, file, i, fragment)
+
 
 			hunks = append(hunks, HunkInfoNew{
 				GlobalIndex: globalIndex,
@@ -262,4 +267,16 @@ func extractHunkContentFromFragment(file *gitdiff.File, fragment *gitdiff.TextFr
 	}
 	
 	return result.String(), nil
+}
+
+// containsBinaryMarker checks if the patch content contains a binary file marker for the given file
+func containsBinaryMarker(patchContent, filePath string) bool {
+	// Look for "Binary files" line that mentions this file
+	lines := strings.Split(patchContent, "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "Binary files") && strings.Contains(line, filePath) {
+			return true
+		}
+	}
+	return false
 }
