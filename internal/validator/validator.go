@@ -23,7 +23,7 @@ func NewValidator(exec executor.CommandExecutor) *Validator {
 	}
 }
 
-// CheckDependencies checks if required external commands (git and filterdiff) are available.
+// CheckDependencies checks if required external commands (git) are available.
 // Returns an error if any dependency is missing.
 func (v *Validator) CheckDependencies() error {
 	// Check git
