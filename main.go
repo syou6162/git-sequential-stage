@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/syou6162/git-sequential-stage/internal/executor"
 	"github.com/syou6162/git-sequential-stage/internal/stager"
@@ -14,7 +15,7 @@ import (
 type hunkList []string
 
 func (h *hunkList) String() string {
-	return ""
+	return strings.Join(*h, ", ")
 }
 
 func (h *hunkList) Set(value string) error {

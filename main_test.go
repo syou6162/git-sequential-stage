@@ -54,6 +54,16 @@ func TestRunGitSequentialStage_Usage(t *testing.T) {
 						patchFile = tt.args[i+1]
 						i++
 					}
+				case "-h":
+					// Help flag should not cause error
+					err := error(nil)
+					if tt.expectedError && err == nil {
+						t.Error("Expected error but got none")
+					}
+					if !tt.expectedError && err != nil {
+						t.Errorf("Unexpected error: %v", err)
+					}
+					return
 				}
 			}
 			

@@ -42,6 +42,7 @@ index abc123..def456 100644
  
  def middle():
 @@ -10,5 +11,6 @@ def middle():
+     return "middle"
  
  def goodbye():
      print("Goodbye")
