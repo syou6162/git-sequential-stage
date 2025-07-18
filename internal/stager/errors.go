@@ -63,70 +63,56 @@ func NewStagerError(errType ErrorType, message string, err error) *StagerError {
 		Type:    errType,
 		Message: message,
 		Err:     err,
-		Context: make(map[string]interface{}),
 	}
 }
 
-// WithContext adds context to the error
-func (e *StagerError) WithContext(key string, value interface{}) *StagerError {
-	e.Context[key] = value
-	return e
-}
 
 // Common error constructors
 
 // NewFileNotFoundError creates a file not found error
 func NewFileNotFoundError(filename string, err error) *StagerError {
-	return NewStagerError(ErrorTypeFileNotFound, 
-		fmt.Sprintf("file not found: %s", filename), err).
-		WithContext("filename", filename)
+	return NewStagerError(ErrorTypeFileNotFound,
+		fmt.Sprintf("file not found: %s", filename), err)
 }
 
 // NewParsingError creates a parsing error
 func NewParsingError(what string, err error) *StagerError {
 	return NewStagerError(ErrorTypeParsing,
-		fmt.Sprintf("failed to parse %s", what), err).
-		WithContext("parsing", what)
+		fmt.Sprintf("failed to parse %s", what), err)
 }
 
 // NewGitCommandError creates a git command error
 func NewGitCommandError(command string, err error) *StagerError {
 	return NewStagerError(ErrorTypeGitCommand,
-		fmt.Sprintf("git command failed: %s", command), err).
-		WithContext("command", command)
+		fmt.Sprintf("git command failed: %s", command), err)
 }
 
 // NewHunkNotFoundError creates a hunk not found error
 func NewHunkNotFoundError(description string, err error) *StagerError {
 	return NewStagerError(ErrorTypeHunkNotFound,
-		fmt.Sprintf("not found: %s", description), err).
-		WithContext("description", description)
+		fmt.Sprintf("not found: %s", description), err)
 }
 
 // NewInvalidArgumentError creates an invalid argument error
 func NewInvalidArgumentError(description string, err error) *StagerError {
 	return NewStagerError(ErrorTypeInvalidArgument,
-		description, err).
-		WithContext("description", description)
+		description, err)
 }
 
 // NewDependencyMissingError creates a dependency missing error
 func NewDependencyMissingError(dependency string) *StagerError {
 	return NewStagerError(ErrorTypeDependencyMissing,
-		fmt.Sprintf("%s command not found", dependency), nil).
-		WithContext("dependency", dependency)
+		fmt.Sprintf("%s command not found", dependency), nil)
 }
 
 // NewIOError creates an I/O error
 func NewIOError(operation string, err error) *StagerError {
 	return NewStagerError(ErrorTypeIO,
-		fmt.Sprintf("I/O error during %s", operation), err).
-		WithContext("operation", operation)
+		fmt.Sprintf("I/O error during %s", operation), err)
 }
 
 // NewPatchApplicationError creates a patch application error
 func NewPatchApplicationError(patchID string, err error) *StagerError {
 	return NewStagerError(ErrorTypePatchApplication,
-		fmt.Sprintf("failed to apply patch with ID %s", patchID), err).
-		WithContext("patch_id", patchID)
+		fmt.Sprintf("failed to apply patch with ID %s", patchID), err)
 }
