@@ -64,6 +64,7 @@ func parsePatchFileWithGitDiff(patchContent string) ([]HunkInfo, error) {
 				IsBinary:    true,
 				StartLine:   0, // Not used for go-gitdiff mode
 				EndLine:     0, // Not used for go-gitdiff mode
+				File:        file,
 			})
 			continue
 		}
@@ -82,6 +83,7 @@ func parsePatchFileWithGitDiff(patchContent string) ([]HunkInfo, error) {
 				StartLine:   0, // Line numbers not used in go-gitdiff mode
 				EndLine:     0, // Line numbers not used in go-gitdiff mode
 				Fragment:    fragment,
+				File:        file,
 			})
 		}
 	}

@@ -30,6 +30,7 @@ type HunkInfo struct {
 	Operation     FileOperation // Type of file operation
 	IsBinary      bool          // Whether this is a binary file
 	Fragment      *gitdiff.TextFragment // Original fragment from go-gitdiff (optional)
+	File          *gitdiff.File         // Original file from go-gitdiff (optional)
 }
 
 // parsePatchFile parses a patch file and returns a list of HunkInfo

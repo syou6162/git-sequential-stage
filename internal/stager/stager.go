@@ -44,7 +44,12 @@ func isNewFileHunk(patchLines []string, hunk *HunkInfo) bool {
 
 // extractFileDiff extracts the entire file diff including headers for a given hunk
 func extractFileDiff(patchLines []string, hunk *HunkInfo) []byte {
-	// Always search by file path - this works for both go-gitdiff and legacy modes
+	// If we have go-gitdiff File object, use it to generate the diff
+	if hunk.File != nil {
+		return []byte(hunk.File.String())
+	}
+	
+	// Legacy mode: search by file path
 	fileStartLine := -1
 	fileEndLine := len(patchLines)
 	
