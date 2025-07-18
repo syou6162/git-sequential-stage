@@ -5,7 +5,7 @@ inclusion: always
 # プロジェクト構造
 
 ## ルートレベル
-- `main.go` - CLIエントリーポイントと引数解析
+- `main.go` - CLIエントリーポイント、引数解析、メインロジック統合
 - `main_test.go` - メイン機能の統合テスト
 - `e2e_test.go` - エンドツーエンドテスト
 - `go.mod/go.sum` - Goモジュール依存関係
