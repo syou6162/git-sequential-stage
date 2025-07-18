@@ -228,18 +228,20 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
 
 // preparePatchData prepares patch data by reading and parsing the patch file
 func (s *Stager) preparePatchData(patchFile string) ([]HunkInfo, error) {
-	patchContent, err := s.readFile(patchFile)
+	content, err := os.ReadFile(patchFile)
 	if err != nil {
 		return nil, NewFileNotFoundError(patchFile, err)
 	}
+	patchContent := string(content)
 	
-	allHunks, err := parsePatchFile(patchContent)
+	allHunks, err := parsePatchFileWithGitDiff(patchContent)
 	if err != nil {
 		return nil, NewParsingError("patch file", err)
 	}
 	
 	// Calculate patch IDs for all hunks
 	if err := s.calculatePatchIDsForHunks(allHunks, patchContent, patchFile); err != nil {
+		s.logger.Error("Failed to calculate patch IDs: %v", err)
 		return nil, NewGitCommandError("patch-id calculation", err)
 	}
 	
@@ -300,6 +302,7 @@ func (s *Stager) findAndApplyMatchingHunk(currentHunks []HunkInfo, diffLines []s
 		for i, targetID := range targetIDs {
 			if currentPatchID == targetID {
 				// Apply the hunk
+				s.logger.Info("Applying hunk with patch ID: %s", targetID)
 				if err := s.applyHunk(hunkContent, targetID); err != nil {
 					return nil, false, err
 				}
@@ -319,9 +322,7 @@ func (s *Stager) applyHunk(hunkContent []byte, targetID string) error {
 	_, err := s.executor.ExecuteWithStdin("git", bytes.NewReader(hunkContent), "apply", "--cached")
 	if err != nil {
 		// Debug output for troubleshooting
-		if os.Getenv("GIT_SEQUENTIAL_STAGE_VERBOSE") != "" {
-			fmt.Fprintf(os.Stderr, "Failed patch content for %s:\n%s\n", targetID, string(hunkContent))
-		}
+		s.logger.Debug("Failed patch content for %s:\n%s", targetID, string(hunkContent))
 		return NewPatchApplicationError(targetID, err)
 	}
 	return nil
