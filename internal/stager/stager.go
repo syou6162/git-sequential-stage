@@ -128,7 +128,7 @@ func (s *Stager) calculatePatchIDsForHunks(allHunks []HunkInfo, patchContent str
 func collectTargetFiles(hunkSpecs []string) (map[string]bool, error) {
 	targetFiles := make(map[string]bool)
 	for _, spec := range hunkSpecs {
-		filePath, _, err := parseHunkSpec(spec)
+		filePath, _, err := ParseHunkSpec(spec)
 		if err != nil {
 			return nil, err
 		}
