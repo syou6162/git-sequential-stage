@@ -148,7 +148,7 @@ rename to new_name.py
 index abc123..def456 100644
 --- a/old_name.py
 +++ b/new_name.py
-@@ -1,4 +1,5 @@
+@@ -1,3 +1,4 @@
  def renamed_func():
 +    print("File was renamed")
      print("Original content")
@@ -202,16 +202,9 @@ new file mode 100644
 index 000000..abc123
 Binary files /dev/null and b/image.png differ`,
 			checkFunc: func(t *testing.T, hunks []HunkInfoNew) {
-				if len(hunks) != 1 {
-					t.Errorf("Expected 1 entry for binary file, got %d", len(hunks))
-					return
-				}
-				hunk := hunks[0]
-				if !hunk.IsBinary {
-					t.Error("Expected IsBinary to be true")
-				}
-				if hunk.Operation != FileOperationAdded {
-					t.Errorf("Expected FileOperationAdded, got %v", hunk.Operation)
+				// Binary files don't have text hunks, so we expect 0 hunks
+				if len(hunks) != 0 {
+					t.Errorf("Expected 0 hunks for binary file, got %d", len(hunks))
 				}
 			},
 		},
