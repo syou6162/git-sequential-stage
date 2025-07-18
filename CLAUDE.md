@@ -17,6 +17,10 @@ git-sequential-stage/
 └── internal/
     ├── executor/               # コマンド実行抽象化レイヤー
     ├── stager/                 # パッチIDシステムによる核心ステージングロジック
+    │   ├── stager.go          # メイン実装（StageHunks関数と補助関数）
+    │   ├── hunk_info.go       # HunkInfo構造体とパッチ解析のエントリーポイント
+    │   ├── patch_parser_gitdiff.go  # go-gitdiffライブラリを使用した堅牢な解析
+    │   └── errors.go          # カスタムエラー型（StagerError）の定義
     └── validator/              # 依存関係・引数検証
 ```
 
@@ -24,6 +28,8 @@ git-sequential-stage/
 - **依存性注入**: `executor.CommandExecutor`インターフェースによるテストでのモック化
 - **パッチIDシステム**: `git patch-id`によるコンテンツベースのハンク識別
 - **逐次処理**: 依存関係を処理するためのハンク1つずつの適用
+- **エラーハンドリング**: `StagerError`型によるコンテキスト付きエラー管理
+- **解析戦略**: go-gitdiffを優先し、レガシーパーサーへのフォールバック
 
 ## 開発コマンド
 
@@ -71,6 +77,11 @@ CLIは複数の`-hunk`フラグを処理するカスタム`hunkList`タイプを
 - `TestLargeFileWithManyHunks`: パフォーマンス検証（目標: <5秒、実測: ~230ms）
 - `TestBinaryFileHandling`: バイナリファイルのエッジケース
 - `TestFileModificationAndMove`: 複雑なファイル操作
+
+**ユニットテスト**:
+- `patch_parser_test.go`: go-gitdiffとレガシーパーサーの比較検証
+- `special_files_test.go`: 特殊ファイル操作（リネーム、削除、バイナリ）のテスト
+- `main_test.go`: CLIインターフェースとフラグ処理のテスト
 
 **テスト環境**:
 - `go-git`ライブラリによる独立したテストリポジトリ
