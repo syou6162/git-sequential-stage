@@ -62,6 +62,8 @@ func parsePatchFileWithGitDiff(patchContent string) ([]HunkInfo, error) {
 				IndexInFile: 1, // Binary files have one "hunk"
 				Operation:   operation,
 				IsBinary:    true,
+				StartLine:   0, // Not used for go-gitdiff mode
+				EndLine:     0, // Not used for go-gitdiff mode
 			})
 			continue
 		}

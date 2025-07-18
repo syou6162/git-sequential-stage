@@ -27,9 +27,15 @@ func NewStager(exec executor.CommandExecutor) *Stager {
 }
 
 
-// isNewFileHunk checks if a hunk represents a new file by looking for @@ -0,0 in the hunk header
+// isNewFileHunk checks if a hunk represents a new file
 func isNewFileHunk(patchLines []string, hunk *HunkInfo) bool {
-	if hunk.StartLine < len(patchLines) {
+	// If we have Operation field set (go-gitdiff mode), use it
+	if hunk.Operation == FileOperationAdded {
+		return true
+	}
+	
+	// Legacy mode: check for @@ -0,0 in the hunk header
+	if hunk.StartLine > 0 && hunk.StartLine < len(patchLines) {
 		hunkHeader := patchLines[hunk.StartLine]
 		return strings.Contains(hunkHeader, "@@ -0,0")
 	}
@@ -38,7 +44,47 @@ func isNewFileHunk(patchLines []string, hunk *HunkInfo) bool {
 
 // extractFileDiff extracts the entire file diff including headers for a given hunk
 func extractFileDiff(patchLines []string, hunk *HunkInfo) []byte {
-	// Find the start of the file (diff --git line)
+	// If we're in go-gitdiff mode (StartLine/EndLine are 0), search by file path
+	if hunk.StartLine == 0 && hunk.EndLine == 0 && hunk.FilePath != "" {
+		// Search for the file's diff section
+		fileStartLine := -1
+		fileEndLine := len(patchLines)
+		
+		for i, line := range patchLines {
+			if strings.HasPrefix(line, "diff --git") && strings.Contains(line, hunk.FilePath) {
+				// Check if this is actually our file (not just a substring match)
+				parts := strings.Fields(line)
+				if len(parts) >= 4 {
+					// Extract the b/ path
+					bPath := parts[3]
+					if strings.HasPrefix(bPath, "b/") {
+						bPath = strings.TrimPrefix(bPath, "b/")
+					}
+					if bPath == hunk.FilePath {
+						fileStartLine = i
+						// Find the end of this file's diff
+						for j := i + 1; j < len(patchLines); j++ {
+							if strings.HasPrefix(patchLines[j], "diff --git") {
+								fileEndLine = j
+								break
+							}
+						}
+						break
+					}
+				}
+			}
+		}
+		
+		if fileStartLine >= 0 {
+			var fileDiff []string
+			for j := fileStartLine; j < fileEndLine; j++ {
+				fileDiff = append(fileDiff, patchLines[j])
+			}
+			return []byte(strings.Join(fileDiff, "\n"))
+		}
+	}
+	
+	// Legacy mode: use StartLine and EndLine
 	fileStartLine := hunk.StartLine
 	for j := hunk.StartLine - 1; j >= 0; j-- {
 		if strings.HasPrefix(patchLines[j], "diff --git") {

@@ -70,10 +70,14 @@ index abc123..000000
 new file mode 100644
 index 000000..abc123
 Binary files /dev/null and b/image.png differ`,
-			wantHunks: 0, // Binary files don't have text hunks
+			wantHunks: 1, // Binary files are represented as a single hunk
 			checkFunc: func(t *testing.T, hunks []HunkInfo) {
-				if len(hunks) != 0 {
-					t.Errorf("Expected 0 hunks for binary file, got %d", len(hunks))
+				if len(hunks) != 1 {
+					t.Errorf("Expected 1 hunk for binary file, got %d", len(hunks))
+					return
+				}
+				if !hunks[0].IsBinary {
+					t.Error("Expected IsBinary to be true")
 				}
 			},
 		},
@@ -82,10 +86,14 @@ Binary files /dev/null and b/image.png differ`,
 			patchContent: `diff --git a/image.png b/image.png
 index abc123..def456 100644
 Binary files a/image.png and b/image.png differ`,
-			wantHunks: 0, // Binary files don't have text hunks
+			wantHunks: 1, // Binary files are represented as a single hunk
 			checkFunc: func(t *testing.T, hunks []HunkInfo) {
-				if len(hunks) != 0 {
-					t.Errorf("Expected 0 hunks for binary file, got %d", len(hunks))
+				if len(hunks) != 1 {
+					t.Errorf("Expected 1 hunk for binary file, got %d", len(hunks))
+					return
+				}
+				if !hunks[0].IsBinary {
+					t.Error("Expected IsBinary to be true")
 				}
 			},
 		},
@@ -108,10 +116,14 @@ rename to new_name.py`,
 new file mode 100644
 index 0000000..abc123
 Binary files /dev/null and b/new_binary.bin differ`,
-			wantHunks: 0,
+			wantHunks: 1,
 			checkFunc: func(t *testing.T, hunks []HunkInfo) {
-				if len(hunks) != 0 {
-					t.Errorf("Expected 0 hunks for new binary file, got %d", len(hunks))
+				if len(hunks) != 1 {
+					t.Errorf("Expected 1 hunk for new binary file, got %d", len(hunks))
+					return
+				}
+				if !hunks[0].IsBinary {
+					t.Error("Expected IsBinary to be true")
 				}
 			},
 		},
