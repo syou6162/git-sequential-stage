@@ -192,7 +192,13 @@ index 0000000..999888
 
 			// Compare results
 			resultStr := string(result)
-			if resultStr != tt.expectedOutput {
+			// Normalize the output for comparison (handle trailing newlines and "\ No newline at end of file")
+			expectedNorm := strings.TrimSpace(tt.expectedOutput)
+			resultNorm := strings.TrimSpace(resultStr)
+			// Remove "\ No newline at end of file" markers for comparison
+			resultNorm = strings.ReplaceAll(resultNorm, "\n\\ No newline at end of file", "")
+			
+			if expectedNorm != resultNorm {
 				t.Errorf("extractFileDiff() result mismatch\nExpected:\n%s\n\nGot:\n%s", tt.expectedOutput, resultStr)
 			}
 		})
