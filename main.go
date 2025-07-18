@@ -102,15 +102,6 @@ func main() {
 func handleStageError(err error) {
 	fmt.Fprintf(os.Stderr, "Failed to stage hunks: %v\n\n", err)
 	
-	// Check if it's a StagerError with patch content for debugging
-	if stagerErr, ok := err.(*stager.StagerError); ok {
-		if patchContent, exists := stagerErr.Context["patch_content"]; exists {
-			if verbose := os.Getenv("GIT_SEQUENTIAL_STAGE_VERBOSE"); verbose != "" {
-				fmt.Fprintf(os.Stderr, "\nFailing patch content:\n%s\n\n", patchContent)
-			}
-		}
-	}
-	
 	fmt.Fprintf(os.Stderr, "Troubleshooting tips:\n")
 	fmt.Fprintf(os.Stderr, "1. Check if the patch file exists and is readable\n")
 	fmt.Fprintf(os.Stderr, "2. Verify that the hunks haven't already been staged\n")

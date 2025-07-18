@@ -28,12 +28,11 @@ const (
 	ErrorTypePatchApplication
 )
 
-// StagerError represents a custom error with additional context
+// StagerError represents a custom error with type classification
 type StagerError struct {
 	Type    ErrorType
 	Message string
 	Err     error
-	Context map[string]interface{}
 }
 
 // Error implements the error interface

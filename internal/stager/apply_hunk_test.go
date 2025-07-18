@@ -93,16 +93,8 @@ index abc123..def456 100644
 				if !ok {
 					t.Errorf("Expected StagerError, got %T", err)
 				}
-				
-				// Check that patch content is in context
-				if patchContent, exists := stagerErr.Context["patch_content"]; exists {
-					if patchStr, ok := patchContent.(string); ok {
-						if !strings.Contains(patchStr, "invalid patch content") {
-							t.Errorf("Expected patch content to contain 'invalid patch content', got %q", patchStr)
-						}
-					}
-				} else {
-					t.Error("Expected patch_content in error context")
+				if stagerErr.Type != ErrorTypePatchApplication {
+					t.Errorf("Expected ErrorTypePatchApplication, got %v", stagerErr.Type)
 				}
 			},
 		},
