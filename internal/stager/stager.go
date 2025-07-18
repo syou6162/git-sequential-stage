@@ -435,18 +435,6 @@ func (s *Stager) calculatePatchIDStable(hunkPatch []byte) (string, error) {
 }
 
 
-// getStderrFromError extracts stderr from exec.ExitError
-func (s *Stager) getStderrFromError(err error) string {
-	if err == nil {
-		return ""
-	}
-	
-	if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
-		return string(exitErr.Stderr)
-	}
-	
-	return err.Error()
-}
 
 // readFile reads the content of a file
 func (s *Stager) readFile(filePath string) (string, error) {
