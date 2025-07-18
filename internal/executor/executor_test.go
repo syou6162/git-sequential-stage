@@ -255,7 +255,7 @@ func TestMockCommandExecutorExecutedCommandsTracking(t *testing.T) {
 		t.Error("Expected non-nil output from Execute")
 	}
 	
-	output2, err2 := mock.ExecuteWithStdin("filterdiff", strings.NewReader("input"), "--version")
+	output2, err2 := mock.ExecuteWithStdin("git", strings.NewReader("input"), "status")
 	if err2 != nil {
 		t.Fatalf("Unexpected error from ExecuteWithStdin: %v", err2)
 	}

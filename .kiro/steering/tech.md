@@ -45,7 +45,7 @@ go install
 
 ### テスト
 ```bash
-# E2Eテスト実行（gitとfilterdiffが必要）
+# E2Eテスト実行（gitが必要）
 go test ./internal/stager -run E2E
 
 # 詳細出力付きデバッグモード
