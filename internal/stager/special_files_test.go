@@ -131,7 +131,7 @@ Binary files /dev/null and b/new_binary.bin differ`,
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			hunks, err := parsePatchFile(tc.patchContent)
+			hunks, err := parsePatchFileWithGitDiff(tc.patchContent)
 			if err != nil {
 				t.Fatalf("Failed to parse patch: %v", err)
 			}

@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/bluekeyes/go-gitdiff/gitdiff"
 	"github.com/syou6162/git-sequential-stage/internal/executor"
+	"github.com/syou6162/git-sequential-stage/internal/logger"
 )
 
 // Stager handles the sequential staging of hunks from Git patch files.
@@ -15,6 +15,7 @@ import (
 // solving the "hunk number drift" problem that occurs with dependent changes.
 type Stager struct {
 	executor executor.CommandExecutor
+	logger   *logger.Logger
 }
 
 // NewStager creates a new Stager instance with the provided command executor.
@@ -359,12 +360,4 @@ func (s *Stager) calculatePatchIDStable(hunkPatch []byte) (string, error) {
 
 
 
-// readFile reads the content of a file
-func (s *Stager) readFile(filePath string) (string, error) {
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return "", err
-	}
-	return string(content), nil
-}
 

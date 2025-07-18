@@ -131,7 +131,7 @@ Binary files /dev/null and b/image.png differ`,
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Parse with existing string-based parser
-			existingHunks, err := parsePatchFile(tc.patchContent)
+			existingHunks, err := parsePatchFileWithGitDiff(tc.patchContent)
 			if err != nil {
 				t.Fatalf("existing parser failed: %v", err)
 			}
