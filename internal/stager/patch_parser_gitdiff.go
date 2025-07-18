@@ -7,34 +7,10 @@ import (
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
 )
 
-// FileOperation represents the type of file operation
-type FileOperation int
-
-const (
-	FileOperationModified FileOperation = iota
-	FileOperationAdded
-	FileOperationDeleted
-	FileOperationRenamed
-	FileOperationCopied
-)
-
-// HunkInfoNew represents information about a single hunk using go-gitdiff
-type HunkInfoNew struct {
-	GlobalIndex   int           // Global hunk number in the patch file (1, 2, 3, ...)
-	FilePath      string        // File path this hunk belongs to (new path for renames)
-	OldFilePath   string        // Old file path (for renames)
-	IndexInFile   int           // Hunk number within the file (1, 2, 3, ...)
-	PatchID       string        // Unique patch ID calculated using git patch-id
-	StartLine     int           // Line number where this hunk starts in the patch file
-	EndLine       int           // Line number where this hunk ends in the patch file
-	Operation     FileOperation // Type of file operation
-	IsBinary      bool          // Whether this is a binary file
-	Fragment      *gitdiff.TextFragment // Original fragment from go-gitdiff
-}
 
 // parsePatchFileWithGitDiff parses a patch file using go-gitdiff library
-func parsePatchFileWithGitDiff(patchContent string) ([]HunkInfoNew, error) {
-	var hunks []HunkInfoNew
+func parsePatchFileWithGitDiff(patchContent string) ([]HunkInfo, error) {
+	var hunks []HunkInfo
 	globalIndex := 0
 
 	// Parse the patch using go-gitdiff
@@ -79,7 +55,7 @@ func parsePatchFileWithGitDiff(patchContent string) ([]HunkInfoNew, error) {
 		isBinary := file.IsBinary || (len(file.TextFragments) == 0 && containsBinaryMarker(patchContent, filePath))
 		if isBinary {
 			globalIndex++
-			hunks = append(hunks, HunkInfoNew{
+			hunks = append(hunks, HunkInfo{
 				GlobalIndex: globalIndex,
 				FilePath:    filePath,
 				OldFilePath: oldFilePath,
@@ -93,22 +69,16 @@ func parsePatchFileWithGitDiff(patchContent string) ([]HunkInfoNew, error) {
 		// Process text fragments (hunks)
 		for i, fragment := range file.TextFragments {
 			globalIndex++
-			
-			// Calculate approximate line numbers in patch
-			// This is an approximation since go-gitdiff doesn't provide original line numbers
-			startLine := calculateStartLine(patchContent, file, i)
-			endLine := calculateEndLine(patchContent, file, i, fragment)
 
-
-			hunks = append(hunks, HunkInfoNew{
+			hunks = append(hunks, HunkInfo{
 				GlobalIndex: globalIndex,
 				FilePath:    filePath,
 				OldFilePath: oldFilePath,
 				IndexInFile: i + 1,
 				Operation:   operation,
 				IsBinary:    false,
-				StartLine:   startLine,
-				EndLine:     endLine,
+				StartLine:   0, // Line numbers not used in go-gitdiff mode
+				EndLine:     0, // Line numbers not used in go-gitdiff mode
 				Fragment:    fragment,
 			})
 		}
@@ -117,106 +87,7 @@ func parsePatchFileWithGitDiff(patchContent string) ([]HunkInfoNew, error) {
 	return hunks, nil
 }
 
-// calculateStartLine estimates the start line of a hunk in the original patch
-func calculateStartLine(patchContent string, file *gitdiff.File, fragmentIndex int) int {
-	lines := strings.Split(patchContent, "\n")
-	
-	// Build possible file headers
-	var fileHeaders []string
-	
-	// Standard format
-	if file.OldName != "" && file.NewName != "" {
-		fileHeaders = append(fileHeaders, fmt.Sprintf("diff --git a/%s b/%s", file.OldName, file.NewName))
-	}
-	if file.IsNew && file.NewName != "" {
-		fileHeaders = append(fileHeaders, fmt.Sprintf("diff --git a/%s b/%s", file.NewName, file.NewName))
-	}
-	if file.IsDelete && file.OldName != "" {
-		fileHeaders = append(fileHeaders, fmt.Sprintf("diff --git a/%s b/%s", file.OldName, file.OldName))
-	}
-	
-	// Also check without 'a/' and 'b/' prefixes for compatibility
-	if file.OldName != "" && file.NewName != "" {
-		fileHeaders = append(fileHeaders, fmt.Sprintf("diff --git %s %s", file.OldName, file.NewName))
-	}
-	
-	foundFile := false
-	hunkCount := 0
-	
-	for i, line := range lines {
-		// Check if this is our file
-		for _, header := range fileHeaders {
-			if strings.Contains(line, header) {
-				foundFile = true
-				break
-			}
-		}
-		
-		if foundFile && strings.HasPrefix(line, "@@") {
-			if hunkCount == fragmentIndex {
-				return i
-			}
-			hunkCount++
-		}
-		
-		// Reset if we hit another file
-		if foundFile && strings.HasPrefix(line, "diff --git") {
-			isOurFile := false
-			for _, header := range fileHeaders {
-				if strings.Contains(line, header) {
-					isOurFile = true
-					break
-				}
-			}
-			if !isOurFile {
-				break
-			}
-		}
-	}
-	
-	return 0
-}
 
-// calculateEndLine estimates the end line of a hunk in the original patch
-func calculateEndLine(patchContent string, file *gitdiff.File, fragmentIndex int, fragment *gitdiff.TextFragment) int {
-	startLine := calculateStartLine(patchContent, file, fragmentIndex)
-	
-	// Count the lines in the fragment
-	lineCount := 1 // hunk header
-	lineCount += len(fragment.Lines)
-	
-	return startLine + lineCount - 1
-}
-
-// convertToHunkInfo converts HunkInfoNew to the original HunkInfo format
-// This is a temporary adapter function until we fully migrate
-func convertToHunkInfo(newHunks []HunkInfoNew) []HunkInfo {
-	oldHunks := make([]HunkInfo, 0, len(newHunks))
-	
-	for _, h := range newHunks {
-		// Skip binary files in the old format
-		if h.IsBinary {
-			continue
-		}
-		
-		// Use the appropriate file path based on operation
-		filePath := h.FilePath
-		if h.Operation == FileOperationDeleted {
-			filePath = h.OldFilePath
-		}
-		
-		oldHunks = append(oldHunks, HunkInfo{
-			GlobalIndex: h.GlobalIndex,
-			FilePath:    filePath,
-			IndexInFile: h.IndexInFile,
-			PatchID:     h.PatchID,
-			StartLine:   h.StartLine,
-			EndLine:     h.EndLine,
-		})
-	}
-	
-	return oldHunks
-}
 
 // extractHunkContentFromFragment extracts hunk content from a go-gitdiff fragment
 func extractHunkContentFromFragment(file *gitdiff.File, fragment *gitdiff.TextFragment) (string, error) {

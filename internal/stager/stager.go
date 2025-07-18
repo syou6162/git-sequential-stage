@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/bluekeyes/go-gitdiff/gitdiff"
 	"github.com/syou6162/git-sequential-stage/internal/executor"
 )
 
@@ -64,27 +65,64 @@ func extractFileDiff(patchLines []string, hunk *HunkInfo) []byte {
 }
 
 // extractHunkContent extracts the content for a specific hunk
-// For new files, it returns the entire file diff
-// For regular files, it uses filterdiff to extract the specific hunk
+// Uses go-gitdiff Fragment when available, falls back to filterdiff for legacy compatibility
 func (s *Stager) extractHunkContent(patchLines []string, hunk *HunkInfo, patchFile string, isNewFile bool) ([]byte, error) {
+	// Try go-gitdiff approach first if Fragment is available
+	if hunk.Fragment != nil && !isNewFile {
+		// Create a temporary file structure for extractHunkContentFromFragment
+		file := &gitdiff.File{
+			OldName: hunk.OldFilePath,
+			NewName: hunk.FilePath,
+			IsNew:   hunk.Operation == FileOperationAdded,
+			IsDelete: hunk.Operation == FileOperationDeleted,
+			IsRename: hunk.Operation == FileOperationRenamed,
+			IsCopy:  hunk.Operation == FileOperationCopied,
+		}
+		
+		content, err := extractHunkContentFromFragment(file, hunk.Fragment)
+		if err == nil {
+			return []byte(content), nil
+		}
+		// Fall through to legacy approach if go-gitdiff fails
+	}
+	
 	if isNewFile {
 		return extractFileDiff(patchLines, hunk), nil
 	}
 	
-	// Use filterdiff to extract single hunk with file filter
+	// Fallback to filterdiff for legacy compatibility
 	filterCmd := fmt.Sprintf("--hunks=%d", hunk.IndexInFile)
 	filePattern := fmt.Sprintf("*%s", hunk.FilePath)
 	return s.executor.Execute("filterdiff", "-i", filePattern, filterCmd, patchFile)
 }
 
 // extractHunkContentFromTempFile extracts hunk content using a temporary file
-// This is used in the staging loop where we work with current diffs
+// Uses go-gitdiff Fragment when available, falls back to filterdiff for legacy compatibility
 func (s *Stager) extractHunkContentFromTempFile(diffLines []string, hunk *HunkInfo, tmpFileName string, isNewFile bool) ([]byte, error) {
+	// Try go-gitdiff approach first if Fragment is available
+	if hunk.Fragment != nil && !isNewFile {
+		// Create a temporary file structure for extractHunkContentFromFragment
+		file := &gitdiff.File{
+			OldName: hunk.OldFilePath,
+			NewName: hunk.FilePath,
+			IsNew:   hunk.Operation == FileOperationAdded,
+			IsDelete: hunk.Operation == FileOperationDeleted,
+			IsRename: hunk.Operation == FileOperationRenamed,
+			IsCopy:  hunk.Operation == FileOperationCopied,
+		}
+		
+		content, err := extractHunkContentFromFragment(file, hunk.Fragment)
+		if err == nil {
+			return []byte(content), nil
+		}
+		// Fall through to legacy approach if go-gitdiff fails
+	}
+	
 	if isNewFile {
 		return extractFileDiff(diffLines, hunk), nil
 	}
 	
-	// Use filterdiff to extract single hunk from current diff with file filter
+	// Fallback to filterdiff for legacy compatibility
 	filterCmd := fmt.Sprintf("--hunks=%d", hunk.IndexInFile)
 	filePattern := fmt.Sprintf("*%s", hunk.FilePath)
 	return s.executor.Execute("filterdiff", "-i", filePattern, filterCmd, tmpFileName)
@@ -253,10 +291,6 @@ func (s *Stager) getCurrentDiff(targetFiles map[string]bool) ([]byte, error) {
 	
 	diffOutput, err := s.executor.Execute("git", diffArgs...)
 	if err != nil {
-		errorMsg := s.getStderrFromError(err)
-		if errorMsg != "" {
-			return nil, NewGitCommandError("git diff", err).WithContext("stderr", errorMsg)
-		}
 		return nil, NewGitCommandError("git diff", err)
 	}
 	
