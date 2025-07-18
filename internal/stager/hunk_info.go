@@ -7,17 +7,6 @@ import (
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
 )
 
-// FileOperation represents the type of file operation
-type FileOperation int
-
-const (
-	FileOperationModified FileOperation = iota
-	FileOperationAdded
-	FileOperationDeleted
-	FileOperationRenamed
-	FileOperationCopied
-)
-
 // HunkInfo represents information about a single hunk
 type HunkInfo struct {
 	GlobalIndex   int                   // Global hunk number in the patch file (1, 2, 3, ...)

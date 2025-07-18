@@ -202,8 +202,8 @@ index abc123..000000
 					return
 				}
 				hunk := hunks[0]
-				if hunk.Operation != FileOperationDeleted {
-					t.Errorf("Expected FileOperationDeleted, got %v", hunk.Operation)
+				if hunk.File == nil || !hunk.File.IsDelete {
+					t.Errorf("Expected IsDelete to be true")
 				}
 				if hunk.FilePath != "deleted.py" {
 					t.Errorf("Expected file path 'deleted.py', got '%s'", hunk.FilePath)
@@ -225,8 +225,8 @@ Binary files /dev/null and b/image.png differ`,
 				if !hunks[0].IsBinary {
 					t.Error("Expected IsBinary to be true")
 				}
-				if hunks[0].Operation != FileOperationAdded {
-					t.Errorf("Expected FileOperationAdded, got %v", hunks[0].Operation)
+				if hunks[0].File == nil || !hunks[0].File.IsNew {
+					t.Errorf("Expected IsNew to be true")
 				}
 			},
 		},

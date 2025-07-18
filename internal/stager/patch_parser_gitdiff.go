@@ -41,29 +41,23 @@ func parsePatchFileWithGitDiff(patchContent string) ([]HunkInfo, error) {
 
 	// Process each file in the patch
 	for _, file := range files {
-		// Determine file operation
-		var operation FileOperation
+		// Determine file paths
 		var filePath, oldFilePath string
 
 		switch {
 		case file.IsDelete:
-			operation = FileOperationDeleted
 			filePath = file.OldName
 			oldFilePath = file.OldName
 		case file.IsNew:
-			operation = FileOperationAdded
 			filePath = file.NewName
 			oldFilePath = ""
 		case file.IsRename:
-			operation = FileOperationRenamed
 			filePath = file.NewName
 			oldFilePath = file.OldName
 		case file.IsCopy:
-			operation = FileOperationCopied
 			filePath = file.NewName
 			oldFilePath = file.OldName
 		default:
-			operation = FileOperationModified
 			filePath = file.NewName
 			oldFilePath = file.OldName
 		}
@@ -78,7 +72,6 @@ func parsePatchFileWithGitDiff(patchContent string) ([]HunkInfo, error) {
 				FilePath:    filePath,
 				OldFilePath: oldFilePath,
 				IndexInFile: 1, // Binary files have one "hunk"
-				Operation:   operation,
 				IsBinary:    true,
 				File:        file,
 			})
@@ -94,7 +87,6 @@ func parsePatchFileWithGitDiff(patchContent string) ([]HunkInfo, error) {
 				FilePath:    filePath,
 				OldFilePath: oldFilePath,
 				IndexInFile: i + 1,
-				Operation:   operation,
 				IsBinary:    false,
 				Fragment:    fragment,
 				File:        file,

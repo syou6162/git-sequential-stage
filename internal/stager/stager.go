@@ -97,25 +97,14 @@ func (s *Stager) generateHunkPatch(hunk *HunkInfo) ([]byte, error) {
 	result.WriteString(fmt.Sprintf("+++ b/%s\n", file.NewName))
 	
 	// Write the fragment
-	result.WriteString(fragment.Header())
-	if !strings.HasSuffix(fragment.Header(), "\n") {
-		result.WriteString("\n")
-	}
-	for _, line := range fragment.Lines {
-		switch line.Op {
-		case gitdiff.OpContext:
-			result.WriteString(" " + line.Line)
-		case gitdiff.OpDelete:
-			result.WriteString("-" + line.Line)
-		case gitdiff.OpAdd:
-			result.WriteString("+" + line.Line)
-		}
-		if !strings.HasSuffix(line.Line, "\n") {
-			result.WriteString("\n")
-		}
-	}
+	result.WriteString(fragment.String())
 	
 	return []byte(result.String()), nil
+}
+
+// setFallbackPatchID sets a fallback patch ID for a hunk when calculation fails
+func setFallbackPatchID(hunk *HunkInfo) {
+	hunk.PatchID = fmt.Sprintf("unknown-%d", hunk.GlobalIndex)
 }
 
 // calculatePatchIDsForHunks calculates patch IDs for all hunks in the list
@@ -124,19 +113,20 @@ func (s *Stager) calculatePatchIDsForHunks(allHunks []HunkInfo, patchContent str
 		hunkContent, err := s.extractHunkContent(&allHunks[i], patchFile)
 		if err != nil {
 			// Continue without this hunk
-			allHunks[i].PatchID = fmt.Sprintf("unknown-%d", allHunks[i].GlobalIndex)
+			s.logger.Debug("Failed to extract hunk content for hunk %d: %v", allHunks[i].GlobalIndex, err)
+			setFallbackPatchID(&allHunks[i])
 			continue
 		}
 		
 		if len(hunkContent) == 0 {
-			allHunks[i].PatchID = fmt.Sprintf("unknown-%d", allHunks[i].GlobalIndex)
+			setFallbackPatchID(&allHunks[i])
 			continue
 		}
 		
 		patchID, err := s.calculatePatchIDStable(hunkContent)
 		if err != nil {
 			// Continue without patch ID
-			allHunks[i].PatchID = fmt.Sprintf("unknown-%d", allHunks[i].GlobalIndex)
+			setFallbackPatchID(&allHunks[i])
 		} else {
 			allHunks[i].PatchID = patchID
 		}
