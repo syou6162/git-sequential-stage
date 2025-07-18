@@ -153,7 +153,7 @@ func collectTargetFiles(hunkSpecs []string) (map[string]bool, error) {
 func buildTargetIDs(hunkSpecs []string, allHunks []HunkInfo) ([]string, error) {
 	var targetIDs []string
 	for _, spec := range hunkSpecs {
-		filePath, hunkNumbers, err := parseHunkSpec(spec)
+		filePath, hunkNumbers, err := ParseHunkSpec(spec)
 		if err != nil {
 			return nil, err
 		}
@@ -207,8 +207,9 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
 		}
 		
 		// Parse current diff
-		currentHunks, err := parsePatchFile(string(diffOutput))
+		currentHunks, err := parsePatchFileWithGitDiff(string(diffOutput))
 		if err != nil {
+			s.logger.Error("Failed to parse current diff: %v", err)
 			return NewParsingError("current diff", err)
 		}
 		
