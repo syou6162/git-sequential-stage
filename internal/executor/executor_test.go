@@ -280,8 +280,8 @@ func TestMockCommandExecutorExecutedCommandsTracking(t *testing.T) {
 	}
 
 	// Check second command
-	if mock.ExecutedCommands[1].Name != "filterdiff" {
-		t.Errorf("Second command name = %v, want filterdiff", mock.ExecutedCommands[1].Name)
+	if mock.ExecutedCommands[1].Name != "git" {
+		t.Errorf("Second command name = %v, want git", mock.ExecutedCommands[1].Name)
 	}
 	if !bytes.Equal(mock.ExecutedCommands[1].Stdin, []byte("input")) {
 		t.Errorf("Second command stdin = %v, want [input]", mock.ExecutedCommands[1].Stdin)

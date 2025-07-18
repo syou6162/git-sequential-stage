@@ -57,6 +57,12 @@ GIT_SEQUENTIAL_STAGE_VERBOSE=1 ./git-sequential-stage -patch=changes.patch -hunk
 # パッチ生成と特定ハンクのステージング
 git diff > changes.patch
 git-sequential-stage -patch=changes.patch -hunk="main.go:1,3" -hunk="internal/stager/stager.go:2,4,5"
+
+# 複数ファイルの複数ハンクを順次ステージング
+git-sequential-stage -patch=changes.patch \
+  -hunk="main.go:1,3" \
+  -hunk="internal/stager/stager.go:2,4,5" \
+  -hunk="README.md:1"
 ```
 
 ## ビルドシステム
