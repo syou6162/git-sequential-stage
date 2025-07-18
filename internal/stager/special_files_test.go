@@ -174,8 +174,8 @@ index abc123..def456 100644
 					return
 				}
 				hunk := hunks[0]
-				if hunk.Operation != FileOperationRenamed {
-					t.Errorf("Expected FileOperationRenamed, got %v", hunk.Operation)
+				if hunk.File == nil || !hunk.File.IsRename {
+					t.Errorf("Expected IsRename to be true")
 				}
 				if hunk.FilePath != "new_name.py" {
 					t.Errorf("Expected new file path 'new_name.py', got '%s'", hunk.FilePath)
