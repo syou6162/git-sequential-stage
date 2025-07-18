@@ -27,7 +27,7 @@ index abc123..def456 100644
 +    print("Hello, World!")
      return "hello"
  # end of file`,
-			description: "Basic single file, single hunk patch",
+			description: "Basic single file, single hunk patch - tests the simplest case of one file with one change",
 		},
 		{
 			name: "single_file_multiple_hunks",
@@ -48,7 +48,7 @@ index abc123..def456 100644
      print("Goodbye")
 +    print("See you later!")
      return "goodbye"`,
-			description: "Single file with multiple hunks",
+			description: "Single file with multiple hunks - tests handling of multiple separate changes in the same file",
 		},
 		{
 			name: "multiple_files",

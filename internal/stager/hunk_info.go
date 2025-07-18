@@ -159,7 +159,7 @@ func extractHunkContent(patchLines []string, hunk HunkInfo) string {
 func parseHunkSpec(spec string) (filePath string, hunkNumbers []int, err error) {
 	parts := strings.SplitN(spec, ":", 2)
 	if len(parts) != 2 {
-		return "", nil, fmt.Errorf("invalid hunk spec format: %s (expected file:numbers)", spec)
+		return "", nil, NewInvalidArgumentError(fmt.Sprintf("invalid hunk spec format: %s (expected file:numbers)", spec), nil)
 	}
 	
 	filePath = parts[0]
@@ -170,10 +170,10 @@ func parseHunkSpec(spec string) (filePath string, hunkNumbers []int, err error) 
 		numStr = strings.TrimSpace(numStr)
 		var num int
 		if _, err := fmt.Sscanf(numStr, "%d", &num); err != nil {
-			return "", nil, fmt.Errorf("invalid hunk number: %s", numStr)
+			return "", nil, NewInvalidArgumentError(fmt.Sprintf("invalid hunk number: %s", numStr), err)
 		}
 		if num <= 0 {
-			return "", nil, fmt.Errorf("hunk number must be positive: %d", num)
+			return "", nil, NewInvalidArgumentError(fmt.Sprintf("hunk number must be positive: %d", num), nil)
 		}
 		hunkNumbers = append(hunkNumbers, num)
 	}

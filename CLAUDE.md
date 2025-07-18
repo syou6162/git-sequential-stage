@@ -96,8 +96,23 @@ CLIは複数の`-hunk`フラグを処理するカスタム`hunkList`タイプを
 3. コンテンツベースのマッチングで逐次適用
 4. 「ハンク番号のずれ」問題を自動解決
 
+**パッチ解析の2層構造**:
+1. **プライマリ**: `go-gitdiff`ライブラリによる堅牢な解析
+   - ファイル操作タイプ（追加、削除、リネーム、コピー）の正確な検出
+   - バイナリファイルの適切な処理
+   - Gitのdiffフォーマット仕様に準拠した解析
+2. **フォールバック**: レガシー文字列ベースパーサー
+   - go-gitdiffが失敗した場合の後方互換性を保証
+   - シンプルなパッチに対する軽量な処理
+
+**エラーハンドリング設計**:
+- `StagerError`型: エラータイプとコンテキスト情報を含む構造化エラー
+- `errors.Is/As`との互換性: Go標準のエラーハンドリングパターンをサポート
+- エラータイプ: FileNotFound、Parsing、GitCommand、HunkNotFound等を明確に分類
+
 **依存関係**:
 - 実行時: `git`, `filterdiff`（patchutils）
+- ビルド時: `github.com/bluekeyes/go-gitdiff`（パッチ解析）
 - テスト時: `go-git`ライブラリ
 - CI: patchutils自動インストール付きGitHub Actions
 

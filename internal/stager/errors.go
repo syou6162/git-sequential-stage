@@ -98,19 +98,17 @@ func NewGitCommandError(command string, err error) *StagerError {
 }
 
 // NewHunkNotFoundError creates a hunk not found error
-func NewHunkNotFoundError(file string, hunkNum int) *StagerError {
+func NewHunkNotFoundError(description string, err error) *StagerError {
 	return NewStagerError(ErrorTypeHunkNotFound,
-		fmt.Sprintf("hunk %d not found in file %s", hunkNum, file), nil).
-		WithContext("file", file).
-		WithContext("hunk_number", hunkNum)
+		fmt.Sprintf("not found: %s", description), err).
+		WithContext("description", description)
 }
 
 // NewInvalidArgumentError creates an invalid argument error
-func NewInvalidArgumentError(arg string, reason string) *StagerError {
+func NewInvalidArgumentError(description string, err error) *StagerError {
 	return NewStagerError(ErrorTypeInvalidArgument,
-		fmt.Sprintf("invalid argument %s: %s", arg, reason), nil).
-		WithContext("argument", arg).
-		WithContext("reason", reason)
+		description, err).
+		WithContext("description", description)
 }
 
 // NewDependencyMissingError creates a dependency missing error

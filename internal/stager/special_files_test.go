@@ -4,7 +4,8 @@ import (
 	"testing"
 )
 
-// TestParsePatchFile_SpecialFiles tests parsing of renamed, deleted, and binary files
+// TestParsePatchFile_SpecialFiles tests parsing of special file operations including renamed, deleted, and binary files.
+// This test ensures our legacy parser can handle these edge cases that commonly appear in Git patches.
 func TestParsePatchFile_SpecialFiles(t *testing.T) {
 	testCases := []struct {
 		name         string
@@ -13,6 +14,7 @@ func TestParsePatchFile_SpecialFiles(t *testing.T) {
 		checkFunc    func(t *testing.T, hunks []HunkInfo)
 	}{
 		{
+			// Tests file rename with content changes - ensures the parser correctly identifies the new filename
 			name: "renamed_file_with_changes",
 			patchContent: `diff --git a/old_name.py b/new_name.py
 similarity index 95%
@@ -40,6 +42,7 @@ index abc123..def456 100644
 			},
 		},
 		{
+			// Tests file deletion - ensures the parser can handle patches that remove entire files
 			name: "deleted_file",
 			patchContent: `diff --git a/deleted.py b/deleted.py
 deleted file mode 100644
@@ -202,9 +205,16 @@ new file mode 100644
 index 000000..abc123
 Binary files /dev/null and b/image.png differ`,
 			checkFunc: func(t *testing.T, hunks []HunkInfoNew) {
-				// Binary files don't have text hunks, so we expect 0 hunks
-				if len(hunks) != 0 {
-					t.Errorf("Expected 0 hunks for binary file, got %d", len(hunks))
+				// Binary files are represented as a single hunk in our implementation
+				if len(hunks) != 1 {
+					t.Errorf("Expected 1 hunk for binary file, got %d", len(hunks))
+					return
+				}
+				if !hunks[0].IsBinary {
+					t.Error("Expected IsBinary to be true")
+				}
+				if hunks[0].Operation != FileOperationAdded {
+					t.Errorf("Expected FileOperationAdded, got %v", hunks[0].Operation)
 				}
 			},
 		},

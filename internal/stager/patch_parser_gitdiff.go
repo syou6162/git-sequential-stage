@@ -40,7 +40,7 @@ func parsePatchFileWithGitDiff(patchContent string) ([]HunkInfoNew, error) {
 	// Parse the patch using go-gitdiff
 	files, _, err := gitdiff.Parse(strings.NewReader(patchContent))
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse patch with go-gitdiff: %v", err)
+		return nil, NewParsingError("patch with go-gitdiff", err)
 	}
 
 	// Process each file in the patch

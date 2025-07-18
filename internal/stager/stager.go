@@ -155,7 +155,7 @@ func buildTargetIDs(hunkSpecs []string, allHunks []HunkInfo) ([]string, error) {
 				}
 			}
 			if !found {
-				return nil, fmt.Errorf("hunk %d not found in file %s", hunkNum, filePath)
+				return nil, NewHunkNotFoundError(fmt.Sprintf("hunk %d in file %s", hunkNum, filePath), nil)
 			}
 		}
 	}
@@ -183,7 +183,7 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
 		// Get target files
 		targetFiles, err := collectTargetFiles(hunkSpecs)
 		if err != nil {
-			return fmt.Errorf("failed to collect target files: %v", err)
+			return NewInvalidArgumentError("failed to collect target files", err)
 		}
 		
 		// Get current diff
@@ -195,7 +195,7 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
 		// Parse current diff
 		currentHunks, err := parsePatchFile(string(diffOutput))
 		if err != nil {
-			return fmt.Errorf("failed to parse current diff: %v", err)
+			return NewParsingError("current diff", err)
 		}
 		
 		diffLines := strings.Split(string(diffOutput), "\n")
@@ -214,7 +214,7 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
 		}
 		
 		if !applied {
-			return fmt.Errorf("unable to find hunks with patch IDs: %v", targetIDs)
+			return NewHunkNotFoundError(fmt.Sprintf("hunks with patch IDs: %v", targetIDs), nil)
 		}
 		
 		targetIDs = newTargetIDs
@@ -255,9 +255,9 @@ func (s *Stager) getCurrentDiff(targetFiles map[string]bool) ([]byte, error) {
 	if err != nil {
 		errorMsg := s.getStderrFromError(err)
 		if errorMsg != "" {
-			return nil, fmt.Errorf("failed to get current diff: exit status %v - %s", err, errorMsg)
+			return nil, NewGitCommandError("git diff", err).WithContext("stderr", errorMsg)
 		}
-		return nil, fmt.Errorf("failed to get current diff: %v", err)
+		return nil, NewGitCommandError("git diff", err)
 	}
 	
 	return diffOutput, nil
@@ -267,7 +267,7 @@ func (s *Stager) getCurrentDiff(targetFiles map[string]bool) ([]byte, error) {
 func (s *Stager) createTempDiffFile(diffOutput []byte) (string, func(), error) {
 	tmpFile, err := os.CreateTemp("", "current_diff_*.patch")
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to create temp file: %v", err)
+		return "", nil, NewIOError("create temp file", err)
 	}
 	
 	cleanup := func() {
@@ -277,7 +277,7 @@ func (s *Stager) createTempDiffFile(diffOutput []byte) (string, func(), error) {
 	
 	if _, err := tmpFile.Write(diffOutput); err != nil {
 		cleanup()
-		return "", nil, fmt.Errorf("failed to write temp file: %v", err)
+		return "", nil, NewIOError("write temp file", err)
 	}
 	
 	tmpFile.Close()
@@ -348,7 +348,7 @@ func (s *Stager) calculatePatchIDStable(hunkPatch []byte) (string, error) {
 		return parts[0], nil
 	}
 	
-	return "", fmt.Errorf("unexpected git patch-id output")
+	return "", NewGitCommandError("git patch-id", fmt.Errorf("unexpected output"))
 }
 
 
