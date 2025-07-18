@@ -1,7 +1,6 @@
 package stager
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
@@ -17,6 +16,27 @@ func parsePatchFileWithGitDiff(patchContent string) ([]HunkInfo, error) {
 	files, _, err := gitdiff.Parse(strings.NewReader(patchContent))
 	if err != nil {
 		return nil, NewParsingError("patch with go-gitdiff", err)
+	}
+	
+	// Check if the patch contains binary file markers
+	// go-gitdiff doesn't automatically detect "Binary files ... differ" as binary
+	binaryFiles := make(map[string]bool)
+	lines := strings.Split(patchContent, "\n")
+	currentFile := ""
+	for _, line := range lines {
+		// Track current file being processed
+		if strings.HasPrefix(line, "diff --git ") {
+			parts := strings.Fields(line)
+			if len(parts) >= 4 {
+				// Extract filename from "diff --git a/file b/file"
+				currentFile = strings.TrimPrefix(parts[3], "b/")
+			}
+		}
+		
+		// Check for binary file marker
+		if strings.HasPrefix(line, "Binary files") && strings.HasSuffix(line, "differ") && currentFile != "" {
+			binaryFiles[currentFile] = true
+		}
 	}
 
 	// Process each file in the patch
@@ -50,10 +70,8 @@ func parsePatchFileWithGitDiff(patchContent string) ([]HunkInfo, error) {
 
 
 		// Handle binary files
-		// Note: go-gitdiff may not always detect binary files correctly from the patch format
-		// We also check if the file is empty (no text fragments) and patch contains "Binary files"
-		isBinary := file.IsBinary || (len(file.TextFragments) == 0 && containsBinaryMarker(patchContent, filePath))
-		if isBinary {
+		// Check both go-gitdiff detection and our manual detection
+		if file.IsBinary || binaryFiles[filePath] {
 			globalIndex++
 			hunks = append(hunks, HunkInfo{
 				GlobalIndex: globalIndex,
@@ -62,8 +80,6 @@ func parsePatchFileWithGitDiff(patchContent string) ([]HunkInfo, error) {
 				IndexInFile: 1, // Binary files have one "hunk"
 				Operation:   operation,
 				IsBinary:    true,
-				StartLine:   0, // Not used for go-gitdiff mode
-				EndLine:     0, // Not used for go-gitdiff mode
 				File:        file,
 			})
 			continue
@@ -80,8 +96,6 @@ func parsePatchFileWithGitDiff(patchContent string) ([]HunkInfo, error) {
 				IndexInFile: i + 1,
 				Operation:   operation,
 				IsBinary:    false,
-				StartLine:   0, // Line numbers not used in go-gitdiff mode
-				EndLine:     0, // Line numbers not used in go-gitdiff mode
 				Fragment:    fragment,
 				File:        file,
 			})
@@ -92,66 +106,3 @@ func parsePatchFileWithGitDiff(patchContent string) ([]HunkInfo, error) {
 }
 
 
-
-// extractHunkContentFromFragment extracts hunk content from a go-gitdiff fragment
-func extractHunkContentFromFragment(file *gitdiff.File, fragment *gitdiff.TextFragment) (string, error) {
-	var result strings.Builder
-	
-	// Write file header
-	result.WriteString(fmt.Sprintf("diff --git a/%s b/%s\n", file.OldName, file.NewName))
-	if file.OldMode != file.NewMode && file.OldMode != 0 && file.NewMode != 0 {
-		result.WriteString(fmt.Sprintf("old mode %o\n", file.OldMode))
-		result.WriteString(fmt.Sprintf("new mode %o\n", file.NewMode))
-	}
-	if file.IsNew {
-		result.WriteString(fmt.Sprintf("new file mode %o\n", file.NewMode))
-	}
-	if file.IsDelete {
-		result.WriteString(fmt.Sprintf("deleted file mode %o\n", file.OldMode))
-	}
-	if file.IsRename {
-		result.WriteString(fmt.Sprintf("rename from %s\n", file.OldName))
-		result.WriteString(fmt.Sprintf("rename to %s\n", file.NewName))
-	}
-	
-	// Write index line (simplified)
-	result.WriteString("index 0000000..0000000 100644\n")
-	result.WriteString(fmt.Sprintf("--- a/%s\n", file.OldName))
-	result.WriteString(fmt.Sprintf("+++ b/%s\n", file.NewName))
-	
-	// Write hunk header
-	result.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@", 
-		fragment.OldPosition, fragment.OldLines,
-		fragment.NewPosition, fragment.NewLines))
-	// Note: go-gitdiff doesn't expose the function context header
-	result.WriteString("\n")
-	
-	// Write hunk lines
-	for _, line := range fragment.Lines {
-		switch line.Op {
-		case gitdiff.OpContext:
-			result.WriteString(" " + line.Line)
-		case gitdiff.OpDelete:
-			result.WriteString("-" + line.Line)
-		case gitdiff.OpAdd:
-			result.WriteString("+" + line.Line)
-		}
-		if !strings.HasSuffix(line.Line, "\n") {
-			result.WriteString("\n")
-		}
-	}
-	
-	return result.String(), nil
-}
-
-// containsBinaryMarker checks if the patch content contains a binary file marker for the given file
-func containsBinaryMarker(patchContent, filePath string) bool {
-	// Look for "Binary files" line that mentions this file
-	lines := strings.Split(patchContent, "\n")
-	for _, line := range lines {
-		if strings.Contains(line, "Binary files") && strings.Contains(line, filePath) {
-			return true
-		}
-	}
-	return false
-}
