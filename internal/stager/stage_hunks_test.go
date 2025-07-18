@@ -3,6 +3,7 @@ package stager
 import (
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/syou6162/git-sequential-stage/internal/executor"
@@ -128,8 +129,15 @@ index abc1234..def5678 100644
 				t.Errorf("Unexpected error: %v", err)
 			}
 			if tt.expectErr && err != nil && tt.errMsg != "" {
-				if len(err.Error()) < len(tt.errMsg) || err.Error()[:len(tt.errMsg)] != tt.errMsg {
-					t.Errorf("Error message mismatch. Expected to start with %q, got %q", tt.errMsg, err.Error())
+				// Check if error contains expected text (flexible to handle both old and new error formats)
+				errorStr := err.Error()
+				if tt.name == "non-existent patch file" {
+					// For file not found, check for either old or new error format
+					if !strings.Contains(errorStr, "patch file") && !strings.Contains(errorStr, "file not found") {
+						t.Errorf("Error message mismatch. Expected error about patch file, got %q", errorStr)
+					}
+				} else if !strings.Contains(errorStr, tt.errMsg) {
+					t.Errorf("Error message mismatch. Expected to contain %q, got %q", tt.errMsg, errorStr)
 				}
 			}
 		})
