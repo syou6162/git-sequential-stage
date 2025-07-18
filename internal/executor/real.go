@@ -2,19 +2,23 @@ package executor
 
 import (
 	"bytes"
-	"fmt"
 	"io"
-	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/syou6162/git-sequential-stage/internal/logger"
 )
 
 // RealCommandExecutor is the real implementation of CommandExecutor
-type RealCommandExecutor struct{}
+type RealCommandExecutor struct{
+	logger *logger.Logger
+}
 
 // NewRealCommandExecutor creates a new real executor
 func NewRealCommandExecutor() *RealCommandExecutor {
-	return &RealCommandExecutor{}
+	return &RealCommandExecutor{
+		logger: logger.NewFromEnv(),
+	}
 }
 
 // Execute implements CommandExecutor.Execute
@@ -25,9 +29,9 @@ func (r *RealCommandExecutor) Execute(name string, args ...string) ([]byte, erro
 	
 	output, err := cmd.Output()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Command failed: %s %s\n", name, strings.Join(args, " "))
+		r.logger.Error("Command failed: %s %s", name, strings.Join(args, " "))
 		if stderr.Len() > 0 {
-			fmt.Fprintf(os.Stderr, "[ERROR] stderr: %s\n", stderr.String())
+			r.logger.Error("stderr: %s", stderr.String())
 		}
 		
 		// Return stderr content along with the error
@@ -49,9 +53,9 @@ func (r *RealCommandExecutor) ExecuteWithStdin(name string, stdin io.Reader, arg
 	
 	output, err := cmd.Output()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Command failed: %s %s (with stdin)\n", name, strings.Join(args, " "))
+		r.logger.Error("Command failed: %s %s (with stdin)", name, strings.Join(args, " "))
 		if stderr.Len() > 0 {
-			fmt.Fprintf(os.Stderr, "[ERROR] stderr: %s\n", stderr.String())
+			r.logger.Error("stderr: %s", stderr.String())
 		}
 		
 		// Return stderr content along with the error
