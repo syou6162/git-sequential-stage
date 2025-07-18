@@ -185,10 +185,10 @@ index 0000000..999888
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Use helper function to parse and validate
-			hunk, patchLines := parseAndValidateHunk(t, tt.patchContent, tt.hunkIndex)
+			hunk, _ := parseAndValidateHunk(t, tt.patchContent, tt.hunkIndex)
 
 			// Call the function under test
-			result := extractFileDiff(patchLines, &hunk)
+			result := extractFileDiff(&hunk)
 
 			// Compare results
 			resultStr := string(result)
@@ -275,16 +275,12 @@ index 1234567..0000000
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Use helper function to parse and validate
-			hunk, patchLines := parseAndValidateHunk(t, tt.patchContent, tt.hunkIndex)
+			hunk, _ := parseAndValidateHunk(t, tt.patchContent, tt.hunkIndex)
 
-			result := isNewFileHunk(patchLines, &hunk)
+			result := isNewFileHunk(&hunk)
 
 			if result != tt.expected {
-				hunkHeaderLine := ""
-				if hunk.StartLine < len(patchLines) {
-					hunkHeaderLine = patchLines[hunk.StartLine]
-				}
-				t.Errorf("isNewFileHunk() = %v, expected %v for hunk header: %s", result, tt.expected, hunkHeaderLine)
+				t.Errorf("isNewFileHunk() = %v, expected %v for file operation: %v", result, tt.expected, hunk.Operation)
 			}
 		})
 	}
@@ -480,10 +476,10 @@ index abc1234..def5678 100644
 			stager := NewStager(mock)
 
 			// Use helper to parse and validate
-			hunk, patchLines := parseAndValidateHunk(t, tt.patchContent, tt.hunkIndex)
+			hunk, _ := parseAndValidateHunk(t, tt.patchContent, tt.hunkIndex)
 
 			// Call the method under test
-			result, err := stager.extractHunkContent(patchLines, &hunk, "/tmp/test.patch", tt.isNewFile)
+			result, err := stager.extractHunkContent(&hunk, "/tmp/test.patch")
 
 			if tt.expectError && err == nil {
 				t.Error("Expected error but got none")

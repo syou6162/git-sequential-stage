@@ -175,8 +175,8 @@ Binary files /dev/null and b/image.png differ`,
 			
 			// Log existing parser results
 			for i, hunk := range existingHunks {
-				t.Logf("Existing parser: Hunk %d in %s (file hunk %d) at lines %d-%d",
-					i+1, hunk.FilePath, hunk.IndexInFile, hunk.StartLine, hunk.EndLine)
+				t.Logf("Existing parser: Hunk %d in %s (file hunk %d)",
+					i+1, hunk.FilePath, hunk.IndexInFile)
 			}
 
 			// Check if counts match (note: they might not for special cases)
