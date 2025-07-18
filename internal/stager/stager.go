@@ -23,29 +23,17 @@ type Stager struct {
 func NewStager(exec executor.CommandExecutor) *Stager {
 	return &Stager{
 		executor: exec,
+		logger:   logger.NewFromEnv(),
 	}
 }
 
 
-// isNewFileHunk checks if a hunk represents a new file
-func isNewFileHunk(hunk *HunkInfo) bool {
-	return hunk.Operation == FileOperationAdded
-}
-
-// extractFileDiff extracts the entire file diff including headers for a given hunk
-func extractFileDiff(hunk *HunkInfo) []byte {
-	// We always have go-gitdiff File object now
-	if hunk.File != nil {
-		return []byte(hunk.File.String())
-	}
-	return nil
-}
 
 
 // extractHunkContent extracts the content for a specific hunk
 func (s *Stager) extractHunkContent(hunk *HunkInfo, patchFile string) ([]byte, error) {
 	// For new files or binary files, return the entire file diff
-	if hunk.Operation == FileOperationAdded || hunk.IsBinary {
+	if (hunk.File != nil && hunk.File.IsNew) || hunk.IsBinary {
 		if hunk.File != nil {
 			return []byte(hunk.File.String()), nil
 		}
