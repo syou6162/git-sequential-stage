@@ -17,6 +17,10 @@ git-sequential-stage/
 └── internal/
     ├── executor/               # コマンド実行抽象化レイヤー
     ├── stager/                 # パッチIDシステムによる核心ステージングロジック
+    │   ├── stager.go          # メイン実装（StageHunks関数と補助関数）
+    │   ├── hunk_info.go       # HunkInfo構造体とパッチ解析のエントリーポイント
+    │   ├── patch_parser_gitdiff.go  # go-gitdiffライブラリを使用した堅牢な解析
+    │   └── errors.go          # カスタムエラー型（StagerError）の定義
     └── validator/              # 依存関係・引数検証
 ```
 
@@ -24,6 +28,8 @@ git-sequential-stage/
 - **依存性注入**: `executor.CommandExecutor`インターフェースによるテストでのモック化
 - **パッチIDシステム**: `git patch-id`によるコンテンツベースのハンク識別
 - **逐次処理**: 依存関係を処理するためのハンク1つずつの適用
+- **エラーハンドリング**: `StagerError`型によるコンテキスト付きエラー管理
+- **解析戦略**: go-gitdiffを優先し、レガシーパーサーへのフォールバック
 
 ## 開発コマンド
 
@@ -72,6 +78,11 @@ CLIは複数の`-hunk`フラグを処理するカスタム`hunkList`タイプを
 - `TestBinaryFileHandling`: バイナリファイルのエッジケース
 - `TestFileModificationAndMove`: 複雑なファイル操作
 
+**ユニットテスト**:
+- `patch_parser_test.go`: go-gitdiffとレガシーパーサーの比較検証
+- `special_files_test.go`: 特殊ファイル操作（リネーム、削除、バイナリ）のテスト
+- `main_test.go`: CLIインターフェースとフラグ処理のテスト
+
 **テスト環境**:
 - `go-git`ライブラリによる独立したテストリポジトリ
 - Go 1.20+の`t.Chdir()`によるディレクトリ管理
@@ -85,8 +96,23 @@ CLIは複数の`-hunk`フラグを処理するカスタム`hunkList`タイプを
 3. コンテンツベースのマッチングで逐次適用
 4. 「ハンク番号のずれ」問題を自動解決
 
+**パッチ解析の2層構造**:
+1. **プライマリ**: `go-gitdiff`ライブラリによる堅牢な解析
+   - ファイル操作タイプ（追加、削除、リネーム、コピー）の正確な検出
+   - バイナリファイルの適切な処理
+   - Gitのdiffフォーマット仕様に準拠した解析
+2. **フォールバック**: レガシー文字列ベースパーサー
+   - go-gitdiffが失敗した場合の後方互換性を保証
+   - シンプルなパッチに対する軽量な処理
+
+**エラーハンドリング設計**:
+- `StagerError`型: エラータイプとコンテキスト情報を含む構造化エラー
+- `errors.Is/As`との互換性: Go標準のエラーハンドリングパターンをサポート
+- エラータイプ: FileNotFound、Parsing、GitCommand、HunkNotFound等を明確に分類
+
 **依存関係**:
 - 実行時: `git`, `filterdiff`（patchutils）
+- ビルド時: `github.com/bluekeyes/go-gitdiff`（パッチ解析）
 - テスト時: `go-git`ライブラリ
 - CI: patchutils自動インストール付きGitHub Actions
 

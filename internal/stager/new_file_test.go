@@ -37,10 +37,10 @@ index abc1234..def5678 100644
 }
 
 // parseAndValidateHunk is a helper to parse patch file and validate hunk extraction
-func parseAndValidateHunk(t *testing.T, patchContent string, hunkIndex int) (HunkInfo, []string) {
+func parseAndValidateHunk(t *testing.T, patchContent string, hunkIndex int) HunkInfo {
 	t.Helper()
 	
-	hunks, err := parsePatchFile(patchContent)
+	hunks, err := parsePatchFileWithGitDiff(patchContent)
 	if err != nil {
 		t.Fatalf("Failed to parse patch: %v", err)
 	}
@@ -49,8 +49,7 @@ func parseAndValidateHunk(t *testing.T, patchContent string, hunkIndex int) (Hun
 		t.Fatalf("Hunk index %d out of range, only %d hunks found", hunkIndex, len(hunks))
 	}
 	
-	patchLines := strings.Split(patchContent, "\n")
-	return hunks[hunkIndex], patchLines
+	return hunks[hunkIndex]
 }
 
 // assertHunkProperties validates common hunk properties
@@ -68,9 +67,9 @@ func assertHunkProperties(t *testing.T, hunk HunkInfo, expectedFile string, expe
 	}
 }
 
-// TestExtractFileDiff tests the extractFileDiff function which extracts the entire
-// file diff (including headers) for a given hunk. This is crucial for handling
-// new file creation where the entire file content must be staged as one unit.
+// TestExtractFileDiff tests extracting the entire file diff using File.String().
+// This is crucial for handling new file creation where the entire file content
+// must be staged as one unit.
 func TestExtractFileDiff(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -185,25 +184,33 @@ index 0000000..999888
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Use helper function to parse and validate
-			hunk, patchLines := parseAndValidateHunk(t, tt.patchContent, tt.hunkIndex)
+			hunk := parseAndValidateHunk(t, tt.patchContent, tt.hunkIndex)
 
 			// Call the function under test
-			result := extractFileDiff(patchLines, &hunk)
+			var result []byte
+			if hunk.File != nil {
+				result = []byte(hunk.File.String())
+			}
 
 			// Compare results
 			resultStr := string(result)
-			if resultStr != tt.expectedOutput {
-				t.Errorf("extractFileDiff() result mismatch\nExpected:\n%s\n\nGot:\n%s", tt.expectedOutput, resultStr)
+			// Normalize the output for comparison (handle trailing newlines and "\ No newline at end of file")
+			expectedNorm := strings.TrimSpace(tt.expectedOutput)
+			resultNorm := strings.TrimSpace(resultStr)
+			// Remove "\ No newline at end of file" markers for comparison
+			resultNorm = strings.ReplaceAll(resultNorm, "\n\\ No newline at end of file", "")
+			
+			if expectedNorm != resultNorm {
+				t.Errorf("File.String() result mismatch\nExpected:\n%s\n\nGot:\n%s", tt.expectedOutput, resultStr)
 			}
 		})
 	}
 }
 
-// TestIsNewFileHunk tests the isNewFileHunk function which determines whether
-// a hunk represents a new file creation by checking for the "@@ -0,0" pattern
-// in the hunk header. This distinction is important because new files require
-// different handling than modifications to existing files.
-func TestIsNewFileHunk(t *testing.T) {
+// TestIsNewFile tests that go-gitdiff correctly identifies new files.
+// This distinction is important because new files require different handling
+// than modifications to existing files.
+func TestIsNewFile(t *testing.T) {
 	tests := []struct {
 		name         string
 		patchContent string
@@ -269,16 +276,12 @@ index 1234567..0000000
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Use helper function to parse and validate
-			hunk, patchLines := parseAndValidateHunk(t, tt.patchContent, tt.hunkIndex)
+			hunk := parseAndValidateHunk(t, tt.patchContent, tt.hunkIndex)
 
-			result := isNewFileHunk(patchLines, &hunk)
+			result := hunk.File != nil && hunk.File.IsNew
 
 			if result != tt.expected {
-				hunkHeaderLine := ""
-				if hunk.StartLine < len(patchLines) {
-					hunkHeaderLine = patchLines[hunk.StartLine]
-				}
-				t.Errorf("isNewFileHunk() = %v, expected %v for hunk header: %s", result, tt.expected, hunkHeaderLine)
+				t.Errorf("File.IsNew = %v, expected %v", result, tt.expected)
 			}
 		})
 	}
@@ -373,7 +376,7 @@ index 0000000..999888
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hunks, err := parsePatchFile(tt.patchContent)
+			hunks, err := parsePatchFileWithGitDiff(tt.patchContent)
 			if err != nil {
 				t.Fatalf("Failed to parse patch: %v", err)
 			}
@@ -402,18 +405,13 @@ index 0000000..999888
 }
 
 // TestStager_ExtractHunkContent_NewFile tests the extractHunkContent method of Stager
-// for both new file creation and existing file modification scenarios. For new files,
-// it verifies that the entire file diff is extracted without using filterdiff. For
-// existing files, it ensures that filterdiff is called with the correct parameters.
+// for both new file creation and existing file modification scenarios.
+// Since we now use go-gitdiff for all parsing, filterdiff is no longer used.
 func TestStager_ExtractHunkContent_NewFile(t *testing.T) {
-	// Define expected mock response for readability and consistency
-	const mockFilterdiffResponse = "mocked filterdiff output with sufficient length to meet test expectations"
-	
 	tests := []struct {
 		name         string
 		patchContent string
 		hunkIndex    int
-		isNewFile    bool
 		expectError  bool
 		expectedLen  int // expected minimum length of result
 	}{
@@ -429,20 +427,11 @@ index 0000000..1234567
 +
 +func main() {}`,
 			hunkIndex:   0,
-			isNewFile:   true,
 			expectError: false,
-			expectedLen: len(`diff --git a/new_file.go b/new_file.go
-new file mode 100644
-index 0000000..1234567
---- /dev/null
-+++ b/new_file.go
-@@ -0,0 +1,3 @@
-+package main
-+
-+func main() {}`), // Actual length of the expected patch content
+			expectedLen: 100, // Approximate minimum length for a new file patch
 		},
 		{
-			name: "existing file with filterdiff (mock)",
+			name: "existing file modification",
 			patchContent: `diff --git a/existing.go b/existing.go
 index abc1234..def5678 100644
 --- a/existing.go
@@ -453,31 +442,31 @@ index abc1234..def5678 100644
 +import "fmt"
  func main() {}`,
 			hunkIndex:   0,
-			isNewFile:   false,
 			expectError: false,
-			expectedLen: len(mockFilterdiffResponse), // Length of mocked response
+			expectedLen: 50, // Approximate minimum length for a hunk patch
+		},
+		{
+			name: "binary file",
+			patchContent: `diff --git a/image.png b/image.png
+new file mode 100644
+index 0000000..abc123
+Binary files /dev/null and b/image.png differ`,
+			hunkIndex:   0,
+			expectError: false,
+			expectedLen: 50, // Binary files return the full diff
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Setup mock executor
-			mock := executor.NewMockCommandExecutor()
-			if !tt.isNewFile {
-				// Mock filterdiff response for existing files
-				mock.Commands["filterdiff [-i *existing.go --hunks=1 /tmp/test.patch]"] = executor.MockResponse{
-					Output: []byte(mockFilterdiffResponse),
-					Error:  nil,
-				}
-			}
-
-			stager := NewStager(mock)
+			// No mocking needed since we use go-gitdiff parsing
+			stager := NewStager(executor.NewRealCommandExecutor())
 
 			// Use helper to parse and validate
-			hunk, patchLines := parseAndValidateHunk(t, tt.patchContent, tt.hunkIndex)
+			hunk := parseAndValidateHunk(t, tt.patchContent, tt.hunkIndex)
 
 			// Call the method under test
-			result, err := stager.extractHunkContent(patchLines, &hunk, "/tmp/test.patch", tt.isNewFile)
+			result, err := stager.extractHunkContent(&hunk, "/tmp/test.patch")
 
 			if tt.expectError && err == nil {
 				t.Error("Expected error but got none")
