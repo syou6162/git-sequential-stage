@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
@@ -28,164 +27,101 @@ func NewStager(exec executor.CommandExecutor) *Stager {
 
 
 // isNewFileHunk checks if a hunk represents a new file
-func isNewFileHunk(patchLines []string, hunk *HunkInfo) bool {
-	// If we have Operation field set (go-gitdiff mode), use it
-	if hunk.Operation == FileOperationAdded {
-		return true
-	}
-	
-	// Legacy mode: check for @@ -0,0 in the hunk header
-	if hunk.StartLine > 0 && hunk.StartLine < len(patchLines) {
-		hunkHeader := patchLines[hunk.StartLine]
-		return strings.Contains(hunkHeader, "@@ -0,0")
-	}
-	return false
+func isNewFileHunk(hunk *HunkInfo) bool {
+	return hunk.Operation == FileOperationAdded
 }
 
 // extractFileDiff extracts the entire file diff including headers for a given hunk
-func extractFileDiff(patchLines []string, hunk *HunkInfo) []byte {
-	// If we have go-gitdiff File object, use it to generate the diff
+func extractFileDiff(hunk *HunkInfo) []byte {
+	// We always have go-gitdiff File object now
 	if hunk.File != nil {
 		return []byte(hunk.File.String())
 	}
-	
-	// Legacy mode: search by file path
-	fileStartLine := -1
-	fileEndLine := len(patchLines)
-	
-	// If we have a valid StartLine from legacy mode, use it as a hint to search nearby first
-	if hunk.StartLine > 0 && hunk.StartLine < len(patchLines) {
-		// Search backwards from StartLine for efficiency
-		for i := hunk.StartLine; i >= 0; i-- {
-			if strings.HasPrefix(patchLines[i], "diff --git") && isFileMatch(patchLines[i], hunk.FilePath) {
-				fileStartLine = i
-				break
-			}
-		}
-	}
-	
-	// If not found with the hint, search the entire patch
-	if fileStartLine == -1 {
-		for i, line := range patchLines {
-			if strings.HasPrefix(line, "diff --git") && isFileMatch(line, hunk.FilePath) {
-				fileStartLine = i
-				break
-			}
-		}
-	}
-	
-	// Find the end of this file's diff
-	if fileStartLine >= 0 {
-		for j := fileStartLine + 1; j < len(patchLines); j++ {
-			if strings.HasPrefix(patchLines[j], "diff --git") {
-				fileEndLine = j
-				break
-			}
-		}
-		
-		// Extract the entire file diff
-		var fileDiff []string
-		for j := fileStartLine; j < fileEndLine; j++ {
-			fileDiff = append(fileDiff, patchLines[j])
-		}
-		return []byte(strings.Join(fileDiff, "\n"))
-	}
-	
 	return nil
 }
 
-// isFileMatch checks if a diff --git line matches the given file path
-func isFileMatch(diffLine string, filePath string) bool {
-	if !strings.Contains(diffLine, filePath) {
-		return false
-	}
-	
-	// Check if this is actually our file (not just a substring match)
-	parts := strings.Fields(diffLine)
-	if len(parts) >= 4 {
-		// Extract the b/ path
-		bPath := parts[3]
-		if strings.HasPrefix(bPath, "b/") {
-			bPath = strings.TrimPrefix(bPath, "b/")
-		}
-		return bPath == filePath
-	}
-	return false
-}
 
 // extractHunkContent extracts the content for a specific hunk
-// Uses go-gitdiff Fragment when available, falls back to filterdiff for legacy compatibility
-func (s *Stager) extractHunkContent(patchLines []string, hunk *HunkInfo, patchFile string, isNewFile bool) ([]byte, error) {
-	// Try go-gitdiff approach first if Fragment is available
-	if hunk.Fragment != nil && !isNewFile {
-		// Create a temporary file structure for extractHunkContentFromFragment
-		file := &gitdiff.File{
-			OldName: hunk.OldFilePath,
-			NewName: hunk.FilePath,
-			IsNew:   hunk.Operation == FileOperationAdded,
-			IsDelete: hunk.Operation == FileOperationDeleted,
-			IsRename: hunk.Operation == FileOperationRenamed,
-			IsCopy:  hunk.Operation == FileOperationCopied,
-		}
-		
-		content, err := extractHunkContentFromFragment(file, hunk.Fragment)
-		if err == nil {
-			return []byte(content), nil
-		}
-		// Fall through to legacy approach if go-gitdiff fails
+func (s *Stager) extractHunkContent(hunk *HunkInfo, patchFile string) ([]byte, error) {
+	// For new files or when we have the full File object, return the entire file diff
+	if hunk.Operation == FileOperationAdded && hunk.File != nil {
+		return []byte(hunk.File.String()), nil
 	}
 	
-	if isNewFile {
-		return extractFileDiff(patchLines, hunk), nil
+	// For single hunks when we have Fragment and File
+	if hunk.Fragment != nil && hunk.File != nil {
+		return s.generateHunkPatch(hunk)
 	}
 	
-	// Fallback to filterdiff for legacy compatibility
+	// Fallback to filterdiff for legacy compatibility or complex cases
 	filterCmd := fmt.Sprintf("--hunks=%d", hunk.IndexInFile)
 	filePattern := fmt.Sprintf("*%s", hunk.FilePath)
 	return s.executor.Execute("filterdiff", "-i", filePattern, filterCmd, patchFile)
 }
 
-// extractHunkContentFromTempFile extracts hunk content using a temporary file
-// Uses go-gitdiff Fragment when available, falls back to filterdiff for legacy compatibility
-func (s *Stager) extractHunkContentFromTempFile(diffLines []string, hunk *HunkInfo, tmpFileName string, isNewFile bool) ([]byte, error) {
-	// Try go-gitdiff approach first if Fragment is available
-	if hunk.Fragment != nil && !isNewFile {
-		// Create a temporary file structure for extractHunkContentFromFragment
-		file := &gitdiff.File{
-			OldName: hunk.OldFilePath,
-			NewName: hunk.FilePath,
-			IsNew:   hunk.Operation == FileOperationAdded,
-			IsDelete: hunk.Operation == FileOperationDeleted,
-			IsRename: hunk.Operation == FileOperationRenamed,
-			IsCopy:  hunk.Operation == FileOperationCopied,
-		}
-		
-		content, err := extractHunkContentFromFragment(file, hunk.Fragment)
-		if err == nil {
-			return []byte(content), nil
-		}
-		// Fall through to legacy approach if go-gitdiff fails
+// generateHunkPatch generates a patch for a single hunk using go-gitdiff objects
+func (s *Stager) generateHunkPatch(hunk *HunkInfo) ([]byte, error) {
+	var result strings.Builder
+	
+	file := hunk.File
+	fragment := hunk.Fragment
+	
+	// Write file header
+	result.WriteString(fmt.Sprintf("diff --git a/%s b/%s\n", file.OldName, file.NewName))
+	if file.OldMode != file.NewMode && file.OldMode != 0 && file.NewMode != 0 {
+		result.WriteString(fmt.Sprintf("old mode %o\n", file.OldMode))
+		result.WriteString(fmt.Sprintf("new mode %o\n", file.NewMode))
+	}
+	if file.IsNew {
+		result.WriteString(fmt.Sprintf("new file mode %o\n", file.NewMode))
+	}
+	if file.IsDelete {
+		result.WriteString(fmt.Sprintf("deleted file mode %o\n", file.OldMode))
+	}
+	if file.IsRename {
+		result.WriteString(fmt.Sprintf("rename from %s\n", file.OldName))
+		result.WriteString(fmt.Sprintf("rename to %s\n", file.NewName))
 	}
 	
-	if isNewFile {
-		return extractFileDiff(diffLines, hunk), nil
+	// Write index line
+	if file.OldOIDPrefix != "" && file.NewOIDPrefix != "" {
+		result.WriteString(fmt.Sprintf("index %s..%s", file.OldOIDPrefix, file.NewOIDPrefix))
+		if file.NewMode != 0 {
+			result.WriteString(fmt.Sprintf(" %o", file.NewMode))
+		}
+		result.WriteString("\n")
 	}
 	
-	// Fallback to filterdiff for legacy compatibility
-	filterCmd := fmt.Sprintf("--hunks=%d", hunk.IndexInFile)
-	filePattern := fmt.Sprintf("*%s", hunk.FilePath)
-	return s.executor.Execute("filterdiff", "-i", filePattern, filterCmd, tmpFileName)
+	// Write file paths
+	result.WriteString(fmt.Sprintf("--- a/%s\n", file.OldName))
+	result.WriteString(fmt.Sprintf("+++ b/%s\n", file.NewName))
+	
+	// Write the fragment
+	result.WriteString(fragment.Header())
+	if !strings.HasSuffix(fragment.Header(), "\n") {
+		result.WriteString("\n")
+	}
+	for _, line := range fragment.Lines {
+		switch line.Op {
+		case gitdiff.OpContext:
+			result.WriteString(" " + line.Line)
+		case gitdiff.OpDelete:
+			result.WriteString("-" + line.Line)
+		case gitdiff.OpAdd:
+			result.WriteString("+" + line.Line)
+		}
+		if !strings.HasSuffix(line.Line, "\n") {
+			result.WriteString("\n")
+		}
+	}
+	
+	return []byte(result.String()), nil
 }
 
 // calculatePatchIDsForHunks calculates patch IDs for all hunks in the list
 func (s *Stager) calculatePatchIDsForHunks(allHunks []HunkInfo, patchContent string, patchFile string) error {
-	patchLines := strings.Split(patchContent, "\n")
-	
 	for i := range allHunks {
-		// Check if this is a new file by looking for @@ -0,0
-		isNewFile := isNewFileHunk(patchLines, &allHunks[i])
-		
-		hunkContent, err := s.extractHunkContent(patchLines, &allHunks[i], patchFile, isNewFile)
+		hunkContent, err := s.extractHunkContent(&allHunks[i], patchFile)
 		if err != nil {
 			// Continue without this hunk
 			allHunks[i].PatchID = fmt.Sprintf("unknown-%d", allHunks[i].GlobalIndex)
@@ -369,11 +305,8 @@ func (s *Stager) createTempDiffFile(diffOutput []byte) (string, func(), error) {
 
 // findAndApplyMatchingHunk finds a matching hunk and applies it
 func (s *Stager) findAndApplyMatchingHunk(currentHunks []HunkInfo, diffLines []string, tmpFileName string, targetIDs []string) ([]string, bool, error) {
-	for _, currentHunk := range currentHunks {
-		// Check if this is a new file
-		isNewFile := isNewFileHunk(diffLines, &currentHunk)
-		
-		hunkContent, err := s.extractHunkContentFromTempFile(diffLines, &currentHunk, tmpFileName, isNewFile)
+	for i := range currentHunks {
+		hunkContent, err := s.extractHunkContent(&currentHunks[i], tmpFileName)
 		if err != nil || len(hunkContent) == 0 {
 			continue
 		}
