@@ -16,7 +16,22 @@ type HunkInfo struct {
 }
 
 // parsePatchFile parses a patch file and returns a list of HunkInfo
+// This function now uses go-gitdiff internally but maintains the same interface
 func parsePatchFile(patchContent string) ([]HunkInfo, error) {
+	// Try the new go-gitdiff based parser first
+	newHunks, err := parsePatchFileWithGitDiff(patchContent)
+	if err != nil {
+		// Fallback to legacy parser if go-gitdiff fails
+		// This ensures backward compatibility with existing patches
+		return parsePatchFileLegacy(patchContent)
+	}
+	
+	// Convert new format to old format for backward compatibility
+	return convertToHunkInfo(newHunks), nil
+}
+
+// parsePatchFileLegacy is the original string-based parser (kept for fallback)
+func parsePatchFileLegacy(patchContent string) ([]HunkInfo, error) {
 	var hunks []HunkInfo
 	globalIndex := 0
 	currentFile := ""
