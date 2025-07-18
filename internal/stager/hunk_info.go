@@ -20,127 +20,23 @@ const (
 
 // HunkInfo represents information about a single hunk
 type HunkInfo struct {
-	GlobalIndex   int           // Global hunk number in the patch file (1, 2, 3, ...)
-	FilePath      string        // File path this hunk belongs to (new path for renames)
-	OldFilePath   string        // Old file path (for renames)
-	IndexInFile   int           // Hunk number within the file (1, 2, 3, ...)
-	PatchID       string        // Unique patch ID calculated using git patch-id
-	StartLine     int           // Line number where this hunk starts in the patch file
-	EndLine       int           // Line number where this hunk ends in the patch file
-	Operation     FileOperation // Type of file operation
-	IsBinary      bool          // Whether this is a binary file
-	Fragment      *gitdiff.TextFragment // Original fragment from go-gitdiff (optional)
-	File          *gitdiff.File         // Original file from go-gitdiff (optional)
+	GlobalIndex   int                   // Global hunk number in the patch file (1, 2, 3, ...)
+	FilePath      string                // File path this hunk belongs to (new path for renames)
+	OldFilePath   string                // Old file path (for renames)
+	IndexInFile   int                   // Hunk number within the file (1, 2, 3, ...)
+	PatchID       string                // Unique patch ID calculated using git patch-id
+	Operation     FileOperation         // Type of file operation
+	IsBinary      bool                  // Whether this is a binary file
+	Fragment      *gitdiff.TextFragment // Original fragment from go-gitdiff
+	File          *gitdiff.File         // Original file from go-gitdiff
 }
 
 // parsePatchFile parses a patch file and returns a list of HunkInfo
-// This function now uses go-gitdiff internally but maintains the same interface
+// This function uses go-gitdiff for robust patch parsing
 func parsePatchFile(patchContent string) ([]HunkInfo, error) {
-	// Try the new go-gitdiff based parser first
-	hunks, err := parsePatchFileWithGitDiff(patchContent)
-	if err != nil {
-		// Fallback to legacy parser if go-gitdiff fails
-		// This ensures backward compatibility with existing patches
-		return parsePatchFileLegacy(patchContent)
-	}
-	
-	return hunks, nil
+	return parsePatchFileWithGitDiff(patchContent)
 }
 
-// parsePatchFileLegacy is the original string-based parser (kept for fallback)
-func parsePatchFileLegacy(patchContent string) ([]HunkInfo, error) {
-	var hunks []HunkInfo
-	globalIndex := 0
-	currentFile := ""
-	fileHunkIndex := make(map[string]int)
-	isNewFile := false
-	
-	lines := strings.Split(patchContent, "\n")
-	lineNum := 0
-	
-	for lineNum < len(lines) {
-		line := lines[lineNum]
-		
-		// Check for file header
-		if strings.HasPrefix(line, "diff --git") {
-			// Extract file path from diff line
-			parts := strings.Fields(line)
-			if len(parts) >= 4 {
-				// Handle both regular diffs and --no-index diffs
-				filePath := parts[3]
-				if strings.HasPrefix(filePath, "b/") {
-					currentFile = strings.TrimPrefix(filePath, "b/")
-				} else {
-					// For --no-index diffs, use the path as-is
-					currentFile = filePath
-				}
-				fileHunkIndex[currentFile] = 0
-				isNewFile = false
-			}
-		} else if strings.HasPrefix(line, "new file mode") {
-			isNewFile = true
-		} else if strings.HasPrefix(line, "@@") && currentFile != "" {
-			// Found a hunk header
-			globalIndex++
-			fileHunkIndex[currentFile]++
-			
-			hunkStartLine := lineNum
-			
-			// Find the end of this hunk
-			hunkEndLine := lineNum + 1
-			for hunkEndLine < len(lines) {
-				nextLine := lines[hunkEndLine]
-				// Stop at next hunk header or file header
-				if strings.HasPrefix(nextLine, "@@") || strings.HasPrefix(nextLine, "diff --git") {
-					break
-				}
-				hunkEndLine++
-			}
-			
-			hunks = append(hunks, HunkInfo{
-				GlobalIndex: globalIndex,
-				FilePath:    currentFile,
-				IndexInFile: fileHunkIndex[currentFile],
-				StartLine:   hunkStartLine,
-				EndLine:     hunkEndLine - 1,
-			})
-			
-			// Skip to the end of this hunk
-			lineNum = hunkEndLine - 1
-		} else if isNewFile && currentFile != "" && strings.HasPrefix(line, "@@ -0,0") {
-			// Special case for new files with @@ -0,0 format
-			globalIndex++
-			fileHunkIndex[currentFile]++
-			
-			hunkStartLine := lineNum
-			
-			// For new files, the entire content is one hunk
-			hunkEndLine := lineNum + 1
-			for hunkEndLine < len(lines) {
-				nextLine := lines[hunkEndLine]
-				if strings.HasPrefix(nextLine, "diff --git") {
-					break
-				}
-				hunkEndLine++
-			}
-			
-			hunks = append(hunks, HunkInfo{
-				GlobalIndex: globalIndex,
-				FilePath:    currentFile,
-				IndexInFile: fileHunkIndex[currentFile],
-				StartLine:   hunkStartLine,
-				EndLine:     hunkEndLine - 1,
-			})
-			
-			// Skip to the end of this hunk
-			lineNum = hunkEndLine - 1
-		}
-		
-		lineNum++
-	}
-	
-	return hunks, nil
-}
 
 
 // parseHunkSpec parses a hunk specification like "file.go:1,3"
