@@ -21,10 +21,6 @@ func TestValidator_CheckDependencies(t *testing.T) {
 					Output: []byte("git version 2.39.0\n"),
 					Error:  nil,
 				}
-				m.Commands["filterdiff [--version]"] = executor.MockResponse{
-					Output: []byte("filterdiff version 0.3.4\n"),
-					Error:  nil,
-				}
 			},
 			wantErr: false,
 		},

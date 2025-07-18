@@ -102,12 +102,12 @@ func TestMockCommandExecutorExecute(t *testing.T) {
 		{
 			name: "mock command with multiple arguments",
 			setup: func(m *MockCommandExecutor) {
-				m.Commands["filterdiff [-i *test.go --hunks=1]"] = MockResponse{
+				m.Commands["git [-i *test.go --hunks=1]"] = MockResponse{
 					Output: []byte("diff content"),
 					Error:  nil,
 				}
 			},
-			command:    "filterdiff",
+			command:    "git",
 			args:       []string{"-i", "*test.go", "--hunks=1"},
 			wantOutput: []byte("diff content"),
 			wantError:  false,
@@ -244,7 +244,7 @@ func TestMockCommandExecutorExecutedCommandsTracking(t *testing.T) {
 	
 	// Setup multiple commands
 	mock.Commands["git [--version]"] = MockResponse{Output: []byte("git version"), Error: nil}
-	mock.Commands["filterdiff [--version]"] = MockResponse{Output: []byte("filterdiff version"), Error: nil}
+	mock.Commands["git [status]"] = MockResponse{Output: []byte("git status"), Error: nil}
 
 	// Execute multiple commands
 	output1, err1 := mock.Execute("git", "--version")
