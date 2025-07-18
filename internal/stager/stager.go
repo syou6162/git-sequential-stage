@@ -322,11 +322,8 @@ func (s *Stager) findAndApplyMatchingHunk(currentHunks []HunkInfo, diffLines []s
 func (s *Stager) applyHunk(hunkContent []byte, targetID string) error {
 	_, err := s.executor.ExecuteWithStdin("git", bytes.NewReader(hunkContent), "apply", "--cached")
 	if err != nil {
-		// Debug: save the failing patch
-		debugFile := fmt.Sprintf("/tmp/failing_patch_%s.patch", targetID)
-		os.WriteFile(debugFile, hunkContent, 0644)
 		return NewPatchApplicationError(targetID, err).
-			WithContext("debug_file", debugFile)
+			WithContext("patch_content", string(hunkContent))
 	}
 	return nil
 }

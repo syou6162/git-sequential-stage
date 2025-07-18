@@ -101,10 +101,21 @@ func main() {
 
 func handleStageError(err error) {
 	fmt.Fprintf(os.Stderr, "Failed to stage hunks: %v\n\n", err)
+	
+	// Check if it's a StagerError with patch content for debugging
+	if stagerErr, ok := err.(*stager.StagerError); ok {
+		if patchContent, exists := stagerErr.Context["patch_content"]; exists {
+			if verbose := os.Getenv("GIT_SEQUENTIAL_STAGE_VERBOSE"); verbose != "" {
+				fmt.Fprintf(os.Stderr, "\nFailing patch content:\n%s\n\n", patchContent)
+			}
+		}
+	}
+	
 	fmt.Fprintf(os.Stderr, "Troubleshooting tips:\n")
 	fmt.Fprintf(os.Stderr, "1. Check if the patch file exists and is readable\n")
 	fmt.Fprintf(os.Stderr, "2. Verify that the hunks haven't already been staged\n")
 	fmt.Fprintf(os.Stderr, "3. Ensure the patch was generated from the current working tree state\n")
 	fmt.Fprintf(os.Stderr, "4. Run 'git status' to check the current state\n")
+	fmt.Fprintf(os.Stderr, "\nFor detailed debug output, set GIT_SEQUENTIAL_STAGE_VERBOSE=1\n")
 	os.Exit(1)
 }
