@@ -5,18 +5,20 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strconv"
 	"strings"
 
 	"github.com/syou6162/git-sequential-stage/internal/executor"
 )
 
-// Stager handles the sequential staging of hunks
+// Stager handles the sequential staging of hunks from Git patch files.
+// It provides functionality to selectively stage specific hunks identified by patch IDs,
+// solving the "hunk number drift" problem that occurs with dependent changes.
 type Stager struct {
 	executor executor.CommandExecutor
 }
 
-// NewStager creates a new stager
+// NewStager creates a new Stager instance with the provided command executor.
+// The executor is used to run Git and filterdiff commands.
 func NewStager(exec executor.CommandExecutor) *Stager {
 	return &Stager{
 		executor: exec,

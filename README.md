@@ -67,23 +67,48 @@ go build
 ## Usage
 
 ```bash
-git-sequential-stage -hunks=<hunk_list> -patch=<patch_file>
+git-sequential-stage -patch=<patch_file> -hunk=<file:hunks> [-hunk=<file:hunks>...]
 ```
 
 ### Options
 
-- `-hunks`: Comma-separated list of hunk numbers to stage (e.g., "1,3,5")
 - `-patch`: Path to the patch file
+- `-hunk`: File and hunk specification in the format `file:hunk_numbers` (can be specified multiple times)
 
-### Example
+### Examples
 
 ```bash
 # Generate a patch file
 git diff > changes.patch
 
-# Stage hunks 1, 3, and 5 from the patch
-git-sequential-stage -hunks=1,3,5 -patch=changes.patch
+# Stage hunks 1 and 3 from main.go
+git-sequential-stage -patch=changes.patch -hunk="main.go:1,3"
+
+# Stage multiple files with different hunks
+git-sequential-stage -patch=changes.patch \
+  -hunk="main.go:1,3" \
+  -hunk="internal/stager/stager.go:2,4,5" \
+  -hunk="README.md:1"
+
+# Stage all changes from a specific file
+git diff main.go > main.patch
+git-sequential-stage -patch=main.patch -hunk="main.go:1,2,3"
 ```
+
+## New Features
+
+### Enhanced Patch Parsing with go-gitdiff
+
+The tool now uses the `go-gitdiff` library for more robust patch parsing, providing:
+- Better handling of special file operations (renames, deletions, binary files)
+- Fallback to legacy parser for maximum compatibility
+- Improved error messages with custom error types
+
+### Improved Architecture
+
+- **Refactored StageHunks**: Split into smaller, focused functions for better maintainability
+- **Custom Error Types**: Structured error handling with context information
+- **Better Test Coverage**: Enhanced test suite covering edge cases
 
 ## How It Works
 
