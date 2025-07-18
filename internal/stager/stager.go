@@ -356,8 +356,11 @@ func (s *Stager) findAndApplyMatchingHunk(currentHunks []HunkInfo, diffLines []s
 func (s *Stager) applyHunk(hunkContent []byte, targetID string) error {
 	_, err := s.executor.ExecuteWithStdin("git", bytes.NewReader(hunkContent), "apply", "--cached")
 	if err != nil {
-		return NewPatchApplicationError(targetID, err).
-			WithContext("patch_content", string(hunkContent))
+		// Debug output for troubleshooting
+		if os.Getenv("GIT_SEQUENTIAL_STAGE_VERBOSE") != "" {
+			fmt.Fprintf(os.Stderr, "Failed patch content for %s:\n%s\n", targetID, string(hunkContent))
+		}
+		return NewPatchApplicationError(targetID, err)
 	}
 	return nil
 }
