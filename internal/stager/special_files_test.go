@@ -140,7 +140,7 @@ func TestParsePatchFileWithGitDiff_SpecialFiles(t *testing.T) {
 	testCases := []struct {
 		name         string
 		patchContent string
-		checkFunc    func(t *testing.T, hunks []HunkInfoNew)
+		checkFunc    func(t *testing.T, hunks []HunkInfo)
 	}{
 		{
 			name: "renamed_file_detection",
@@ -156,7 +156,7 @@ index abc123..def456 100644
 +    print("File was renamed")
      print("Original content")
      return True`,
-			checkFunc: func(t *testing.T, hunks []HunkInfoNew) {
+			checkFunc: func(t *testing.T, hunks []HunkInfo) {
 				if len(hunks) != 1 {
 					t.Errorf("Expected 1 hunk, got %d", len(hunks))
 					return
@@ -184,7 +184,7 @@ index abc123..000000
 -def old_function():
 -    print("This will be deleted")
 -    return 0`,
-			checkFunc: func(t *testing.T, hunks []HunkInfoNew) {
+			checkFunc: func(t *testing.T, hunks []HunkInfo) {
 				if len(hunks) != 1 {
 					t.Errorf("Expected 1 hunk, got %d", len(hunks))
 					return
@@ -204,7 +204,7 @@ index abc123..000000
 new file mode 100644
 index 000000..abc123
 Binary files /dev/null and b/image.png differ`,
-			checkFunc: func(t *testing.T, hunks []HunkInfoNew) {
+			checkFunc: func(t *testing.T, hunks []HunkInfo) {
 				// Binary files are represented as a single hunk in our implementation
 				if len(hunks) != 1 {
 					t.Errorf("Expected 1 hunk for binary file, got %d", len(hunks))

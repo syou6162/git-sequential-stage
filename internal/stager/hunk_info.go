@@ -3,31 +3,47 @@ package stager
 import (
 	"fmt"
 	"strings"
+
+	"github.com/bluekeyes/go-gitdiff/gitdiff"
+)
+
+// FileOperation represents the type of file operation
+type FileOperation int
+
+const (
+	FileOperationModified FileOperation = iota
+	FileOperationAdded
+	FileOperationDeleted
+	FileOperationRenamed
+	FileOperationCopied
 )
 
 // HunkInfo represents information about a single hunk
 type HunkInfo struct {
-	GlobalIndex int    // Global hunk number in the patch file (1, 2, 3, ...)
-	FilePath    string // File path this hunk belongs to
-	IndexInFile int    // Hunk number within the file (1, 2, 3, ...)
-	PatchID     string // Unique patch ID calculated using git patch-id
-	StartLine   int    // Line number where this hunk starts in the patch file
-	EndLine     int    // Line number where this hunk ends in the patch file
+	GlobalIndex   int           // Global hunk number in the patch file (1, 2, 3, ...)
+	FilePath      string        // File path this hunk belongs to (new path for renames)
+	OldFilePath   string        // Old file path (for renames)
+	IndexInFile   int           // Hunk number within the file (1, 2, 3, ...)
+	PatchID       string        // Unique patch ID calculated using git patch-id
+	StartLine     int           // Line number where this hunk starts in the patch file
+	EndLine       int           // Line number where this hunk ends in the patch file
+	Operation     FileOperation // Type of file operation
+	IsBinary      bool          // Whether this is a binary file
+	Fragment      *gitdiff.TextFragment // Original fragment from go-gitdiff (optional)
 }
 
 // parsePatchFile parses a patch file and returns a list of HunkInfo
 // This function now uses go-gitdiff internally but maintains the same interface
 func parsePatchFile(patchContent string) ([]HunkInfo, error) {
 	// Try the new go-gitdiff based parser first
-	newHunks, err := parsePatchFileWithGitDiff(patchContent)
+	hunks, err := parsePatchFileWithGitDiff(patchContent)
 	if err != nil {
 		// Fallback to legacy parser if go-gitdiff fails
 		// This ensures backward compatibility with existing patches
 		return parsePatchFileLegacy(patchContent)
 	}
 	
-	// Convert new format to old format for backward compatibility
-	return convertToHunkInfo(newHunks), nil
+	return hunks, nil
 }
 
 // parsePatchFileLegacy is the original string-based parser (kept for fallback)
