@@ -141,35 +141,6 @@ func parsePatchFileLegacy(patchContent string) ([]HunkInfo, error) {
 	return hunks, nil
 }
 
-// extractHunkContent extracts the content of a hunk including its file header
-func extractHunkContent(patchLines []string, hunk HunkInfo) string {
-	// Find the file header for this hunk
-	fileHeaderStart := hunk.StartLine
-	for i := hunk.StartLine - 1; i >= 0; i-- {
-		if strings.HasPrefix(patchLines[i], "diff --git") {
-			fileHeaderStart = i
-			break
-		}
-	}
-	
-	// Extract file header up to the hunk header
-	var result []string
-	for i := fileHeaderStart; i < len(patchLines); i++ {
-		line := patchLines[i]
-		result = append(result, line)
-		// Stop after the hunk header
-		if strings.HasPrefix(line, "@@") && i >= hunk.StartLine {
-			break
-		}
-	}
-	
-	// Extract hunk content (lines after the hunk header)
-	for i := hunk.StartLine + 1; i <= hunk.EndLine && i < len(patchLines); i++ {
-		result = append(result, patchLines[i])
-	}
-	
-	return strings.Join(result, "\n")
-}
 
 // parseHunkSpec parses a hunk specification like "file.go:1,3"
 func parseHunkSpec(spec string) (filePath string, hunkNumbers []int, err error) {
