@@ -184,6 +184,16 @@ This prevents manual `git add` commands while allowing necessary git operations 
 go test ./...
 ```
 
+### Debug mode
+
+To see detailed debug output including failing patch content, set the `GIT_SEQUENTIAL_STAGE_VERBOSE` environment variable:
+
+```bash
+GIT_SEQUENTIAL_STAGE_VERBOSE=1 ./git-sequential-stage -patch=changes.patch -hunk="file.go:1,3"
+```
+
+This will display the exact patch content that failed to apply, which can help diagnose staging issues.
+
 ### Project structure
 
 ```
