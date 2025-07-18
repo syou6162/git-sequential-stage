@@ -43,20 +43,20 @@ func extractFileDiff(hunk *HunkInfo) []byte {
 
 // extractHunkContent extracts the content for a specific hunk
 func (s *Stager) extractHunkContent(hunk *HunkInfo, patchFile string) ([]byte, error) {
-	// For new files or when we have the full File object, return the entire file diff
-	if hunk.Operation == FileOperationAdded && hunk.File != nil {
-		return []byte(hunk.File.String()), nil
+	// For new files or binary files, return the entire file diff
+	if hunk.Operation == FileOperationAdded || hunk.IsBinary {
+		if hunk.File != nil {
+			return []byte(hunk.File.String()), nil
+		}
+		return nil, fmt.Errorf("file object is nil for %s", hunk.FilePath)
 	}
 	
-	// For single hunks when we have Fragment and File
+	// For single hunks with Fragment
 	if hunk.Fragment != nil && hunk.File != nil {
 		return s.generateHunkPatch(hunk)
 	}
 	
-	// Fallback to filterdiff for legacy compatibility or complex cases
-	filterCmd := fmt.Sprintf("--hunks=%d", hunk.IndexInFile)
-	filePattern := fmt.Sprintf("*%s", hunk.FilePath)
-	return s.executor.Execute("filterdiff", "-i", filePattern, filterCmd, patchFile)
+	return nil, fmt.Errorf("fragment or file object is nil for %s", hunk.FilePath)
 }
 
 // generateHunkPatch generates a patch for a single hunk using go-gitdiff objects

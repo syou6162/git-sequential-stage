@@ -404,18 +404,13 @@ index 0000000..999888
 }
 
 // TestStager_ExtractHunkContent_NewFile tests the extractHunkContent method of Stager
-// for both new file creation and existing file modification scenarios. For new files,
-// it verifies that the entire file diff is extracted without using filterdiff. For
-// existing files, it ensures that filterdiff is called with the correct parameters.
+// for both new file creation and existing file modification scenarios.
+// Since we now use go-gitdiff for all parsing, filterdiff is no longer used.
 func TestStager_ExtractHunkContent_NewFile(t *testing.T) {
-	// Define expected mock response for readability and consistency
-	const mockFilterdiffResponse = "mocked filterdiff output with sufficient length to meet test expectations"
-	
 	tests := []struct {
 		name         string
 		patchContent string
 		hunkIndex    int
-		isNewFile    bool
 		expectError  bool
 		expectedLen  int // expected minimum length of result
 	}{
@@ -431,20 +426,11 @@ index 0000000..1234567
 +
 +func main() {}`,
 			hunkIndex:   0,
-			isNewFile:   true,
 			expectError: false,
-			expectedLen: len(`diff --git a/new_file.go b/new_file.go
-new file mode 100644
-index 0000000..1234567
---- /dev/null
-+++ b/new_file.go
-@@ -0,0 +1,3 @@
-+package main
-+
-+func main() {}`), // Actual length of the expected patch content
+			expectedLen: 100, // Approximate minimum length for a new file patch
 		},
 		{
-			name: "existing file with filterdiff (mock)",
+			name: "existing file modification",
 			patchContent: `diff --git a/existing.go b/existing.go
 index abc1234..def5678 100644
 --- a/existing.go
@@ -455,28 +441,28 @@ index abc1234..def5678 100644
 +import "fmt"
  func main() {}`,
 			hunkIndex:   0,
-			isNewFile:   false,
 			expectError: false,
-			expectedLen: len(mockFilterdiffResponse), // Length of mocked response
+			expectedLen: 50, // Approximate minimum length for a hunk patch
+		},
+		{
+			name: "binary file",
+			patchContent: `diff --git a/image.png b/image.png
+new file mode 100644
+index 0000000..abc123
+Binary files /dev/null and b/image.png differ`,
+			hunkIndex:   0,
+			expectError: false,
+			expectedLen: 50, // Binary files return the full diff
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Setup mock executor
-			mock := executor.NewMockCommandExecutor()
-			if !tt.isNewFile {
-				// Mock filterdiff response for existing files
-				mock.Commands["filterdiff [-i *existing.go --hunks=1 /tmp/test.patch]"] = executor.MockResponse{
-					Output: []byte(mockFilterdiffResponse),
-					Error:  nil,
-				}
-			}
-
-			stager := NewStager(mock)
+			// No mocking needed since we use go-gitdiff parsing
+			stager := NewStager(executor.NewRealCommandExecutor())
 
 			// Use helper to parse and validate
-			hunk, _ := parseAndValidateHunk(t, tt.patchContent, tt.hunkIndex)
+			hunk := parseAndValidateHunk(t, tt.patchContent, tt.hunkIndex)
 
 			// Call the method under test
 			result, err := stager.extractHunkContent(&hunk, "/tmp/test.patch")
