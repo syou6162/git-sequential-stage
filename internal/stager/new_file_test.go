@@ -37,7 +37,7 @@ index abc1234..def5678 100644
 }
 
 // parseAndValidateHunk is a helper to parse patch file and validate hunk extraction
-func parseAndValidateHunk(t *testing.T, patchContent string, hunkIndex int) (HunkInfo, []string) {
+func parseAndValidateHunk(t *testing.T, patchContent string, hunkIndex int) HunkInfo {
 	t.Helper()
 	
 	hunks, err := parsePatchFile(patchContent)
@@ -49,8 +49,7 @@ func parseAndValidateHunk(t *testing.T, patchContent string, hunkIndex int) (Hun
 		t.Fatalf("Hunk index %d out of range, only %d hunks found", hunkIndex, len(hunks))
 	}
 	
-	patchLines := strings.Split(patchContent, "\n")
-	return hunks[hunkIndex], patchLines
+	return hunks[hunkIndex]
 }
 
 // assertHunkProperties validates common hunk properties
@@ -185,7 +184,7 @@ index 0000000..999888
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Use helper function to parse and validate
-			hunk, _ := parseAndValidateHunk(t, tt.patchContent, tt.hunkIndex)
+			hunk := parseAndValidateHunk(t, tt.patchContent, tt.hunkIndex)
 
 			// Call the function under test
 			result := extractFileDiff(&hunk)
@@ -275,7 +274,7 @@ index 1234567..0000000
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Use helper function to parse and validate
-			hunk, _ := parseAndValidateHunk(t, tt.patchContent, tt.hunkIndex)
+			hunk := parseAndValidateHunk(t, tt.patchContent, tt.hunkIndex)
 
 			result := isNewFileHunk(&hunk)
 
