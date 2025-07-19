@@ -189,29 +189,120 @@ func (s *Stager) generateDetailedStagingError(evaluation *StagingAreaEvaluation)
     return NewSafetyError(ErrorTypeStagingAreaNotClean, message, advice, nil)
 }
 
-func (s *Stager) buildStagingAdvice(modified, added, deleted, renamed, copied []string, intentToAdd []string) string {
+func (s *Stager) buildRecommendedActions(modified, added, deleted, renamed, copied, intentToAdd []string) []RecommendedAction {
+    var actions []RecommendedAction
+    
+    // Intent-to-addファイルの場合は情報提供のみ
+    if len(intentToAdd) > 0 {
+        actions = append(actions, RecommendedAction{
+            Description: "Intent-to-add files detected (semantic_commit workflow)",
+            Commands:    []string{"# These files will be processed normally"},
+            Priority:    1,
+            Category:    "info",
+        })
+    }
+    
+    // 削除ファイルがある場合の推奨アクション
+    if len(deleted) > 0 {
+        for _, file := range deleted {
+            actions = append(actions, RecommendedAction{
+                Description: fmt.Sprintf("Commit deletion of %s", file),
+                Commands:    []string{fmt.Sprintf("git commit -m \"Remove %s\"", file)},
+                Priority:    1,
+                Category:    "commit",
+            })
+            actions = append(actions, RecommendedAction{
+                Description: fmt.Sprintf("Restore deleted file %s", file),
+                Commands:    []string{fmt.Sprintf("git reset HEAD %s", file)},
+                Priority:    2,
+                Category:    "restore",
+            })
+        }
+    }
+    
+    // 修正・追加・リネーム・コピーファイルの推奨アクション
+    if len(modified) > 0 || (len(added) > 0 && len(intentToAdd) == 0) || len(renamed) > 0 || len(copied) > 0 {
+        // 全体コミット
+        actions = append(actions, RecommendedAction{
+            Description: "Commit all staged changes",
+            Commands:    []string{"git commit -m \"Your commit message\""},
+            Priority:    1,
+            Category:    "commit",
+        })
+        
+        // 全体アンステージ
+        actions = append(actions, RecommendedAction{
+            Description: "Unstage all changes",
+            Commands:    []string{"git reset HEAD"},
+            Priority:    2,
+            Category:    "unstage",
+        })
+        
+        // ファイル別アンステージ
+        allFiles := append(append(append(modified, added...), renamed...), copied...)
+        for _, file := range allFiles {
+            if !contains(intentToAdd, file) { // intent-to-addファイルは除外
+                actions = append(actions, RecommendedAction{
+                    Description: fmt.Sprintf("Unstage specific file %s", file),
+                    Commands:    []string{fmt.Sprintf("git reset HEAD %s", file)},
+                    Priority:    3,
+                    Category:    "unstage",
+                })
+            }
+        }
+    }
+    
+    return actions
+}
+
+func (s *Stager) buildStagingAdvice(actions []RecommendedAction) string {
     var advice strings.Builder
     
-    // Intent-to-addファイルの説明
-    if len(intentToAdd) > 0 {
-        advice.WriteString("Intent-to-add files (semantic_commit workflow):\n")
-        advice.WriteString("  - These files will be processed normally\n")
-        advice.WriteString("  - Part of semantic_commit workflow (git add -N)\n\n")
+    // 優先度順にソート
+    sort.Slice(actions, func(i, j int) bool {
+        return actions[i].Priority < actions[j].Priority
+    })
+    
+    // カテゴリ別にグループ化して表示
+    categories := make(map[string][]RecommendedAction)
+    for _, action := range actions {
+        categories[action.Category] = append(categories[action.Category], action)
     }
     
-    // 削除ファイルがある場合は特別な推奨事項
-    if len(deleted) > 0 {
-        advice.WriteString("For deleted files:\n")
-        advice.WriteString("  - Commit deletion: git commit -m \"Remove <filename>\"\n")
-        advice.WriteString("  - (Alternative) Restore file: git reset HEAD <file>\n\n")
+    // 情報提供
+    if infoActions, exists := categories["info"]; exists {
+        advice.WriteString("Information:\n")
+        for _, action := range infoActions {
+            advice.WriteString(fmt.Sprintf("  - %s\n", action.Description))
+        }
+        advice.WriteString("\n")
     }
     
-    // その他のファイルの対処法
-    if len(modified) > 0 || (len(added) > 0 && len(intentToAdd) == 0) || len(renamed) > 0 || len(copied) > 0 {
-        advice.WriteString("For other changes:\n")
-        advice.WriteString("  - Commit all changes: git commit -m \"Your commit message\"\n")
-        advice.WriteString("  - Unstage all changes: git reset HEAD\n")
-        advice.WriteString("  - Unstage specific files: git reset HEAD <file>\n\n")
+    // コミット推奨
+    if commitActions, exists := categories["commit"]; exists {
+        advice.WriteString("Recommended: Commit changes first\n")
+        for _, action := range commitActions {
+            advice.WriteString(fmt.Sprintf("  %s\n", action.Commands[0]))
+        }
+        advice.WriteString("\n")
+    }
+    
+    // アンステージ代替案
+    if unstageActions, exists := categories["unstage"]; exists {
+        advice.WriteString("Alternative: Unstage changes\n")
+        for _, action := range unstageActions {
+            advice.WriteString(fmt.Sprintf("  %s\n", action.Commands[0]))
+        }
+        advice.WriteString("\n")
+    }
+    
+    // 復元オプション
+    if restoreActions, exists := categories["restore"]; exists {
+        advice.WriteString("Restore options:\n")
+        for _, action := range restoreActions {
+            advice.WriteString(fmt.Sprintf("  %s\n", action.Commands[0]))
+        }
+        advice.WriteString("\n")
     }
     
     advice.WriteString("Note: File deletions should ideally be committed separately.")
