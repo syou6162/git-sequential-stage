@@ -499,8 +499,7 @@ index ghi789..jkl012 100644
 }
 
 func TestEvaluatePatchContent_IntentToAddFiles(t *testing.T) {
-	mockExecutor := executor.NewMockCommandExecutor()
-	checker := NewSafetyChecker(mockExecutor)
+	checker := NewSafetyChecker()
 
 	// Intent-to-add files have IsNew but no TextFragments
 	patchContent := `diff --git a/new_file.go b/new_file.go

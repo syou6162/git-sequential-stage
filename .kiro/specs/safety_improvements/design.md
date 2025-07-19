@@ -153,13 +153,13 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
     // 既存の Phase 1, 2 処理...
 }
 
-func (s *Stager) performSafetyChecks() error {
-    checker := NewSafetyChecker(s.executor)
-    evaluation, err := checker.EvaluateStagingArea()
+func (s *Stager) performSafetyChecks(patchContent string) error {
+    checker := NewSafetyChecker()  // 引数不要
+    evaluation, err := checker.EvaluatePatchContent(patchContent)
     if err != nil {
         return NewSafetyError(GitOperationFailed, 
-            "Failed to evaluate staging area safety", 
-            "Ensure you are in a valid Git repository", err)
+            "Failed to evaluate patch content safety", 
+            "Check if the patch content is valid", err)
     }
     
     if !evaluation.IsClean {
