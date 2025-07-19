@@ -33,10 +33,9 @@ type RecommendedAction struct {
 }
 
 // NewSafetyChecker creates a new SafetyChecker instance
-func NewSafetyChecker(executor executor.CommandExecutor) *SafetyChecker {
-	return &SafetyChecker{
-		executor: executor,
-	}
+// No longer requires an executor since all operations are patch-based
+func NewSafetyChecker() *SafetyChecker {
+	return &SafetyChecker{}
 }
 
 // EvaluateStagingArea evaluates the current staging area for safety

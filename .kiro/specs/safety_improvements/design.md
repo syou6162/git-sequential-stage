@@ -54,8 +54,8 @@ type RecommendedAction struct {
 ```
 
 **主要メソッド:**
-- `EvaluateStagingArea() (*StagingAreaEvaluation, error)`: ステージングエリアの安全性評価を実行
-- `ValidateGitState() error`: Git リポジトリの基本状態を検証
+- `EvaluatePatchContent(patchContent string) (*StagingAreaEvaluation, error)`: パッチ内容からの安全性評価（**主要API**）
+- ~~`EvaluateStagingArea() (*StagingAreaEvaluation, error)`~~: **廃止済み** (Phase 2で廃止、Phase 3で削除予定)
 
 #### 2. Enhanced File Processing
 

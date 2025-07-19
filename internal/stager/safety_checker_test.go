@@ -432,8 +432,7 @@ func TestEvaluateStagingArea_LsFilesError(t *testing.T) {
 }
 
 func TestEvaluatePatchContent_EmptyPatch(t *testing.T) {
-	mockExecutor := executor.NewMockCommandExecutor()
-	checker := NewSafetyChecker(mockExecutor)
+	checker := NewSafetyChecker()
 
 	evaluation, err := checker.EvaluatePatchContent("")
 
