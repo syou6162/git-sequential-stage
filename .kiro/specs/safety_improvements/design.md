@@ -27,18 +27,18 @@ graph TD
 
 #### 1. SafetyChecker コンポーネント
 
-**責務:** ツール実行前の安全性チェックを実行
+**責務:** パッチファイルからの安全性チェックを実行（**完全gitコマンド不要**）
 
 ```go
+// SafetyChecker - 完全にステートレスなパッチベース安全性チェッカー
 type SafetyChecker struct {
-    executor executor.CommandExecutor
-    logger   *logger.Logger
+    // フィールドなし - 完全にステートレス
 }
 
 type StagingAreaEvaluation struct {
     IsClean           bool
     StagedFiles       []string
-    IntentToAddFiles  []string  // git add -N されたファイル
+    IntentToAddFiles  []string  // Intent-to-addファイル (IsNew && len(TextFragments) == 0)
     ErrorMessage      string
     AllowContinue     bool      // intent-to-addのみの場合はtrue
     RecommendedActions []RecommendedAction  // LLM Agent用の推奨アクション
