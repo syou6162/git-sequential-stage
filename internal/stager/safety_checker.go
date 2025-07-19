@@ -41,6 +41,7 @@ func NewSafetyChecker(executor executor.CommandExecutor) *SafetyChecker {
 }
 
 // EvaluateStagingArea evaluates the current staging area for safety
+// This method is now deprecated in favor of EvaluatePatchContent for git-command-free operation
 func (s *SafetyChecker) EvaluateStagingArea() (*StagingAreaEvaluation, error) {
 	// Get git diff --cached output to analyze what's currently staged
 	cachedDiffOutput, err := s.executor.Execute("git", "diff", "--cached")
