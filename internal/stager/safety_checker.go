@@ -86,12 +86,65 @@ func (s *SafetyChecker) EvaluateStagingArea() (*StagingAreaEvaluation, error) {
 	return evaluation, nil
 }
 
-// parseGitStatusEnhanced parses the output of git status --porcelain with go-gitdiff enhancement
-func (s *SafetyChecker) parseGitStatusEnhanced(output string) (map[string][]string, []string) {
+// parseGitStatusEnhanced analyzes staged changes using go-gitdiff for consistent implementation
+func (s *SafetyChecker) parseGitStatusEnhanced(statusOutput string) (map[string][]string, []string) {
 	filesByStatus := make(map[string][]string)
 	var allStagedFiles []string
 
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	// Primary approach: Use git diff --cached with go-gitdiff for precise analysis
+	cachedDiffOutput, err := s.executor.Execute("git", "diff", "--cached")
+	if err == nil && len(cachedDiffOutput) > 0 {
+		// Parse staged changes using go-gitdiff
+		files, _, err := gitdiff.Parse(strings.NewReader(string(cachedDiffOutput)))
+		if err == nil {
+			// Extract file information from go-gitdiff analysis
+			for _, file := range files {
+				filename := file.NewName
+				if file.IsDelete {
+					filename = file.OldName
+				}
+
+				// Add to all staged files list
+				allStagedFiles = append(allStagedFiles, filename)
+
+				// Categorize files based on go-gitdiff detection
+				switch {
+				case file.IsNew:
+					filesByStatus["A"] = append(filesByStatus["A"], filename)
+				case file.IsDelete:
+					filesByStatus["D"] = append(filesByStatus["D"], filename)
+				case file.IsRename:
+					// Store rename with proper notation
+					renameNotation := file.OldName + " -> " + file.NewName
+					filesByStatus["R"] = append(filesByStatus["R"], renameNotation)
+				case file.IsCopy:
+					// Store copy with proper notation
+					copyNotation := file.OldName + " -> " + file.NewName
+					filesByStatus["C"] = append(filesByStatus["C"], copyNotation)
+				case file.IsBinary:
+					// Handle binary files
+					filesByStatus["BINARY"] = append(filesByStatus["BINARY"], filename)
+				default:
+					// Regular modifications
+					filesByStatus["M"] = append(filesByStatus["M"], filename)
+				}
+			}
+
+			// If we successfully parsed with go-gitdiff, return the results
+			return filesByStatus, allStagedFiles
+		}
+	}
+
+	// Fallback: Use git status --porcelain parsing for edge cases
+	return s.parseGitStatusFallback(statusOutput)
+}
+
+// parseGitStatusFallback provides fallback parsing when go-gitdiff approach fails
+func (s *SafetyChecker) parseGitStatusFallback(output string) (map[string][]string, []string) {
+	filesByStatus := make(map[string][]string)
+	var allStagedFiles []string
+
+	lines := strings.Split(strings.TrimSpace(output), "\n")
 	for _, line := range lines {
 		if len(line) < 3 {
 			continue
@@ -131,85 +184,9 @@ func (s *SafetyChecker) parseGitStatusEnhanced(output string) (map[string][]stri
 		}
 	}
 
-	// Enhanced analysis using git diff and go-gitdiff for detailed file information
-	s.enhanceFileAnalysisWithGitDiff(filesByStatus)
-
 	return filesByStatus, allStagedFiles
 }
 
-// enhanceFileAnalysisWithGitDiff enhances file analysis using go-gitdiff for detailed inspection
-func (s *SafetyChecker) enhanceFileAnalysisWithGitDiff(filesByStatus map[string][]string) {
-	// Get git diff --cached output to analyze staged changes with go-gitdiff
-	cachedDiffOutput, err := s.executor.Execute("git", "diff", "--cached")
-	if err != nil {
-		// If there's an error getting cached diff, we'll continue with basic analysis
-		return
-	}
-
-	if len(cachedDiffOutput) == 0 {
-		// No staged changes to analyze
-		return
-	}
-
-	// Parse the cached diff using go-gitdiff for detailed file information
-	files, _, err := gitdiff.Parse(strings.NewReader(string(cachedDiffOutput)))
-	if err != nil {
-		// If parsing fails, continue with basic analysis
-		return
-	}
-
-	// Update file categorization based on go-gitdiff analysis
-	for _, file := range files {
-		filename := file.NewName
-		if file.IsDelete {
-			filename = file.OldName
-		}
-
-		// Update categorization with more precise information from go-gitdiff
-		switch {
-		case file.IsNew:
-			// Handle new files with more precision
-			if !s.contains(filesByStatus["A"], filename) {
-				filesByStatus["A"] = append(filesByStatus["A"], filename)
-			}
-		case file.IsDelete:
-			// Handle deletions with more precision
-			if !s.contains(filesByStatus["D"], filename) {
-				filesByStatus["D"] = append(filesByStatus["D"], filename)
-			}
-		case file.IsRename:
-			// Handle renames with proper old->new notation
-			renameNotation := file.OldName + " -> " + file.NewName
-			if !s.contains(filesByStatus["R"], renameNotation) {
-				filesByStatus["R"] = append(filesByStatus["R"], renameNotation)
-			}
-		case file.IsCopy:
-			// Handle copies with proper source->destination notation
-			copyNotation := file.OldName + " -> " + file.NewName
-			if !s.contains(filesByStatus["C"], copyNotation) {
-				filesByStatus["C"] = append(filesByStatus["C"], copyNotation)
-			}
-		case file.IsBinary:
-			// Mark binary files separately for special handling
-			filesByStatus["BINARY"] = append(filesByStatus["BINARY"], filename)
-		default:
-			// Regular modifications
-			if !s.contains(filesByStatus["M"], filename) {
-				filesByStatus["M"] = append(filesByStatus["M"], filename)
-			}
-		}
-	}
-}
-
-// contains checks if a slice contains a specific string
-func (s *SafetyChecker) contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
-}
 
 // detectIntentToAddFiles detects files added with git add -N
 func (s *SafetyChecker) detectIntentToAddFiles() ([]string, error) {
