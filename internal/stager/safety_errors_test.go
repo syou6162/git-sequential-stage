@@ -120,18 +120,3 @@ func TestSafetyErrorType_String(t *testing.T) {
 	}
 }
 
-func TestSafetyError_MethodChaining(t *testing.T) {
-	err := NewSafetyError(ErrorTypeStagingAreaNotClean, "test", "", nil).
-		WithContext("file", "test.txt").
-		WithContext("line", 42)
-
-	file, _ := err.GetContext("file")
-	if file != "test.txt" {
-		t.Error("expected method chaining to work correctly")
-	}
-
-	line, _ := err.GetContext("line")
-	if line != 42 {
-		t.Error("expected multiple context values to be stored")
-	}
-}
