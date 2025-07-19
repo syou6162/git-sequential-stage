@@ -41,18 +41,11 @@ func NewSafetyChecker(executor executor.CommandExecutor) *SafetyChecker {
 }
 
 // EvaluateStagingArea evaluates the current staging area for safety
-// This method is now deprecated in favor of EvaluatePatchContent for git-command-free operation
+// DEPRECATED: This method requires git commands. Use EvaluatePatchContent instead for git-command-free operation.
 func (s *SafetyChecker) EvaluateStagingArea() (*StagingAreaEvaluation, error) {
-	// Get git diff --cached output to analyze what's currently staged
-	cachedDiffOutput, err := s.executor.Execute("git", "diff", "--cached")
-	if err != nil {
-		return nil, NewSafetyError(GitOperationFailed,
-			"Failed to get staged changes",
-			"Ensure you are in a valid Git repository", err)
-	}
-
-	// Evaluate the staged changes from the diff output
-	return s.EvaluatePatchContent(string(cachedDiffOutput))
+	return nil, NewSafetyError(DeprecatedMethod,
+		"EvaluateStagingArea is deprecated",
+		"Use EvaluatePatchContent with patch file content instead", nil)
 }
 
 // EvaluatePatchContent evaluates safety from patch content (git-command-free analysis)
