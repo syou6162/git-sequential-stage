@@ -16,7 +16,7 @@ func TestNewSafetyError(t *testing.T) {
 	}{
 		{
 			name:          "staging area not clean error",
-			errorType:     ErrorTypeStagingAreaNotClean,
+			errorType:     StagingAreaNotClean,
 			message:       "staging area contains already staged files",
 			advice:        "commit or reset staged changes first",
 			underlying:    nil,
@@ -24,7 +24,7 @@ func TestNewSafetyError(t *testing.T) {
 		},
 		{
 			name:          "new file conflict with underlying error",
-			errorType:     ErrorTypeNewFileConflict,
+			errorType:     NewFileConflict,
 			message:       "new file already exists in index",
 			advice:        "run 'git reset HEAD file.txt' to unstage",
 			underlying:    errors.New("already exists in index"),
@@ -32,7 +32,7 @@ func TestNewSafetyError(t *testing.T) {
 		},
 		{
 			name:          "git operation failed",
-			errorType:     ErrorTypeGitOperationFailed,
+			errorType:     GitOperationFailed,
 			message:       "failed to check staging area",
 			advice:        "",
 			underlying:    errors.New("git status failed"),

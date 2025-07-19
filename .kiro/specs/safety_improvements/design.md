@@ -94,18 +94,17 @@ type SafetyError struct {
     Message     string
     Advice      string
     Underlying  error
-    Context     map[string]interface{}
 }
 
 type SafetyErrorType int
 
 const (
-    ErrorTypeStagingAreaNotClean SafetyErrorType = iota
-    ErrorTypeNewFileConflict
-    ErrorTypeDeletedFileConflict
-    ErrorTypeRenamedFileConflict
-    ErrorTypeGitOperationFailed
-    ErrorTypeIntentToAddProcessing  // Intent-to-add処理エラー
+    StagingAreaNotClean SafetyErrorType = iota
+    NewFileConflict
+    DeletedFileConflict
+    RenamedFileConflict
+    GitOperationFailed
+    IntentToAddProcessing  // Intent-to-add処理エラー
 )
 ```
 
@@ -157,7 +156,7 @@ func (s *Stager) performSafetyChecks() error {
     checker := NewSafetyChecker(s.executor)
     evaluation, err := checker.EvaluateStagingArea()
     if err != nil {
-        return NewSafetyError(ErrorTypeGitOperationFailed, 
+        return NewSafetyError(GitOperationFailed, 
             "Failed to evaluate staging area safety", 
             "Ensure you are in a valid Git repository", err)
     }
@@ -186,7 +185,7 @@ func (s *Stager) generateDetailedStagingError(evaluation *StagingAreaEvaluation)
     message := s.buildStagingErrorMessage(modified, added, deleted, renamed, copied)
     advice := s.buildStagingAdvice(modified, added, deleted, renamed, copied)
     
-    return NewSafetyError(ErrorTypeStagingAreaNotClean, message, advice, nil)
+    return NewSafetyError(StagingAreaNotClean, message, advice, nil)
 }
 
 func (s *Stager) buildRecommendedActions(modified, added, deleted, renamed, copied, intentToAdd []string) []RecommendedAction {
@@ -325,7 +324,7 @@ func (s *Stager) performSafetyChecksWithSemanticCommit() error {
     checker := NewSafetyChecker(s.executor)
     evaluation, err := checker.EvaluateStagingArea()
     if err != nil {
-        return NewSafetyError(ErrorTypeGitOperationFailed, 
+        return NewSafetyError(GitOperationFailed, 
             "Failed to evaluate staging area safety", 
             "Ensure you are in a valid Git repository", err)
     }
@@ -367,7 +366,7 @@ func (s *Stager) applyNewFileHunk(hunkContent []byte, targetID string, hunk *Hun
     _, err := s.executor.ExecuteWithStdin("git", bytes.NewReader(hunkContent), "apply", "--cached")
     if err != nil {
         if strings.Contains(err.Error(), "already exists in index") {
-            return NewSafetyError(ErrorTypeNewFileConflict,
+            return NewSafetyError(NewFileConflict,
                 fmt.Sprintf("New file %s is already staged", hunk.FilePath),
                 fmt.Sprintf("Run 'git reset HEAD %s' to unstage the file first", hunk.FilePath),
                 err)
@@ -392,7 +391,7 @@ func (s *Stager) applyDeletedFileHunk(hunkContent []byte, targetID string, hunk 
     _, err := s.executor.Execute("git", "rm", "--cached", hunk.FilePath)
     if err != nil {
         if strings.Contains(err.Error(), "did not match any files") {
-            return NewSafetyError(ErrorTypeDeletedFileConflict,
+            return NewSafetyError(DeletedFileConflict,
                 fmt.Sprintf("File %s is already deleted", hunk.FilePath),
                 "The file has already been removed from the index",
                 err)
@@ -457,7 +456,6 @@ func NewSafetyError(errorType SafetyErrorType, message, advice string, underlyin
         Message:    message,
         Advice:     advice,
         Underlying: underlying,
-        Context:    make(map[string]interface{}),
     }
 }
 
