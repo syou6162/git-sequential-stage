@@ -2,6 +2,7 @@ package stager
 
 import (
 	"fmt"
+	"strings"
 )
 
 // ErrorType represents the type of error that occurred
@@ -115,4 +116,91 @@ func NewIOError(operation string, err error) *StagerError {
 func NewPatchApplicationError(patchID string, err error) *StagerError {
 	return NewStagerError(ErrorTypePatchApplication,
 		fmt.Sprintf("failed to apply patch with ID %s", patchID), err)
+}
+
+// SafetyErrorType represents the type of safety-related error
+type SafetyErrorType int
+
+const (
+	// StagingAreaNotClean indicates the staging area has existing staged files
+	StagingAreaNotClean SafetyErrorType = iota
+	// NewFileConflict indicates a new file is already staged
+	NewFileConflict
+	// DeletedFileConflict indicates a deleted file conflict
+	DeletedFileConflict
+	// RenamedFileConflict indicates a renamed file conflict
+	RenamedFileConflict
+	// GitOperationFailed indicates a git operation failed
+	GitOperationFailed
+	// IntentToAddProcessing indicates an error during intent-to-add file processing
+	IntentToAddProcessing
+)
+
+// SafetyError represents a safety-related error with detailed context
+type SafetyError struct {
+	Type       SafetyErrorType
+	Message    string
+	Advice     string
+	Underlying error
+}
+
+// NewSafetyError creates a new SafetyError
+func NewSafetyError(errorType SafetyErrorType, message, advice string, underlying error) *SafetyError {
+	return &SafetyError{
+		Type:       errorType,
+		Message:    message,
+		Advice:     advice,
+		Underlying: underlying,
+	}
+}
+
+// Error returns the formatted error message
+func (e *SafetyError) Error() string {
+	var result strings.Builder
+	result.WriteString(fmt.Sprintf("Safety Error: %s", e.Message))
+
+	if e.Advice != "" {
+		result.WriteString(fmt.Sprintf("\nAdvice: %s", e.Advice))
+	}
+
+	if e.Underlying != nil {
+		result.WriteString(fmt.Sprintf("\nUnderlying error: %v", e.Underlying))
+	}
+
+	return result.String()
+}
+
+// Is implements error comparison for errors.Is
+func (e *SafetyError) Is(target error) bool {
+	t, ok := target.(*SafetyError)
+	if !ok {
+		return false
+	}
+	return e.Type == t.Type
+}
+
+// Unwrap returns the underlying error
+func (e *SafetyError) Unwrap() error {
+	return e.Underlying
+}
+
+
+// String returns a string representation of the error type
+func (t SafetyErrorType) String() string {
+	switch t {
+	case StagingAreaNotClean:
+		return "StagingAreaNotClean"
+	case NewFileConflict:
+		return "NewFileConflict"
+	case DeletedFileConflict:
+		return "DeletedFileConflict"
+	case RenamedFileConflict:
+		return "RenamedFileConflict"
+	case GitOperationFailed:
+		return "GitOperationFailed"
+	case IntentToAddProcessing:
+		return "IntentToAddProcessing"
+	default:
+		return "Unknown"
+	}
 }
