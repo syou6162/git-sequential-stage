@@ -134,6 +134,8 @@ const (
 	GitOperationFailed
 	// IntentToAddProcessing indicates an error during intent-to-add file processing
 	IntentToAddProcessing
+	// DeprecatedMethod indicates a deprecated method was called
+	DeprecatedMethod
 )
 
 // SafetyError represents a safety-related error with detailed context
