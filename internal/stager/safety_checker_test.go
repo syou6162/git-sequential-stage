@@ -29,6 +29,12 @@ func TestEvaluateStagingArea_CleanStagingArea(t *testing.T) {
 		Error:  nil,
 	}
 	
+	// Mock git diff --cached (empty output = no staged changes)
+	mockExecutor.Commands["git [diff --cached]"] = executor.MockResponse{
+		Output: []byte(""),
+		Error:  nil,
+	}
+	
 	// Mock git ls-files --cached --stage (no intent-to-add files)
 	mockExecutor.Commands["git [ls-files --cached --stage]"] = executor.MockResponse{
 		Output: []byte(""),
@@ -66,6 +72,30 @@ func TestEvaluateStagingArea_ModifiedFiles(t *testing.T) {
 	gitStatusOutput := "M  file1.go\nM  file2.go\n"
 	mockExecutor.Commands["git [status --porcelain]"] = executor.MockResponse{
 		Output: []byte(gitStatusOutput),
+		Error:  nil,
+	}
+	
+	// Mock git diff --cached (modified files with diff output)
+	gitDiffOutput := `diff --git a/file1.go b/file1.go
+index abc123..def456 100644
+--- a/file1.go
++++ b/file1.go
+@@ -1,3 +1,4 @@
+ package main
+ 
++// Added comment
+ func main() {}
+diff --git a/file2.go b/file2.go
+index ghi789..jkl012 100644
+--- a/file2.go
++++ b/file2.go
+@@ -1,3 +1,4 @@
+ package utils
+ 
++// Added comment
+ func Helper() {}`
+	mockExecutor.Commands["git [diff --cached]"] = executor.MockResponse{
+		Output: []byte(gitDiffOutput),
 		Error:  nil,
 	}
 	
@@ -372,6 +402,12 @@ func TestEvaluateStagingArea_LsFilesError(t *testing.T) {
 		Error:  nil,
 	}
 	
+	// Mock git diff --cached (clean)
+	mockExecutor.Commands["git [diff --cached]"] = executor.MockResponse{
+		Output: []byte(""),
+		Error:  nil,
+	}
+	
 	// Mock git ls-files --cached --stage error
 	mockExecutor.Commands["git [ls-files --cached --stage]"] = executor.MockResponse{
 		Output: nil,
@@ -397,6 +433,49 @@ func TestEvaluateStagingArea_LsFilesError(t *testing.T) {
 		if safetyError.Type != GitOperationFailed {
 			t.Errorf("Expected GitOperationFailed error type, got %v", safetyError.Type)
 		}
+	}
+}
+
+func TestEvaluateStagingArea_GitDiffCachedFallback(t *testing.T) {
+	mockExecutor := executor.NewMockCommandExecutor()
+	
+	// Mock git status --porcelain (modified files)
+	gitStatusOutput := "M  file1.go\nM  file2.go\n"
+	mockExecutor.Commands["git [status --porcelain]"] = executor.MockResponse{
+		Output: []byte(gitStatusOutput),
+		Error:  nil,
+	}
+	
+	// Mock git diff --cached failure (should trigger fallback)
+	mockExecutor.Commands["git [diff --cached]"] = executor.MockResponse{
+		Output: nil,
+		Error:  fmt.Errorf("diff --cached failed"),
+	}
+	
+	// Mock git ls-files --cached --stage
+	mockExecutor.Commands["git [ls-files --cached --stage]"] = executor.MockResponse{
+		Output: []byte("100644 abc123 0 file1.go\n100644 def456 0 file2.go\n"),
+		Error:  nil,
+	}
+
+	checker := NewSafetyChecker(mockExecutor)
+	evaluation, err := checker.EvaluateStagingArea()
+
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	// Should fallback to git status parsing and still work
+	if evaluation.IsClean {
+		t.Error("Expected dirty staging area")
+	}
+
+	if len(evaluation.StagedFiles) != 2 {
+		t.Errorf("Expected 2 staged files, got %d", len(evaluation.StagedFiles))
+	}
+
+	if len(evaluation.FilesByStatus["M"]) != 2 {
+		t.Errorf("Expected 2 modified files via fallback, got %d", len(evaluation.FilesByStatus["M"]))
 	}
 }
 
