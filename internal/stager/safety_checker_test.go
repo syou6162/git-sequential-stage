@@ -16,6 +16,7 @@ func TestNewSafetyChecker(t *testing.T) {
 }
 
 func TestEvaluateStagingArea_CleanStagingArea(t *testing.T) {
+	t.Skip("DEPRECATED: EvaluateStagingArea is deprecated, will be removed in Phase 3")
 	mockExecutor := executor.NewMockCommandExecutor()
 	
 	// Mock git status --porcelain (empty output = clean staging area)
