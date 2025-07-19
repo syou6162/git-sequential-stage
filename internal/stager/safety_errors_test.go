@@ -64,9 +64,9 @@ func TestNewSafetyError(t *testing.T) {
 }
 
 func TestSafetyError_Is(t *testing.T) {
-	err1 := NewSafetyError(ErrorTypeStagingAreaNotClean, "test", "", nil)
-	err2 := NewSafetyError(ErrorTypeStagingAreaNotClean, "different message", "", nil)
-	err3 := NewSafetyError(ErrorTypeNewFileConflict, "test", "", nil)
+	err1 := NewSafetyError(StagingAreaNotClean, "test", "", nil)
+	err2 := NewSafetyError(StagingAreaNotClean, "different message", "", nil)
+	err3 := NewSafetyError(NewFileConflict, "test", "", nil)
 	regularErr := errors.New("regular error")
 
 	if !errors.Is(err1, err2) {
