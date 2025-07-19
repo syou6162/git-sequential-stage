@@ -84,60 +84,30 @@ func TestSafetyError_Is(t *testing.T) {
 
 func TestSafetyError_Unwrap(t *testing.T) {
 	underlying := errors.New("underlying error")
-	err := NewSafetyError(ErrorTypeGitOperationFailed, "test", "", underlying)
+	err := NewSafetyError(GitOperationFailed, "test", "", underlying)
 
 	if errors.Unwrap(err) != underlying {
 		t.Error("expected Unwrap to return underlying error")
 	}
 
-	errNoUnderlying := NewSafetyError(ErrorTypeStagingAreaNotClean, "test", "", nil)
+	errNoUnderlying := NewSafetyError(StagingAreaNotClean, "test", "", nil)
 	if errors.Unwrap(errNoUnderlying) != nil {
 		t.Error("expected Unwrap to return nil when no underlying error")
 	}
 }
 
-func TestSafetyError_Context(t *testing.T) {
-	err := NewSafetyError(ErrorTypeStagingAreaNotClean, "test", "", nil)
-
-	// Test adding context
-	err.WithContext("files", []string{"file1.txt", "file2.txt"})
-	err.WithContext("count", 42)
-
-	// Test retrieving context
-	files, exists := err.GetContext("files")
-	if !exists {
-		t.Error("expected 'files' context to exist")
-	}
-	if fileList, ok := files.([]string); !ok || len(fileList) != 2 {
-		t.Error("expected 'files' context to contain correct value")
-	}
-
-	count, exists := err.GetContext("count")
-	if !exists {
-		t.Error("expected 'count' context to exist")
-	}
-	if countVal, ok := count.(int); !ok || countVal != 42 {
-		t.Error("expected 'count' context to contain correct value")
-	}
-
-	// Test non-existent context
-	_, exists = err.GetContext("nonexistent")
-	if exists {
-		t.Error("expected non-existent context to return false")
-	}
-}
 
 func TestSafetyErrorType_String(t *testing.T) {
 	tests := []struct {
 		errorType SafetyErrorType
 		expected  string
 	}{
-		{ErrorTypeStagingAreaNotClean, "StagingAreaNotClean"},
-		{ErrorTypeNewFileConflict, "NewFileConflict"},
-		{ErrorTypeDeletedFileConflict, "DeletedFileConflict"},
-		{ErrorTypeRenamedFileConflict, "RenamedFileConflict"},
-		{ErrorTypeGitOperationFailed, "GitOperationFailed"},
-		{ErrorTypeIntentToAddProcessing, "IntentToAddProcessing"},
+		{StagingAreaNotClean, "StagingAreaNotClean"},
+		{NewFileConflict, "NewFileConflict"},
+		{DeletedFileConflict, "DeletedFileConflict"},
+		{RenamedFileConflict, "RenamedFileConflict"},
+		{GitOperationFailed, "GitOperationFailed"},
+		{IntentToAddProcessing, "IntentToAddProcessing"},
 		{SafetyErrorType(999), "Unknown"},
 	}
 
