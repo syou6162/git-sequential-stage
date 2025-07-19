@@ -3,6 +3,7 @@ package stager
 import (
 	"bytes"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 
@@ -168,6 +169,11 @@ func buildTargetIDs(hunkSpecs []string, allHunks []HunkInfo) ([]string, error) {
 // hunkSpecs should be in the format "file:hunk_numbers" (e.g., "main.go:1,3").
 // The function uses patch IDs to track hunks across changes, solving the drift problem.
 func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
+	// Phase 0: Safety checks
+	if err := s.performSafetyChecks(); err != nil {
+		return err
+	}
+	
 	// Phase 1: Preparation
 	allHunks, err := s.preparePatchData(patchFile)
 	if err != nil {
@@ -346,6 +352,122 @@ func (s *Stager) calculatePatchIDStable(hunkPatch []byte) (string, error) {
 	}
 	
 	return "", NewGitCommandError("git patch-id", fmt.Errorf("unexpected output"))
+}
+
+// performSafetyChecks performs safety checks before staging operations
+func (s *Stager) performSafetyChecks() error {
+	// Create a standard logger for SafetyChecker
+	stdLogger := log.New(os.Stderr, "[safety] ", log.LstdFlags)
+	checker := NewSafetyChecker(s.executor, stdLogger)
+	evaluation, err := checker.EvaluateStagingArea()
+	if err != nil {
+		return NewSafetyError(ErrorTypeGitOperationFailed, 
+			"Failed to evaluate staging area safety", 
+			"Ensure you are in a valid Git repository", err)
+	}
+	
+	if !evaluation.IsClean {
+		// Intent-to-add files only - allow continuation
+		if evaluation.AllowContinue {
+			s.logger.Info("Intent-to-add files detected (semantic_commit workflow). Continuing...")
+			return nil
+		}
+		return s.generateDetailedStagingError(evaluation)
+	}
+	
+	return nil
+}
+
+// generateDetailedStagingError generates a detailed error message for staging conflicts
+func (s *Stager) generateDetailedStagingError(evaluation *StagingAreaEvaluation) error {
+	var message strings.Builder
+	var advice strings.Builder
+	
+	// Build error message
+	message.WriteString("SAFETY_CHECK_FAILED: staging_area_not_clean\n\n")
+	
+	// List staged files by status
+	message.WriteString("STAGED_FILES:\n")
+	if modified := evaluation.FilesByStatus["M"]; len(modified) > 0 {
+		message.WriteString(fmt.Sprintf("  MODIFIED: %s\n", strings.Join(modified, ",")))
+	}
+	if added := evaluation.FilesByStatus["A"]; len(added) > 0 {
+		message.WriteString(fmt.Sprintf("  NEW: %s\n", strings.Join(added, ",")))
+	}
+	if intentToAdd := evaluation.IntentToAddFiles; len(intentToAdd) > 0 {
+		message.WriteString(fmt.Sprintf("  INTENT_TO_ADD: %s\n", strings.Join(intentToAdd, ",")))
+	}
+	if deleted := evaluation.FilesByStatus["D"]; len(deleted) > 0 {
+		message.WriteString(fmt.Sprintf("  DELETED: %s\n", strings.Join(deleted, ",")))
+	}
+	if renamed := evaluation.FilesByStatus["R"]; len(renamed) > 0 {
+		message.WriteString(fmt.Sprintf("  RENAMED: %s\n", strings.Join(renamed, ",")))
+	}
+	if copied := evaluation.FilesByStatus["C"]; len(copied) > 0 {
+		message.WriteString(fmt.Sprintf("  COPIED: %s\n", strings.Join(copied, ",")))
+	}
+	
+	// Build recommended actions
+	advice.WriteString("\nRECOMMENDED_ACTIONS:\n")
+	
+	// Group actions by category
+	infoActions := []RecommendedAction{}
+	commitActions := []RecommendedAction{}
+	resetActions := []RecommendedAction{}
+	
+	for _, action := range evaluation.RecommendedActions {
+		switch action.Category {
+		case "info":
+			infoActions = append(infoActions, action)
+		case "commit":
+			commitActions = append(commitActions, action)
+		case "unstage", "reset":
+			resetActions = append(resetActions, action)
+		}
+	}
+	
+	// Display info actions first
+	if len(infoActions) > 0 {
+		advice.WriteString("  # For intent-to-add files - continue processing\n")
+		for _, action := range infoActions {
+			advice.WriteString(fmt.Sprintf("  CONTINUE_PROCESSING: %s\n", action.Description))
+		}
+		advice.WriteString("  \n")
+	}
+	
+	// Display commit actions
+	if len(commitActions) > 0 {
+		advice.WriteString("  # For other files - execute in order\n")
+		for i, action := range commitActions {
+			if len(action.Commands) > 0 {
+				advice.WriteString(fmt.Sprintf("  STEP_%d_%s: %s\n", i+1, 
+					strings.ToUpper(action.Category), action.Commands[0]))
+			}
+		}
+	}
+	
+	// Display reset actions
+	if len(resetActions) > 0 {
+		for i, action := range resetActions {
+			if len(action.Commands) > 0 {
+				stepNum := len(commitActions) + i + 1
+				advice.WriteString(fmt.Sprintf("  STEP_%d_RESET: %s\n", stepNum, action.Commands[0]))
+			}
+		}
+	}
+	
+	// Add alternative simple actions
+	advice.WriteString("\nALTERNATIVE_SIMPLE:\n")
+	advice.WriteString("  COMMIT_ALL: git commit -m \"Mixed changes\"\n")
+	advice.WriteString("  RESET_ALL: git reset HEAD\n")
+	advice.WriteString("\nSTATUS_CHECK: git status --porcelain\n")
+	
+	return NewSafetyError(
+		ErrorTypeStagingAreaNotClean,
+		message.String(),
+		advice.String(),
+		nil,
+	)
 }
 
 
