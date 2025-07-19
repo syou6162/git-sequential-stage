@@ -42,31 +42,84 @@ func NewSafetyChecker(executor executor.CommandExecutor) *SafetyChecker {
 
 // EvaluateStagingArea evaluates the current staging area for safety
 func (s *SafetyChecker) EvaluateStagingArea() (*StagingAreaEvaluation, error) {
-	// Execute git status --porcelain to get the current status
-	statusOutput, err := s.executor.Execute("git", "status", "--porcelain")
+	// Get git diff --cached output to analyze what's currently staged
+	cachedDiffOutput, err := s.executor.Execute("git", "diff", "--cached")
 	if err != nil {
 		return nil, NewSafetyError(GitOperationFailed,
-			"Failed to get git status",
+			"Failed to get staged changes",
 			"Ensure you are in a valid Git repository", err)
 	}
 
-	// Parse the status output using both git status and git diff for comprehensive analysis
-	filesByStatus, allStagedFiles := s.parseGitStatusEnhanced(string(statusOutput))
+	// Evaluate the staged changes from the diff output
+	return s.EvaluatePatchContent(string(cachedDiffOutput))
+}
 
-	// Detect intent-to-add files
-	intentToAddFiles, err := s.detectIntentToAddFiles()
-	if err != nil {
-		return nil, NewSafetyError(GitOperationFailed,
-			"Failed to detect intent-to-add files",
-			"Check git repository state", err)
+// EvaluatePatchContent evaluates safety from patch content (git-command-free analysis)
+func (s *SafetyChecker) EvaluatePatchContent(patchContent string) (*StagingAreaEvaluation, error) {
+	filesByStatus := make(map[string][]string)
+	var allStagedFiles []string
+	var intentToAddFiles []string
+
+	// If no patch content, staging area is clean
+	if strings.TrimSpace(patchContent) == "" {
+		return &StagingAreaEvaluation{
+			IsClean:           true,
+			StagedFiles:       []string{},
+			IntentToAddFiles:  []string{},
+			AllowContinue:     true,
+			FilesByStatus:     filesByStatus,
+		}, nil
 	}
 
-	// Determine if staging area is clean
-	// Remove intent-to-add files from staged files count for cleanliness check
+	// Parse the patch using go-gitdiff for comprehensive analysis
+	files, _, err := gitdiff.Parse(strings.NewReader(patchContent))
+	if err != nil {
+		return nil, NewSafetyError(GitOperationFailed,
+			"Failed to parse patch content",
+			"Check if the patch content is valid", err)
+	}
+
+	// Extract file information from go-gitdiff analysis
+	for _, file := range files {
+		filename := file.NewName
+		if file.IsDelete {
+			filename = file.OldName
+		}
+
+		// Add to all staged files list
+		allStagedFiles = append(allStagedFiles, filename)
+
+		// Detect intent-to-add files (empty blobs in new files)
+		if file.IsNew && len(file.TextFragments) == 0 {
+			intentToAddFiles = append(intentToAddFiles, filename)
+		}
+
+		// Categorize files based on go-gitdiff detection
+		switch {
+		case file.IsBinary:
+			// Handle binary files first (they can also be new/modified/etc)
+			filesByStatus["BINARY"] = append(filesByStatus["BINARY"], filename)
+		case file.IsNew:
+			filesByStatus["A"] = append(filesByStatus["A"], filename)
+		case file.IsDelete:
+			filesByStatus["D"] = append(filesByStatus["D"], filename)
+		case file.IsRename:
+			// Store rename with proper notation
+			renameNotation := file.OldName + " -> " + file.NewName
+			filesByStatus["R"] = append(filesByStatus["R"], renameNotation)
+		case file.IsCopy:
+			// Store copy with proper notation
+			copyNotation := file.OldName + " -> " + file.NewName
+			filesByStatus["C"] = append(filesByStatus["C"], copyNotation)
+		default:
+			// Regular modifications
+			filesByStatus["M"] = append(filesByStatus["M"], filename)
+		}
+	}
+
+	// Determine if staging area is clean (only intent-to-add files allowed)
 	nonIntentToAddStaged := s.filterNonIntentToAdd(allStagedFiles, intentToAddFiles)
 	isClean := len(allStagedFiles) == 0
-
-	// Allow continue if only intent-to-add files are present
 	allowContinue := len(nonIntentToAddStaged) == 0
 
 	evaluation := &StagingAreaEvaluation{
