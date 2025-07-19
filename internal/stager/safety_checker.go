@@ -96,13 +96,6 @@ func NewSafetyChecker() *SafetyChecker {
 	return &SafetyChecker{}
 }
 
-// EvaluateStagingArea evaluates the current staging area for safety
-// DEPRECATED: This method requires git commands. Use EvaluatePatchContent instead for git-command-free operation.
-func (s *SafetyChecker) EvaluateStagingArea() (*StagingAreaEvaluation, error) {
-	return nil, NewSafetyError(DeprecatedMethod,
-		"EvaluateStagingArea is deprecated",
-		"Use EvaluatePatchContent with patch file content instead", nil)
-}
 
 // EvaluatePatchContent evaluates safety from patch content (git-command-free analysis)
 func (s *SafetyChecker) EvaluatePatchContent(patchContent string) (*StagingAreaEvaluation, error) {
