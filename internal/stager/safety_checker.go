@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/bluekeyes/go-gitdiff/gitdiff"
 	"github.com/syou6162/git-sequential-stage/internal/executor"
 )
 
@@ -42,15 +43,15 @@ func NewSafetyChecker(executor executor.CommandExecutor) *SafetyChecker {
 // EvaluateStagingArea evaluates the current staging area for safety
 func (s *SafetyChecker) EvaluateStagingArea() (*StagingAreaEvaluation, error) {
 	// Execute git status --porcelain to get the current status
-	output, err := s.executor.Execute("git", "status", "--porcelain")
+	statusOutput, err := s.executor.Execute("git", "status", "--porcelain")
 	if err != nil {
 		return nil, NewSafetyError(GitOperationFailed,
 			"Failed to get git status",
 			"Ensure you are in a valid Git repository", err)
 	}
 
-	// Parse the status output
-	filesByStatus, allStagedFiles := s.parseGitStatus(string(output))
+	// Parse the status output using both git status and git diff for comprehensive analysis
+	filesByStatus, allStagedFiles := s.parseGitStatusEnhanced(string(statusOutput))
 
 	// Detect intent-to-add files
 	intentToAddFiles, err := s.detectIntentToAddFiles()
@@ -85,8 +86,8 @@ func (s *SafetyChecker) EvaluateStagingArea() (*StagingAreaEvaluation, error) {
 	return evaluation, nil
 }
 
-// parseGitStatus parses the output of git status --porcelain
-func (s *SafetyChecker) parseGitStatus(output string) (map[string][]string, []string) {
+// parseGitStatusEnhanced parses the output of git status --porcelain with go-gitdiff enhancement
+func (s *SafetyChecker) parseGitStatusEnhanced(output string) (map[string][]string, []string) {
 	filesByStatus := make(map[string][]string)
 	var allStagedFiles []string
 
@@ -130,7 +131,84 @@ func (s *SafetyChecker) parseGitStatus(output string) (map[string][]string, []st
 		}
 	}
 
+	// Enhanced analysis using git diff and go-gitdiff for detailed file information
+	s.enhanceFileAnalysisWithGitDiff(filesByStatus)
+
 	return filesByStatus, allStagedFiles
+}
+
+// enhanceFileAnalysisWithGitDiff enhances file analysis using go-gitdiff for detailed inspection
+func (s *SafetyChecker) enhanceFileAnalysisWithGitDiff(filesByStatus map[string][]string) {
+	// Get git diff --cached output to analyze staged changes with go-gitdiff
+	cachedDiffOutput, err := s.executor.Execute("git", "diff", "--cached")
+	if err != nil {
+		// If there's an error getting cached diff, we'll continue with basic analysis
+		return
+	}
+
+	if len(cachedDiffOutput) == 0 {
+		// No staged changes to analyze
+		return
+	}
+
+	// Parse the cached diff using go-gitdiff for detailed file information
+	files, _, err := gitdiff.Parse(strings.NewReader(string(cachedDiffOutput)))
+	if err != nil {
+		// If parsing fails, continue with basic analysis
+		return
+	}
+
+	// Update file categorization based on go-gitdiff analysis
+	for _, file := range files {
+		filename := file.NewName
+		if file.IsDelete {
+			filename = file.OldName
+		}
+
+		// Update categorization with more precise information from go-gitdiff
+		switch {
+		case file.IsNew:
+			// Handle new files with more precision
+			if !s.contains(filesByStatus["A"], filename) {
+				filesByStatus["A"] = append(filesByStatus["A"], filename)
+			}
+		case file.IsDelete:
+			// Handle deletions with more precision
+			if !s.contains(filesByStatus["D"], filename) {
+				filesByStatus["D"] = append(filesByStatus["D"], filename)
+			}
+		case file.IsRename:
+			// Handle renames with proper old->new notation
+			renameNotation := file.OldName + " -> " + file.NewName
+			if !s.contains(filesByStatus["R"], renameNotation) {
+				filesByStatus["R"] = append(filesByStatus["R"], renameNotation)
+			}
+		case file.IsCopy:
+			// Handle copies with proper source->destination notation
+			copyNotation := file.OldName + " -> " + file.NewName
+			if !s.contains(filesByStatus["C"], copyNotation) {
+				filesByStatus["C"] = append(filesByStatus["C"], copyNotation)
+			}
+		case file.IsBinary:
+			// Mark binary files separately for special handling
+			filesByStatus["BINARY"] = append(filesByStatus["BINARY"], filename)
+		default:
+			// Regular modifications
+			if !s.contains(filesByStatus["M"], filename) {
+				filesByStatus["M"] = append(filesByStatus["M"], filename)
+			}
+		}
+	}
+}
+
+// contains checks if a slice contains a specific string
+func (s *SafetyChecker) contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }
 
 // detectIntentToAddFiles detects files added with git add -N
@@ -211,6 +289,9 @@ func (s *SafetyChecker) buildStagingErrorMessage(filesByStatus map[string][]stri
 	if files, exists := filesByStatus["C"]; exists && len(files) > 0 {
 		message.WriteString(fmt.Sprintf("  COPIED: %s\n", strings.Join(files, ",")))
 	}
+	if files, exists := filesByStatus["BINARY"]; exists && len(files) > 0 {
+		message.WriteString(fmt.Sprintf("  BINARY: %s\n", strings.Join(files, ",")))
+	}
 
 	return message.String()
 }
@@ -272,6 +353,9 @@ func (s *SafetyChecker) buildRecommendedActions(filesByStatus map[string][]strin
 	if files, exists := filesByStatus["A"]; exists {
 		nonIntentToAdd := s.filterNonIntentToAdd(files, intentToAddFiles)
 		problematicFiles = append(problematicFiles, nonIntentToAdd...)
+	}
+	if files, exists := filesByStatus["BINARY"]; exists {
+		problematicFiles = append(problematicFiles, files...)
 	}
 
 	if len(problematicFiles) > 0 {
