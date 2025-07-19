@@ -14,14 +14,14 @@
 
 ### Phase 1: 基盤実装
 
-- [ ] 1.1 SafetyError型の実装
+- [x] 1.1 SafetyError型の実装
   - internal/stager/safety_errors.goファイルを作成
   - SafetyError構造体とSafetyErrorType定数を定義
   - NewSafetyError関数とError()メソッドを実装
   - 既存のStagerErrorとの統合を確保
   - _要件: S4 (Git操作エラーハンドリング)_
 
-- [ ] 1.2 SafetyErrorのユニットテスト
+- [x] 1.2 SafetyErrorのユニットテスト
   - internal/stager/safety_errors_test.goファイルを作成
   - 各エラータイプのコンストラクタテストを実装
   - エラーメッセージ形式のテストを実装
