@@ -27,18 +27,18 @@ graph TD
 
 #### 1. SafetyChecker コンポーネント
 
-**責務:** ツール実行前の安全性チェックを実行
+**責務:** パッチファイルからの安全性チェックを実行（**完全gitコマンド不要**）
 
 ```go
+// SafetyChecker - 完全にステートレスなパッチベース安全性チェッカー
 type SafetyChecker struct {
-    executor executor.CommandExecutor
-    logger   *logger.Logger
+    // フィールドなし - 完全にステートレス
 }
 
 type StagingAreaEvaluation struct {
     IsClean           bool
     StagedFiles       []string
-    IntentToAddFiles  []string  // git add -N されたファイル
+    IntentToAddFiles  []string  // Intent-to-addファイル (IsNew && len(TextFragments) == 0)
     ErrorMessage      string
     AllowContinue     bool      // intent-to-addのみの場合はtrue
     RecommendedActions []RecommendedAction  // LLM Agent用の推奨アクション
@@ -54,8 +54,8 @@ type RecommendedAction struct {
 ```
 
 **主要メソッド:**
-- `EvaluateStagingArea() (*StagingAreaEvaluation, error)`: ステージングエリアの安全性評価を実行
-- `ValidateGitState() error`: Git リポジトリの基本状態を検証
+- `EvaluatePatchContent(patchContent string) (*StagingAreaEvaluation, error)`: パッチ内容からの安全性評価（**主要API**）
+- ~~`EvaluateStagingArea() (*StagingAreaEvaluation, error)`~~: **廃止済み** (Phase 2で廃止、Phase 3で削除予定)
 
 #### 2. Enhanced File Processing
 
@@ -134,10 +134,11 @@ func (h *IntentToAddHandler) ProcessIntentToAddHunk(hunk *HunkInfo, content []by
 ### 1. ステージングエリア保護機能
 
 #### 実装方針
-- `StageHunks`メソッドの開始時に`SafetyChecker.CheckStagingArea()`を呼び出し
-- `git status --porcelain`でステージング済みファイルの詳細状態を取得
-- ファイルタイプ別（M/A/D/R/C）に分類して詳細なエラーメッセージと対処法を表示
-- **Intent-to-add (git add -N) ファイルの特別扱い**: semantic_commitワークフロー対応
+- `StageHunks`メソッドの開始時に`SafetyChecker.EvaluatePatchContent()`を呼び出し
+- **パッチファイル内容からの完全解析**: go-gitdiffライブラリによる詳細状態取得
+- ファイルタイプ別（M/A/D/R/C/BINARY）に分類して詳細なエラーメッセージと対処法を表示
+- **Intent-to-add検出**: `IsNew && len(TextFragments) == 0` による自動検出
+- **完全gitコマンド不要**: パッチファイルのみで全ての安全性チェックを実行
 - 各ユースケース（S1.1-S1.8）に対応した専用メッセージを提供
 
 #### 実装詳細
@@ -152,13 +153,13 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
     // 既存の Phase 1, 2 処理...
 }
 
-func (s *Stager) performSafetyChecks() error {
-    checker := NewSafetyChecker(s.executor)
-    evaluation, err := checker.EvaluateStagingArea()
+func (s *Stager) performSafetyChecks(patchContent string) error {
+    checker := NewSafetyChecker()  // 引数不要
+    evaluation, err := checker.EvaluatePatchContent(patchContent)
     if err != nil {
         return NewSafetyError(GitOperationFailed, 
-            "Failed to evaluate staging area safety", 
-            "Ensure you are in a valid Git repository", err)
+            "Failed to evaluate patch content safety", 
+            "Check if the patch content is valid", err)
     }
     
     if !evaluation.IsClean {
@@ -320,13 +321,13 @@ func (s *Stager) StageHunksWithSemanticCommitSupport(hunkSpecs []string, patchFi
     return s.StageHunks(hunkSpecs, patchFile)
 }
 
-func (s *Stager) performSafetyChecksWithSemanticCommit() error {
-    checker := NewSafetyChecker(s.executor)
-    evaluation, err := checker.EvaluateStagingArea()
+func (s *Stager) performSafetyChecksWithSemanticCommit(patchContent string) error {
+    checker := NewSafetyChecker()  // 引数不要
+    evaluation, err := checker.EvaluatePatchContent(patchContent)
     if err != nil {
         return NewSafetyError(GitOperationFailed, 
-            "Failed to evaluate staging area safety", 
-            "Ensure you are in a valid Git repository", err)
+            "Failed to evaluate patch content safety", 
+            "Check if the patch content is valid", err)
     }
     
     // Intent-to-addファイルのみの場合は警告で継続
@@ -484,16 +485,17 @@ sequenceDiagram
     participant M as main.go
     participant S as Stager
     participant SC as SafetyChecker
-    participant G as Git
+    participant P as PatchFile
     
     M->>S: StageHunks()
-    S->>SC: EvaluateStagingArea()
-    SC->>G: git status --porcelain + intent-to-add detection
-    G-->>SC: detailed file status + evaluation
+    S->>P: Read patch content
+    P-->>S: patch content string
+    S->>SC: EvaluatePatchContent(patchContent)
+    SC->>SC: Parse with go-gitdiff + Intent-to-add detection
     SC-->>S: StagingAreaEvaluation
     alt Staging area not clean
         S-->>M: SafetyError with advice
-    else Clean
+    else Clean or Intent-to-add only
         S->>S: Continue with normal processing
     end
 ```

@@ -72,6 +72,13 @@
 
 ### Phase 3: Stager統合
 
+- [ ] 3.0 deprecatedなEvaluateStagingAreaメソッドの完全削除
+  - EvaluateStagingAreaメソッドを完全に削除
+  - EvaluatePatchContentのみのAPIに統一
+  - 関連するテストの更新
+  - 後方互換性の完全な破棄（Phase 2で廃止警告済み）
+  - _技術的負債解消_
+
 - [ ] 3.1 performSafetyChecks()メソッドの実装
   - Stager構造体にperformSafetyChecks()メソッドを追加
   - SafetyCheckerを使用したステージングエリアチェック
