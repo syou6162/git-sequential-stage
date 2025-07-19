@@ -559,8 +559,7 @@ Binary files /dev/null and b/image.png differ`
 }
 
 func TestBuildStagingErrorMessage(t *testing.T) {
-	mockExecutor := executor.NewMockCommandExecutor()
-	checker := NewSafetyChecker(mockExecutor)
+	checker := NewSafetyChecker()
 
 	filesByStatus := map[string][]string{
 		"M":      {"modified1.go", "modified2.go"},

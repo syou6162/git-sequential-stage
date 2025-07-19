@@ -485,16 +485,17 @@ sequenceDiagram
     participant M as main.go
     participant S as Stager
     participant SC as SafetyChecker
-    participant G as Git
+    participant P as PatchFile
     
     M->>S: StageHunks()
-    S->>SC: EvaluateStagingArea()
-    SC->>G: git status --porcelain + intent-to-add detection
-    G-->>SC: detailed file status + evaluation
+    S->>P: Read patch content
+    P-->>S: patch content string
+    S->>SC: EvaluatePatchContent(patchContent)
+    SC->>SC: Parse with go-gitdiff + Intent-to-add detection
     SC-->>S: StagingAreaEvaluation
     alt Staging area not clean
         S-->>M: SafetyError with advice
-    else Clean
+    else Clean or Intent-to-add only
         S->>S: Continue with normal processing
     end
 ```
