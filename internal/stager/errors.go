@@ -202,6 +202,8 @@ func (t SafetyErrorType) String() string {
 		return "GitOperationFailed"
 	case IntentToAddProcessing:
 		return "IntentToAddProcessing"
+	case DeprecatedMethod:
+		return "DeprecatedMethod"
 	default:
 		return "Unknown"
 	}
