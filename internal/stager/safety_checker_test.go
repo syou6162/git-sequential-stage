@@ -405,11 +405,12 @@ func TestBuildStagingErrorMessage(t *testing.T) {
 	checker := NewSafetyChecker(mockExecutor)
 
 	filesByStatus := map[string][]string{
-		"M": {"modified1.go", "modified2.go"},
-		"A": {"added1.go", "added2.go"},
-		"D": {"deleted.go"},
-		"R": {"renamed.go"},
-		"C": {"copied.go"},
+		"M":      {"modified1.go", "modified2.go"},
+		"A":      {"added1.go", "added2.go"},
+		"D":      {"deleted.go"},
+		"R":      {"renamed.go"},
+		"C":      {"copied.go"},
+		"BINARY": {"binary.jpg"},
 	}
 	intentToAddFiles := []string{"added1.go"}
 
@@ -439,6 +440,9 @@ func TestBuildStagingErrorMessage(t *testing.T) {
 	}
 	if !contains(message, "COPIED: copied.go") {
 		t.Error("Message should contain copied files")
+	}
+	if !contains(message, "BINARY: binary.jpg") {
+		t.Error("Message should contain binary files")
 	}
 }
 
