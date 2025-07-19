@@ -164,10 +164,82 @@ func buildTargetIDs(hunkSpecs []string, allHunks []HunkInfo) ([]string, error) {
 	return targetIDs, nil
 }
 
+// performSafetyChecks checks the safety of the staging area based on patch content
+func (s *Stager) performSafetyChecks(patchContent string) error {
+	checker := NewSafetyChecker()
+	evaluation, err := checker.EvaluatePatchContent(patchContent)
+	if err != nil {
+		return NewSafetyError(GitOperationFailed,
+			"Failed to evaluate patch content safety",
+			"Check if the patch content is valid", err)
+	}
+	
+	// Intent-to-add files are allowed to continue
+	if evaluation.AllowContinue {
+		if len(evaluation.IntentToAddFiles) > 0 {
+			s.logger.Info("Intent-to-add files detected (semantic_commit workflow). Continuing...")
+			s.logger.Info("Intent-to-add files: %v", evaluation.IntentToAddFiles)
+		}
+		return nil
+	}
+	
+	// Not clean and not allowed to continue
+	if !evaluation.IsClean {
+		return s.generateDetailedStagingError(evaluation)
+	}
+	
+	return nil
+}
+
+// generateDetailedStagingError creates a detailed error message for staging area issues
+func (s *Stager) generateDetailedStagingError(evaluation *StagingAreaEvaluation) error {
+	// Build a comprehensive error message
+	message := "Staging area is not clean. " + evaluation.ErrorMessage
+	
+	// Build advice from recommended actions
+	var advice strings.Builder
+	advice.WriteString("Please resolve the staging area issues first:\n")
+	
+	// Group actions by category for better organization
+	actionsByCategory := make(map[ActionCategory][]RecommendedAction)
+	for _, action := range evaluation.RecommendedActions {
+		actionsByCategory[action.Category] = append(actionsByCategory[action.Category], action)
+	}
+	
+	// Display actions in a logical order
+	categories := []ActionCategory{ActionCategoryInfo, ActionCategoryCommit, ActionCategoryUnstage, ActionCategoryReset}
+	for _, category := range categories {
+		if actions, exists := actionsByCategory[category]; exists {
+			for _, action := range actions {
+				if len(action.Commands) > 0 {
+					advice.WriteString(fmt.Sprintf("\n%s:\n", action.Description))
+					for _, cmd := range action.Commands {
+						advice.WriteString(fmt.Sprintf("  %s\n", cmd))
+					}
+				}
+			}
+		}
+	}
+	
+	return NewSafetyError(StagingAreaNotClean, message, advice.String(), nil)
+}
+
 // StageHunks stages the specified hunks from a patch file to Git's staging area.
 // hunkSpecs should be in the format "file:hunk_numbers" (e.g., "main.go:1,3").
 // The function uses patch IDs to track hunks across changes, solving the drift problem.
 func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
+	// Phase 0: Safety checks (only if enabled)
+	if os.Getenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK") == "true" {
+		patchContent, err := os.ReadFile(patchFile)
+		if err != nil {
+			return NewFileNotFoundError(patchFile, err)
+		}
+		
+		if err := s.performSafetyChecks(string(patchContent)); err != nil {
+			return err
+		}
+	}
+	
 	// Phase 1: Preparation
 	allHunks, err := s.preparePatchData(patchFile)
 	if err != nil {
