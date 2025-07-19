@@ -21,10 +21,6 @@ func TestValidator_CheckDependencies(t *testing.T) {
 					Output: []byte("git version 2.39.0\n"),
 					Error:  nil,
 				}
-				m.Commands["filterdiff [--version]"] = executor.MockResponse{
-					Output: []byte("filterdiff version 0.3.4\n"),
-					Error:  nil,
-				}
 			},
 			wantErr: false,
 		},
@@ -38,21 +34,6 @@ func TestValidator_CheckDependencies(t *testing.T) {
 			},
 			wantErr: true,
 			errMsg:  "git command not found",
-		},
-		{
-			name: "filterdiff not found",
-			setup: func(m *executor.MockCommandExecutor) {
-				m.Commands["git [--version]"] = executor.MockResponse{
-					Output: []byte("git version 2.39.0\n"),
-					Error:  nil,
-				}
-				m.Commands["filterdiff [--version]"] = executor.MockResponse{
-					Output: nil,
-					Error:  errors.New("command not found: filterdiff"),
-				}
-			},
-			wantErr: true,
-			errMsg:  "filterdiff command not found (install patchutils)",
 		},
 	}
 
