@@ -121,8 +121,8 @@ index ghi789..jkl012 100644
 		t.Errorf("Expected 2 staged files, got %d", len(evaluation.StagedFiles))
 	}
 
-	if len(evaluation.FilesByStatus["M"]) != 2 {
-		t.Errorf("Expected 2 modified files, got %d", len(evaluation.FilesByStatus["M"]))
+	if len(evaluation.FilesByStatus[FileStatusModified]) != 2 {
+		t.Errorf("Expected 2 modified files, got %d", len(evaluation.FilesByStatus[FileStatusModified]))
 	}
 
 	if evaluation.ErrorMessage == "" {
@@ -162,8 +162,8 @@ func TestEvaluateStagingArea_NewFiles(t *testing.T) {
 		t.Error("Expected dirty staging area")
 	}
 
-	if len(evaluation.FilesByStatus["A"]) != 2 {
-		t.Errorf("Expected 2 added files, got %d", len(evaluation.FilesByStatus["A"]))
+	if len(evaluation.FilesByStatus[FileStatusAdded]) != 2 {
+		t.Errorf("Expected 2 added files, got %d", len(evaluation.FilesByStatus[FileStatusAdded]))
 	}
 }
 
@@ -195,8 +195,8 @@ func TestEvaluateStagingArea_DeletedFiles(t *testing.T) {
 		t.Error("Expected dirty staging area")
 	}
 
-	if len(evaluation.FilesByStatus["D"]) != 2 {
-		t.Errorf("Expected 2 deleted files, got %d", len(evaluation.FilesByStatus["D"]))
+	if len(evaluation.FilesByStatus[FileStatusDeleted]) != 2 {
+		t.Errorf("Expected 2 deleted files, got %d", len(evaluation.FilesByStatus[FileStatusDeleted]))
 	}
 }
 
@@ -228,8 +228,8 @@ func TestEvaluateStagingArea_RenamedFiles(t *testing.T) {
 		t.Error("Expected dirty staging area")
 	}
 
-	if len(evaluation.FilesByStatus["R"]) != 1 {
-		t.Errorf("Expected 1 renamed file, got %d", len(evaluation.FilesByStatus["R"]))
+	if len(evaluation.FilesByStatus[FileStatusRenamed]) != 1 {
+		t.Errorf("Expected 1 renamed file, got %d", len(evaluation.FilesByStatus[FileStatusRenamed]))
 	}
 }
 
@@ -261,8 +261,8 @@ func TestEvaluateStagingArea_CopiedFiles(t *testing.T) {
 		t.Error("Expected dirty staging area")
 	}
 
-	if len(evaluation.FilesByStatus["C"]) != 1 {
-		t.Errorf("Expected 1 copied file, got %d", len(evaluation.FilesByStatus["C"]))
+	if len(evaluation.FilesByStatus[FileStatusCopied]) != 1 {
+		t.Errorf("Expected 1 copied file, got %d", len(evaluation.FilesByStatus[FileStatusCopied]))
 	}
 }
 
@@ -354,14 +354,14 @@ func TestEvaluateStagingArea_MixedFiles(t *testing.T) {
 	}
 
 	// Check file categorization
-	if len(evaluation.FilesByStatus["M"]) != 1 {
-		t.Errorf("Expected 1 modified file, got %d", len(evaluation.FilesByStatus["M"]))
+	if len(evaluation.FilesByStatus[FileStatusModified]) != 1 {
+		t.Errorf("Expected 1 modified file, got %d", len(evaluation.FilesByStatus[FileStatusModified]))
 	}
-	if len(evaluation.FilesByStatus["A"]) != 2 {
-		t.Errorf("Expected 2 added files, got %d", len(evaluation.FilesByStatus["A"]))
+	if len(evaluation.FilesByStatus[FileStatusAdded]) != 2 {
+		t.Errorf("Expected 2 added files, got %d", len(evaluation.FilesByStatus[FileStatusAdded]))
 	}
-	if len(evaluation.FilesByStatus["D"]) != 1 {
-		t.Errorf("Expected 1 deleted file, got %d", len(evaluation.FilesByStatus["D"]))
+	if len(evaluation.FilesByStatus[FileStatusDeleted]) != 1 {
+		t.Errorf("Expected 1 deleted file, got %d", len(evaluation.FilesByStatus[FileStatusDeleted]))
 	}
 }
 
@@ -503,8 +503,8 @@ index ghi789..jkl012 100644
 		t.Errorf("Expected 2 staged files, got %d", len(evaluation.StagedFiles))
 	}
 
-	if len(evaluation.FilesByStatus["M"]) != 2 {
-		t.Errorf("Expected 2 modified files, got %d", len(evaluation.FilesByStatus["M"]))
+	if len(evaluation.FilesByStatus[FileStatusModified]) != 2 {
+		t.Errorf("Expected 2 modified files, got %d", len(evaluation.FilesByStatus[FileStatusModified]))
 	}
 }
 
@@ -571,13 +571,13 @@ Binary files /dev/null and b/image.png differ`
 func TestBuildStagingErrorMessage(t *testing.T) {
 	checker := NewSafetyChecker()
 
-	filesByStatus := map[string][]string{
-		"M":      {"modified1.go", "modified2.go"},
-		"A":      {"added1.go", "added2.go"},
-		"D":      {"deleted.go"},
-		"R":      {"renamed.go"},
-		"C":      {"copied.go"},
-		"BINARY": {"binary.jpg"},
+	filesByStatus := map[FileStatus][]string{
+		FileStatusModified: {"modified1.go", "modified2.go"},
+		FileStatusAdded:    {"added1.go", "added2.go"},
+		FileStatusDeleted:  {"deleted.go"},
+		FileStatusRenamed:  {"renamed.go"},
+		FileStatusCopied:   {"copied.go"},
+		FileStatusBinary:   {"binary.jpg"},
 	}
 	intentToAddFiles := []string{"added1.go"}
 
@@ -616,10 +616,10 @@ func TestBuildStagingErrorMessage(t *testing.T) {
 func TestBuildRecommendedActions(t *testing.T) {
 	checker := NewSafetyChecker()
 
-	filesByStatus := map[string][]string{
-		"M": {"modified.go"},
-		"A": {"added.go"},
-		"D": {"deleted.go"},
+	filesByStatus := map[FileStatus][]string{
+		FileStatusModified: {"modified.go"},
+		FileStatusAdded:    {"added.go"},
+		FileStatusDeleted:  {"deleted.go"},
 	}
 	intentToAddFiles := []string{"added.go"}
 
@@ -640,7 +640,7 @@ func TestBuildRecommendedActions(t *testing.T) {
 	// Check for intent-to-add info action
 	foundInfoAction := false
 	for _, action := range actions {
-		if action.Category == "info" && contains(action.Description, "Intent-to-add") {
+		if action.Category == ActionCategoryInfo && contains(action.Description, "Intent-to-add") {
 			foundInfoAction = true
 			break
 		}
@@ -652,7 +652,7 @@ func TestBuildRecommendedActions(t *testing.T) {
 	// Check for deletion commit action
 	foundDeleteAction := false
 	for _, action := range actions {
-		if action.Category == "commit" && contains(action.Description, "deletion") {
+		if action.Category == ActionCategoryCommit && contains(action.Description, "deletion") {
 			foundDeleteAction = true
 			break
 		}

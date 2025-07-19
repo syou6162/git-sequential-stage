@@ -8,6 +8,64 @@ import (
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
 )
 
+// FileStatus represents the modification status of a file
+type FileStatus int
+
+const (
+	FileStatusModified FileStatus = iota
+	FileStatusAdded
+	FileStatusDeleted
+	FileStatusRenamed
+	FileStatusCopied
+	FileStatusBinary
+)
+
+// String returns the string representation of FileStatus
+func (fs FileStatus) String() string {
+	switch fs {
+	case FileStatusModified:
+		return "MODIFIED"
+	case FileStatusAdded:
+		return "ADDED"
+	case FileStatusDeleted:
+		return "DELETED"
+	case FileStatusRenamed:
+		return "RENAMED"
+	case FileStatusCopied:
+		return "COPIED"
+	case FileStatusBinary:
+		return "BINARY"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+// ActionCategory represents the category of a recommended action
+type ActionCategory int
+
+const (
+	ActionCategoryInfo ActionCategory = iota
+	ActionCategoryCommit
+	ActionCategoryUnstage
+	ActionCategoryReset
+)
+
+// String returns the string representation of ActionCategory
+func (ac ActionCategory) String() string {
+	switch ac {
+	case ActionCategoryInfo:
+		return "info"
+	case ActionCategoryCommit:
+		return "commit"
+	case ActionCategoryUnstage:
+		return "unstage"
+	case ActionCategoryReset:
+		return "reset"
+	default:
+		return "unknown"
+	}
+}
+
 // SafetyChecker provides functionality to check the safety of staging operations
 // This is now a stateless utility that operates purely on patch content
 type SafetyChecker struct {
@@ -21,15 +79,15 @@ type StagingAreaEvaluation struct {
 	ErrorMessage         string
 	AllowContinue        bool
 	RecommendedActions   []RecommendedAction
-	FilesByStatus        map[string][]string
+	FilesByStatus        map[FileStatus][]string
 }
 
 // RecommendedAction represents an action that can be taken to resolve a staging issue
 type RecommendedAction struct {
-	Description string   // アクションの説明
-	Commands    []string // 実行すべきコマンドのリスト
-	Priority    int      // 優先度（1が最高）
-	Category    string   // "commit", "unstage", "reset" など
+	Description string         // アクションの説明
+	Commands    []string       // 実行すべきコマンドのリスト
+	Priority    int            // 優先度（1が最高）
+	Category    ActionCategory // アクションのカテゴリ
 }
 
 // NewSafetyChecker creates a new SafetyChecker instance
@@ -48,7 +106,7 @@ func (s *SafetyChecker) EvaluateStagingArea() (*StagingAreaEvaluation, error) {
 
 // EvaluatePatchContent evaluates safety from patch content (git-command-free analysis)
 func (s *SafetyChecker) EvaluatePatchContent(patchContent string) (*StagingAreaEvaluation, error) {
-	filesByStatus := make(map[string][]string)
+	filesByStatus := make(map[FileStatus][]string)
 	var allStagedFiles []string
 	var intentToAddFiles []string
 
@@ -90,22 +148,22 @@ func (s *SafetyChecker) EvaluatePatchContent(patchContent string) (*StagingAreaE
 		switch {
 		case file.IsBinary:
 			// Handle binary files first (they can also be new/modified/etc)
-			filesByStatus["BINARY"] = append(filesByStatus["BINARY"], filename)
+			filesByStatus[FileStatusBinary] = append(filesByStatus[FileStatusBinary], filename)
 		case file.IsNew:
-			filesByStatus["A"] = append(filesByStatus["A"], filename)
+			filesByStatus[FileStatusAdded] = append(filesByStatus[FileStatusAdded], filename)
 		case file.IsDelete:
-			filesByStatus["D"] = append(filesByStatus["D"], filename)
+			filesByStatus[FileStatusDeleted] = append(filesByStatus[FileStatusDeleted], filename)
 		case file.IsRename:
 			// Store rename with proper notation
 			renameNotation := file.OldName + " -> " + file.NewName
-			filesByStatus["R"] = append(filesByStatus["R"], renameNotation)
+			filesByStatus[FileStatusRenamed] = append(filesByStatus[FileStatusRenamed], renameNotation)
 		case file.IsCopy:
 			// Store copy with proper notation
 			copyNotation := file.OldName + " -> " + file.NewName
-			filesByStatus["C"] = append(filesByStatus["C"], copyNotation)
+			filesByStatus[FileStatusCopied] = append(filesByStatus[FileStatusCopied], copyNotation)
 		default:
 			// Regular modifications
-			filesByStatus["M"] = append(filesByStatus["M"], filename)
+			filesByStatus[FileStatusModified] = append(filesByStatus[FileStatusModified], filename)
 		}
 	}
 
@@ -150,15 +208,15 @@ func (s *SafetyChecker) filterNonIntentToAdd(stagedFiles, intentToAddFiles []str
 }
 
 // buildStagingErrorMessage builds a detailed error message about staging area state
-func (s *SafetyChecker) buildStagingErrorMessage(filesByStatus map[string][]string, intentToAddFiles []string) string {
+func (s *SafetyChecker) buildStagingErrorMessage(filesByStatus map[FileStatus][]string, intentToAddFiles []string) string {
 	var message strings.Builder
 	message.WriteString("SAFETY_CHECK_FAILED: staging_area_not_clean\n\n")
 	message.WriteString("STAGED_FILES:\n")
 
-	if files, exists := filesByStatus["M"]; exists && len(files) > 0 {
+	if files, exists := filesByStatus[FileStatusModified]; exists && len(files) > 0 {
 		message.WriteString(fmt.Sprintf("  MODIFIED: %s\n", strings.Join(files, ",")))
 	}
-	if files, exists := filesByStatus["A"]; exists && len(files) > 0 {
+	if files, exists := filesByStatus[FileStatusAdded]; exists && len(files) > 0 {
 		// Filter out intent-to-add files from newly added files
 		nonIntentToAdd := s.filterNonIntentToAdd(files, intentToAddFiles)
 		if len(nonIntentToAdd) > 0 {
@@ -168,16 +226,16 @@ func (s *SafetyChecker) buildStagingErrorMessage(filesByStatus map[string][]stri
 	if len(intentToAddFiles) > 0 {
 		message.WriteString(fmt.Sprintf("  INTENT_TO_ADD: %s\n", strings.Join(intentToAddFiles, ",")))
 	}
-	if files, exists := filesByStatus["D"]; exists && len(files) > 0 {
+	if files, exists := filesByStatus[FileStatusDeleted]; exists && len(files) > 0 {
 		message.WriteString(fmt.Sprintf("  DELETED: %s\n", strings.Join(files, ",")))
 	}
-	if files, exists := filesByStatus["R"]; exists && len(files) > 0 {
+	if files, exists := filesByStatus[FileStatusRenamed]; exists && len(files) > 0 {
 		message.WriteString(fmt.Sprintf("  RENAMED: %s\n", strings.Join(files, ",")))
 	}
-	if files, exists := filesByStatus["C"]; exists && len(files) > 0 {
+	if files, exists := filesByStatus[FileStatusCopied]; exists && len(files) > 0 {
 		message.WriteString(fmt.Sprintf("  COPIED: %s\n", strings.Join(files, ",")))
 	}
-	if files, exists := filesByStatus["BINARY"]; exists && len(files) > 0 {
+	if files, exists := filesByStatus[FileStatusBinary]; exists && len(files) > 0 {
 		message.WriteString(fmt.Sprintf("  BINARY: %s\n", strings.Join(files, ",")))
 	}
 
@@ -185,7 +243,7 @@ func (s *SafetyChecker) buildStagingErrorMessage(filesByStatus map[string][]stri
 }
 
 // buildRecommendedActions builds recommended actions for resolving staging issues
-func (s *SafetyChecker) buildRecommendedActions(filesByStatus map[string][]string, intentToAddFiles []string) []RecommendedAction {
+func (s *SafetyChecker) buildRecommendedActions(filesByStatus map[FileStatus][]string, intentToAddFiles []string) []RecommendedAction {
 	var actions []RecommendedAction
 
 	// Intent-to-add files information
@@ -194,55 +252,55 @@ func (s *SafetyChecker) buildRecommendedActions(filesByStatus map[string][]strin
 			Description: "Intent-to-add files detected (semantic_commit workflow)",
 			Commands:    []string{"# These files will be processed normally"},
 			Priority:    1,
-			Category:    "info",
+			Category:    ActionCategoryInfo,
 		})
 	}
 
 	// Handle deletions first (highest priority)
-	if files, exists := filesByStatus["D"]; exists && len(files) > 0 {
+	if files, exists := filesByStatus[FileStatusDeleted]; exists && len(files) > 0 {
 		for _, file := range files {
 			actions = append(actions, RecommendedAction{
 				Description: fmt.Sprintf("Commit deletion of %s", file),
 				Commands:    []string{fmt.Sprintf("git commit -m \"Remove %s\"", file)},
 				Priority:    1,
-				Category:    "commit",
+				Category:    ActionCategoryCommit,
 			})
 		}
 	}
 
 	// Handle renames and copies
-	if files, exists := filesByStatus["R"]; exists && len(files) > 0 {
+	if files, exists := filesByStatus[FileStatusRenamed]; exists && len(files) > 0 {
 		for _, file := range files {
 			actions = append(actions, RecommendedAction{
 				Description: fmt.Sprintf("Commit rename of %s", file),
 				Commands:    []string{fmt.Sprintf("git commit -m \"Rename %s\"", file)},
 				Priority:    1,
-				Category:    "commit",
+				Category:    ActionCategoryCommit,
 			})
 		}
 	}
 
-	if files, exists := filesByStatus["C"]; exists && len(files) > 0 {
+	if files, exists := filesByStatus[FileStatusCopied]; exists && len(files) > 0 {
 		for _, file := range files {
 			actions = append(actions, RecommendedAction{
 				Description: fmt.Sprintf("Commit copy of %s", file),
 				Commands:    []string{fmt.Sprintf("git commit -m \"Copy %s\"", file)},
 				Priority:    1,
-				Category:    "commit",
+				Category:    ActionCategoryCommit,
 			})
 		}
 	}
 
 	// Handle modifications and non-intent-to-add new files
 	var problematicFiles []string
-	if files, exists := filesByStatus["M"]; exists {
+	if files, exists := filesByStatus[FileStatusModified]; exists {
 		problematicFiles = append(problematicFiles, files...)
 	}
-	if files, exists := filesByStatus["A"]; exists {
+	if files, exists := filesByStatus[FileStatusAdded]; exists {
 		nonIntentToAdd := s.filterNonIntentToAdd(files, intentToAddFiles)
 		problematicFiles = append(problematicFiles, nonIntentToAdd...)
 	}
-	if files, exists := filesByStatus["BINARY"]; exists {
+	if files, exists := filesByStatus[FileStatusBinary]; exists {
 		problematicFiles = append(problematicFiles, files...)
 	}
 
@@ -252,7 +310,7 @@ func (s *SafetyChecker) buildRecommendedActions(filesByStatus map[string][]strin
 			Description: "Commit all staged changes",
 			Commands:    []string{"git commit -m \"Your commit message\""},
 			Priority:    2,
-			Category:    "commit",
+			Category:    ActionCategoryCommit,
 		})
 
 		// Option 2: Unstage all changes
@@ -260,7 +318,7 @@ func (s *SafetyChecker) buildRecommendedActions(filesByStatus map[string][]strin
 			Description: "Unstage all changes",
 			Commands:    []string{"git reset HEAD"},
 			Priority:    3,
-			Category:    "unstage",
+			Category:    ActionCategoryUnstage,
 		})
 
 		// Option 3: Unstage specific files
@@ -269,7 +327,7 @@ func (s *SafetyChecker) buildRecommendedActions(filesByStatus map[string][]strin
 				Description: fmt.Sprintf("Unstage specific file %s", file),
 				Commands:    []string{fmt.Sprintf("git reset HEAD %s", file)},
 				Priority:    4,
-				Category:    "unstage",
+				Category:    ActionCategoryUnstage,
 			})
 		}
 	}
