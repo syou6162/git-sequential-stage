@@ -321,13 +321,13 @@ func (s *Stager) StageHunksWithSemanticCommitSupport(hunkSpecs []string, patchFi
     return s.StageHunks(hunkSpecs, patchFile)
 }
 
-func (s *Stager) performSafetyChecksWithSemanticCommit() error {
-    checker := NewSafetyChecker(s.executor)
-    evaluation, err := checker.EvaluateStagingArea()
+func (s *Stager) performSafetyChecksWithSemanticCommit(patchContent string) error {
+    checker := NewSafetyChecker()  // 引数不要
+    evaluation, err := checker.EvaluatePatchContent(patchContent)
     if err != nil {
         return NewSafetyError(GitOperationFailed, 
-            "Failed to evaluate staging area safety", 
-            "Ensure you are in a valid Git repository", err)
+            "Failed to evaluate patch content safety", 
+            "Check if the patch content is valid", err)
     }
     
     // Intent-to-addファイルのみの場合は警告で継続

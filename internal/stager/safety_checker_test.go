@@ -530,8 +530,7 @@ index 0000000..e69de29`
 }
 
 func TestEvaluatePatchContent_BinaryFile(t *testing.T) {
-	mockExecutor := executor.NewMockCommandExecutor()
-	checker := NewSafetyChecker(mockExecutor)
+	checker := NewSafetyChecker()
 
 	patchContent := `diff --git a/image.png b/image.png
 new file mode 100644
