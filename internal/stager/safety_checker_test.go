@@ -8,15 +8,10 @@ import (
 )
 
 func TestNewSafetyChecker(t *testing.T) {
-	mockExecutor := executor.NewMockCommandExecutor()
-	checker := NewSafetyChecker(mockExecutor)
+	checker := NewSafetyChecker()
 
 	if checker == nil {
 		t.Fatal("NewSafetyChecker returned nil")
-	}
-
-	if checker.executor != mockExecutor {
-		t.Error("SafetyChecker executor not set correctly")
 	}
 }
 
