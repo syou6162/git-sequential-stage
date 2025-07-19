@@ -121,6 +121,14 @@ func (s *SafetyChecker) EvaluatePatchContent(patchContent string) (*StagingAreaE
 			"Failed to parse patch content",
 			"Check if the patch content is valid", err)
 	}
+	
+	// Check if we have a valid patch with actual file changes
+	if len(files) == 0 && strings.TrimSpace(patchContent) != "" {
+		// Non-empty content but no files parsed - likely invalid patch format
+		return nil, NewSafetyError(GitOperationFailed,
+			"Invalid patch format - no file changes detected",
+			"Ensure the patch content is in valid git diff format", nil)
+	}
 
 	// Extract file information from go-gitdiff analysis
 	for _, file := range files {
@@ -132,8 +140,8 @@ func (s *SafetyChecker) EvaluatePatchContent(patchContent string) (*StagingAreaE
 		// Add to all staged files list
 		allStagedFiles = append(allStagedFiles, filename)
 
-		// Detect intent-to-add files (empty blobs in new files)
-		if file.IsNew && len(file.TextFragments) == 0 {
+		// Detect intent-to-add files (empty blobs in new files, but not binary)
+		if file.IsNew && len(file.TextFragments) == 0 && !file.IsBinary {
 			intentToAddFiles = append(intentToAddFiles, filename)
 		}
 

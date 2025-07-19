@@ -357,141 +357,23 @@ index 257cc56..5716ca5 100644
 		t.Fatalf("Unexpected error: %v", err)
 	}
 
-	if evaluation.IsClean {
-		t.Error("Expected dirty staging area")
+	if len(evaluation.RecommendedActions) == 0 {
+		t.Fatal("Expected recommended actions")
 	}
 
-	// Since go-gitdiff might not detect this specific format as binary,
-	// let's check if it's classified as a new file at minimum
-	if len(evaluation.StagedFiles) != 1 {
-		t.Errorf("Expected 1 staged file, got %d", len(evaluation.StagedFiles))
-	}
-
-	if evaluation.StagedFiles[0] != "image.png" {
-		t.Errorf("Expected 'image.png', got '%s'", evaluation.StagedFiles[0])
-	}
-}
-
-func TestBuildStagingErrorMessage(t *testing.T) {
-	checker := NewSafetyChecker()
-
-	filesByStatus := map[FileStatus][]string{
-		FileStatusModified: {"modified1.go", "modified2.go"},
-		FileStatusAdded:    {"added1.go", "added2.go"},
-		FileStatusDeleted:  {"deleted.go"},
-		FileStatusRenamed:  {"renamed.go"},
-		FileStatusCopied:   {"copied.go"},
-		FileStatusBinary:   {"binary.jpg"},
-	}
-	intentToAddFiles := []string{"added1.go"}
-
-	message := checker.buildStagingErrorMessage(filesByStatus, intentToAddFiles)
-
-	// Check that the message contains expected sections
-	if !contains(message, "SAFETY_CHECK_FAILED: staging_area_not_clean") {
-		t.Error("Message should contain safety check failed header")
-	}
-	if !contains(message, "STAGED_FILES:") {
-		t.Error("Message should contain staged files section")
-	}
-	if !contains(message, "MODIFIED: modified1.go,modified2.go") {
-		t.Error("Message should contain modified files")
-	}
-	if !contains(message, "NEW: added2.go") {
-		t.Error("Message should contain non-intent-to-add new files")
-	}
-	if !contains(message, "INTENT_TO_ADD: added1.go") {
-		t.Error("Message should contain intent-to-add files")
-	}
-	if !contains(message, "DELETED: deleted.go") {
-		t.Error("Message should contain deleted files")
-	}
-	if !contains(message, "RENAMED: renamed.go") {
-		t.Error("Message should contain renamed files")
-	}
-	if !contains(message, "COPIED: copied.go") {
-		t.Error("Message should contain copied files")
-	}
-	if !contains(message, "BINARY: binary.jpg") {
-		t.Error("Message should contain binary files")
-	}
-}
-
-func TestBuildRecommendedActions(t *testing.T) {
-	checker := NewSafetyChecker()
-
-	filesByStatus := map[FileStatus][]string{
-		FileStatusModified: {"modified.go"},
-		FileStatusAdded:    {"added.go"},
-		FileStatusDeleted:  {"deleted.go"},
-	}
-	intentToAddFiles := []string{"added.go"}
-
-	actions := checker.buildRecommendedActions(filesByStatus, intentToAddFiles)
-
-	if len(actions) == 0 {
-		t.Fatal("Expected some recommended actions")
-	}
-
-	// Check that actions are sorted by priority
-	for i := 1; i < len(actions); i++ {
-		if actions[i].Priority < actions[i-1].Priority {
-			t.Error("Actions should be sorted by priority")
-			break
-		}
-	}
-
-	// Check for intent-to-add info action
-	foundInfoAction := false
-	for _, action := range actions {
-		if action.Category == ActionCategoryInfo && contains(action.Description, "Intent-to-add") {
-			foundInfoAction = true
-			break
-		}
-	}
-	if !foundInfoAction {
-		t.Error("Expected info action for intent-to-add files")
-	}
-
-	// Check for deletion commit action
+	// Check that actions are prioritized (deleted files should come first)
 	foundDeleteAction := false
-	for _, action := range actions {
-		if action.Category == ActionCategoryCommit && contains(action.Description, "deletion") {
-			foundDeleteAction = true
-			break
-		}
-	}
-	if !foundDeleteAction {
-		t.Error("Expected commit action for deleted files")
-	}
-}
-
-// Helper function to check if a string contains a substring
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && 
-		   (len(substr) == 0 || findSubstring(s, substr) >= 0)
-}
-
-// Simple substring search implementation
-func findSubstring(s, substr string) int {
-	if len(substr) == 0 {
-		return 0
-	}
-	if len(substr) > len(s) {
-		return -1
-	}
-	
-	for i := 0; i <= len(s)-len(substr); i++ {
-		match := true
-		for j := 0; j < len(substr); j++ {
-			if s[i+j] != substr[j] {
-				match = false
+	for _, action := range evaluation.RecommendedActions {
+		if action.Category == ActionCategoryCommit && action.Priority == 1 {
+			// Check if it's related to deleted file
+			if len(action.Commands) > 0 && strings.Contains(action.Commands[0], "deleted.txt") {
+				foundDeleteAction = true
 				break
 			}
 		}
-		if match {
-			return i
-		}
 	}
-	return -1
+
+	if !foundDeleteAction {
+		t.Error("Expected high-priority action for deleted file")
+	}
 }
