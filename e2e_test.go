@@ -102,31 +102,23 @@ func createFile(t *testing.T, dir, filename, content string) {
 
 // commitChanges は変更をコミットします
 func commitChanges(t *testing.T, dir, message string) {
-	repo, err := git.PlainOpen(dir)
-	if err != nil {
-		t.Fatalf("Failed to open repository: %v", err)
+	// go-gitの代わりに直接gitコマンドを使用（go-gitにバグがあるため）
+	cmd := exec.Command("git", "add", ".")
+	cmd.Dir = dir
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("Failed to git add: %v\nOutput: %s", err, output)
 	}
-
-	w, err := repo.Worktree()
-	if err != nil {
-		t.Fatalf("Failed to get worktree: %v", err)
-	}
-
-	// すべてのファイルをステージング
-	_, err = w.Add(".")
-	if err != nil {
-		t.Fatalf("Failed to add files: %v", err)
-	}
-
-	// コミット
-	_, err = w.Commit(message, &git.CommitOptions{
-		Author: &object.Signature{
-			Name:  "Test User",
-			Email: "test@example.com",
-		},
-	})
-	if err != nil {
-		t.Fatalf("Failed to commit: %v", err)
+	
+	cmd = exec.Command("git", "commit", "-m", message)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(),
+		"GIT_AUTHOR_NAME=Test User",
+		"GIT_AUTHOR_EMAIL=test@example.com",
+		"GIT_COMMITTER_NAME=Test User",
+		"GIT_COMMITTER_EMAIL=test@example.com",
+	)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("Failed to git commit: %v\nOutput: %s", err, output)
 	}
 }
 
@@ -160,8 +152,9 @@ func TestBasicSetup(t *testing.T) {
 		t.Fatalf("Failed to get commit: %v", err)
 	}
 
-	if commit.Message != "Initial commit" {
-		t.Errorf("Expected commit message 'Initial commit', got '%s'", commit.Message)
+	expectedMessage := "Initial commit"
+	if strings.TrimSpace(commit.Message) != expectedMessage {
+		t.Errorf("Expected commit message '%s', got '%s'", expectedMessage, commit.Message)
 	}
 }
 
@@ -258,6 +251,14 @@ if __name__ == "__main__":
 	createFile(t, dir, "calculator.py", initialCode)
 	commitChanges(t, dir, "Initial commit")
 
+	// デバッグ: ステージングエリアの状態を確認
+	debugOutput, _ := runCommand(t, dir, "git", "status", "--porcelain")
+	t.Logf("Staging area status after commit: %s", debugOutput)
+	
+	// デバッグ: git diff --cachedで確認
+	cachedDiff, _ := runCommand(t, dir, "git", "diff", "--cached", "--name-only")
+	t.Logf("Cached files after commit: %s", cachedDiff)
+	
 	// ファイルを修正（1つのハンクの変更）
 	modifiedCode := `#!/usr/bin/env python3
 
@@ -274,6 +275,17 @@ if __name__ == "__main__":
     main()
 `
 	modifyFile(t, dir, "calculator.py", modifiedCode)
+
+	// デバッグ: 修正後のステージングエリアの状態を確認
+	debugOutput2, _ := runCommand(t, dir, "git", "status", "--porcelain")
+	t.Logf("Staging area status after modification: %s", debugOutput2)
+	
+	// デバッグ: 各文字を確認
+	if len(debugOutput2) > 0 {
+		for i, ch := range debugOutput2 {
+			t.Logf("Char %d: '%c' (0x%02x)", i, ch, ch)
+		}
+	}
 
 	// パッチファイルを生成
 	patchPath := filepath.Join(dir, "changes.patch")

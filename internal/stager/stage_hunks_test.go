@@ -23,6 +23,15 @@ func TestStager_StageHunks_ErrorCases(t *testing.T) {
 			hunkSpecs: []string{"file.go:1"},
 			patchFile: "/non/existent/file.patch",
 			mockSetup: func(t *testing.T, mock *executor.MockCommandExecutor) (string, error) {
+				// Mock safety checks
+				mock.Commands["git [status --porcelain]"] = executor.MockResponse{
+					Output: []byte(""),
+					Error:  nil,
+				}
+				mock.Commands["git [diff --name-only --diff-filter=A --cached]"] = executor.MockResponse{
+					Output: []byte(""),
+					Error:  nil,
+				}
 				return "/non/existent/file.patch", nil
 			},
 			expectErr: true,
@@ -53,6 +62,16 @@ index abc1234..def5678 100644
 +import "fmt"
  func main() {}`
 				f.WriteString(validPatch)
+				
+				// Mock safety checks
+				mock.Commands["git [status --porcelain]"] = executor.MockResponse{
+					Output: []byte(""),
+					Error:  nil,
+				}
+				mock.Commands["git [diff --name-only --diff-filter=A --cached]"] = executor.MockResponse{
+					Output: []byte(""),
+					Error:  nil,
+				}
 				
 				// Mock patch extraction - not needed since we use go-gitdiff now
 				
@@ -98,6 +117,16 @@ index abc1234..def5678 100644
 +import "fmt"
  func main() {}`
 				f.WriteString(validPatch)
+				
+				// Mock safety checks
+				mock.Commands["git [status --porcelain]"] = executor.MockResponse{
+					Output: []byte(""),
+					Error:  nil,
+				}
+				mock.Commands["git [diff --name-only --diff-filter=A --cached]"] = executor.MockResponse{
+					Output: []byte(""),
+					Error:  nil,
+				}
 				
 				return f.Name(), nil
 			},
