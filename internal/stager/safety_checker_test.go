@@ -604,8 +604,7 @@ func TestBuildStagingErrorMessage(t *testing.T) {
 }
 
 func TestBuildRecommendedActions(t *testing.T) {
-	mockExecutor := executor.NewMockCommandExecutor()
-	checker := NewSafetyChecker(mockExecutor)
+	checker := NewSafetyChecker()
 
 	filesByStatus := map[string][]string{
 		"M": {"modified.go"},
