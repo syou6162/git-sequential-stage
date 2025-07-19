@@ -35,17 +35,26 @@ type SafetyChecker struct {
     logger   *logger.Logger
 }
 
-type SafetyCheckResult struct {
+type StagingAreaEvaluation struct {
     IsClean           bool
     StagedFiles       []string
     IntentToAddFiles  []string  // git add -N されたファイル
     ErrorMessage      string
     AllowContinue     bool      // intent-to-addのみの場合はtrue
+    RecommendedActions []RecommendedAction  // LLM Agent用の推奨アクション
+    FilesByStatus     map[string][]string  // ステータス別ファイルリスト
+}
+
+type RecommendedAction struct {
+    Description string   // アクションの説明
+    Commands    []string // 実行すべきコマンドのリスト
+    Priority    int      // 優先度（1が最高）
+    Category    string   // "commit", "unstage", "reset" など
 }
 ```
 
 **主要メソッド:**
-- `CheckStagingArea() (*SafetyCheckResult, error)`: ステージングエリアの状態をチェック
+- `EvaluateStagingArea() (*StagingAreaEvaluation, error)`: ステージングエリアの安全性評価を実行
 - `ValidateGitState() error`: Git リポジトリの基本状態を検証
 
 #### 2. Enhanced File Processing
@@ -146,32 +155,32 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
 
 func (s *Stager) performSafetyChecks() error {
     checker := NewSafetyChecker(s.executor)
-    result, err := checker.CheckStagingArea()
+    evaluation, err := checker.EvaluateStagingArea()
     if err != nil {
         return NewSafetyError(ErrorTypeGitOperationFailed, 
-            "Failed to check staging area", 
+            "Failed to evaluate staging area safety", 
             "Ensure you are in a valid Git repository", err)
     }
     
-    if !result.IsClean {
+    if !evaluation.IsClean {
         // Intent-to-addファイルのみの場合は警告のみで継続
-        if result.AllowContinue {
+        if evaluation.AllowContinue {
             s.logger.Info("Intent-to-add files detected (semantic_commit workflow). Continuing...")
             return nil
         }
-        return s.generateDetailedStagingError(result)
+        return s.generateDetailedStagingError(evaluation)
     }
     
     return nil
 }
 
-func (s *Stager) generateDetailedStagingError(result *SafetyCheckResult) error {
+func (s *Stager) generateDetailedStagingError(evaluation *StagingAreaEvaluation) error {
     // ファイルタイプ別に分類
-    modified := result.GetFilesByStatus("M")
-    added := result.GetFilesByStatus("A") 
-    deleted := result.GetFilesByStatus("D")
-    renamed := result.GetFilesByStatus("R")
-    copied := result.GetFilesByStatus("C")
+    modified := evaluation.FilesByStatus["M"]
+    added := evaluation.FilesByStatus["A"] 
+    deleted := evaluation.FilesByStatus["D"]
+    renamed := evaluation.FilesByStatus["R"]
+    copied := evaluation.FilesByStatus["C"]
     
     // 統合エラーメッセージを生成
     message := s.buildStagingErrorMessage(modified, added, deleted, renamed, copied)
@@ -223,22 +232,22 @@ func (s *Stager) StageHunksWithSemanticCommitSupport(hunkSpecs []string, patchFi
 
 func (s *Stager) performSafetyChecksWithSemanticCommit() error {
     checker := NewSafetyChecker(s.executor)
-    result, err := checker.CheckStagingAreaWithIntentToAdd()
+    evaluation, err := checker.EvaluateStagingArea()
     if err != nil {
         return NewSafetyError(ErrorTypeGitOperationFailed, 
-            "Failed to check staging area", 
+            "Failed to evaluate staging area safety", 
             "Ensure you are in a valid Git repository", err)
     }
     
     // Intent-to-addファイルのみの場合は警告で継続
-    if result.AllowContinue {
+    if evaluation.AllowContinue {
         s.logger.Info("Semantic commit workflow detected: Intent-to-add files found")
-        s.logger.Info("Files: %v", result.IntentToAddFiles)
+        s.logger.Info("Files: %v", evaluation.IntentToAddFiles)
         return nil
     }
     
-    if !result.IsClean {
-        return s.generateDetailedStagingError(result)
+    if !evaluation.IsClean {
+        return s.generateDetailedStagingError(evaluation)
     }
     
     return nil
@@ -389,10 +398,10 @@ sequenceDiagram
     participant G as Git
     
     M->>S: StageHunks()
-    S->>SC: CheckStagingArea()
-    SC->>G: git diff --cached --name-only
-    G-->>SC: staged files list
-    SC-->>S: SafetyCheckResult
+    S->>SC: EvaluateStagingArea()
+    SC->>G: git status --porcelain + intent-to-add detection
+    G-->>SC: detailed file status + evaluation
+    SC-->>S: StagingAreaEvaluation
     alt Staging area not clean
         S-->>M: SafetyError with advice
     else Clean
