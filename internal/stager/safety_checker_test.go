@@ -454,8 +454,7 @@ func TestEvaluatePatchContent_EmptyPatch(t *testing.T) {
 }
 
 func TestEvaluatePatchContent_ModifiedFiles(t *testing.T) {
-	mockExecutor := executor.NewMockCommandExecutor()
-	checker := NewSafetyChecker(mockExecutor)
+	checker := NewSafetyChecker()
 
 	patchContent := `diff --git a/file1.go b/file1.go
 index abc123..def456 100644

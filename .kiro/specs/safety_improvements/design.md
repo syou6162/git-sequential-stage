@@ -134,10 +134,11 @@ func (h *IntentToAddHandler) ProcessIntentToAddHunk(hunk *HunkInfo, content []by
 ### 1. ステージングエリア保護機能
 
 #### 実装方針
-- `StageHunks`メソッドの開始時に`SafetyChecker.CheckStagingArea()`を呼び出し
-- `git status --porcelain`でステージング済みファイルの詳細状態を取得
-- ファイルタイプ別（M/A/D/R/C）に分類して詳細なエラーメッセージと対処法を表示
-- **Intent-to-add (git add -N) ファイルの特別扱い**: semantic_commitワークフロー対応
+- `StageHunks`メソッドの開始時に`SafetyChecker.EvaluatePatchContent()`を呼び出し
+- **パッチファイル内容からの完全解析**: go-gitdiffライブラリによる詳細状態取得
+- ファイルタイプ別（M/A/D/R/C/BINARY）に分類して詳細なエラーメッセージと対処法を表示
+- **Intent-to-add検出**: `IsNew && len(TextFragments) == 0` による自動検出
+- **完全gitコマンド不要**: パッチファイルのみで全ての安全性チェックを実行
 - 各ユースケース（S1.1-S1.8）に対応した専用メッセージを提供
 
 #### 実装詳細
