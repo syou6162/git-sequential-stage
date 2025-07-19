@@ -9,19 +9,22 @@ inclusion: always
 - 依存関係管理にはモダンなGoモジュールを使用
 
 ## 主要依存関係
-- `github.com/bluekeyes/go-gitdiff` - go-gitdiffライブラリによる拡張パッチ解析
-- `github.com/go-git/go-git/v5` - GoでのGit操作
-- ほとんどの機能は標準ライブラリを使用
+- `github.com/bluekeyes/go-gitdiff` - 高度なパッチ解析とGitdiff処理
+- 標準ライブラリを中心とした軽量な依存関係構成
 
 ## 外部ツール
 - **git** - コアGit操作（必須）
-- **filterdiff** - patchutilsパッケージの一部（必須）
+  - `git diff` - パッチ生成
+  - `git apply --cached` - ハンクのステージング
+  - `git patch-id --stable` - パッチID計算
 
 ## アーキテクチャパターン
 - **インターフェースベース設計**: テスト可能性のためのCommandExecutorインターフェース
 - **依存性注入**: テスト用の実際のvs モックエグゼキューター
-- **構造化エラーハンドリング**: コンテキスト付きカスタムエラータイプ
+- **構造化エラーハンドリング**: 型付きカスタムエラーとコンテキスト情報
 - **モジュラーパッケージ**: 関心の明確な分離
+- **パッチID駆動**: git patch-idを使用したハンク追跡とドリフト問題解決
+- **段階的処理**: 準備フェーズと実行フェーズの分離
 
 ## よく使うコマンド
 
@@ -42,7 +45,7 @@ go install
 
 ### テスト
 ```bash
-# E2Eテスト実行（gitとfilterdiffが必要）
+# E2Eテスト実行（gitが必要）
 go test ./internal/stager -run E2E
 
 # 詳細出力付きデバッグモード
@@ -54,6 +57,12 @@ GIT_SEQUENTIAL_STAGE_VERBOSE=1 ./git-sequential-stage -patch=changes.patch -hunk
 # パッチ生成と特定ハンクのステージング
 git diff > changes.patch
 git-sequential-stage -patch=changes.patch -hunk="main.go:1,3" -hunk="internal/stager/stager.go:2,4,5"
+
+# 複数ファイルの複数ハンクを順次ステージング
+git-sequential-stage -patch=changes.patch \
+  -hunk="main.go:1,3" \
+  -hunk="internal/stager/stager.go:2,4,5" \
+  -hunk="README.md:1"
 ```
 
 ## ビルドシステム

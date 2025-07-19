@@ -48,7 +48,6 @@ This approach ensures that even large, complex changes result in clean, reviewab
 ## Prerequisites
 
 - `git` command must be installed
-- `filterdiff` command must be installed (part of the `patchutils` package)
 
 ## Installation
 
@@ -116,14 +115,14 @@ The tool uses patch IDs internally to ensure reliable hunk identification and se
 
 ### Internal Process
 
-1. **Validation**: Checks that `git` and `filterdiff` commands are available
+1. **Validation**: Checks that `git` command is available
 2. **Parsing**: Parses the hunk numbers from the command line
 3. **Patch ID Assignment**: When you specify hunk numbers (e.g., 1,3,5), the tool:
    - Parses the entire patch file
    - Assigns a unique patch ID to each hunk based on its content
    - Uses these IDs internally to track and apply hunks
 4. **Sequential Staging**: For each requested hunk number:
-   - Extracts the single hunk using `filterdiff --hunks=N`
+   - Extracts the single hunk using go-gitdiff library
    - Calculates its patch ID using `git patch-id`
    - Applies it to the staging area using `git apply --cached`
 5. **Error Handling**: If any hunk fails to apply, the tool stops and reports the error with detailed information

@@ -102,12 +102,12 @@ func TestMockCommandExecutorExecute(t *testing.T) {
 		{
 			name: "mock command with multiple arguments",
 			setup: func(m *MockCommandExecutor) {
-				m.Commands["filterdiff [-i *test.go --hunks=1]"] = MockResponse{
+				m.Commands["git [-i *test.go --hunks=1]"] = MockResponse{
 					Output: []byte("diff content"),
 					Error:  nil,
 				}
 			},
-			command:    "filterdiff",
+			command:    "git",
 			args:       []string{"-i", "*test.go", "--hunks=1"},
 			wantOutput: []byte("diff content"),
 			wantError:  false,
@@ -244,7 +244,7 @@ func TestMockCommandExecutorExecutedCommandsTracking(t *testing.T) {
 	
 	// Setup multiple commands
 	mock.Commands["git [--version]"] = MockResponse{Output: []byte("git version"), Error: nil}
-	mock.Commands["filterdiff [--version]"] = MockResponse{Output: []byte("filterdiff version"), Error: nil}
+	mock.Commands["git [status]"] = MockResponse{Output: []byte("git status"), Error: nil}
 
 	// Execute multiple commands
 	output1, err1 := mock.Execute("git", "--version")
@@ -255,7 +255,7 @@ func TestMockCommandExecutorExecutedCommandsTracking(t *testing.T) {
 		t.Error("Expected non-nil output from Execute")
 	}
 	
-	output2, err2 := mock.ExecuteWithStdin("filterdiff", strings.NewReader("input"), "--version")
+	output2, err2 := mock.ExecuteWithStdin("git", strings.NewReader("input"), "status")
 	if err2 != nil {
 		t.Fatalf("Unexpected error from ExecuteWithStdin: %v", err2)
 	}
@@ -280,8 +280,8 @@ func TestMockCommandExecutorExecutedCommandsTracking(t *testing.T) {
 	}
 
 	// Check second command
-	if mock.ExecutedCommands[1].Name != "filterdiff" {
-		t.Errorf("Second command name = %v, want filterdiff", mock.ExecutedCommands[1].Name)
+	if mock.ExecutedCommands[1].Name != "git" {
+		t.Errorf("Second command name = %v, want git", mock.ExecutedCommands[1].Name)
 	}
 	if !bytes.Equal(mock.ExecutedCommands[1].Stdin, []byte("input")) {
 		t.Errorf("Second command stdin = %v, want [input]", mock.ExecutedCommands[1].Stdin)

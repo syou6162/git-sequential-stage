@@ -91,7 +91,7 @@ CLIは複数の`-hunk`フラグを処理するカスタム`hunkList`タイプを
 ## 主要実装詳細
 
 **パッチIDシステム**: 
-1. `filterdiff --hunks=N`でハンクを抽出
+1. go-gitdiffでハンクを解析・抽出
 2. `git patch-id`でユニークIDを計算
 3. コンテンツベースのマッチングで逐次適用
 4. 「ハンク番号のずれ」問題を自動解決
@@ -111,10 +111,10 @@ CLIは複数の`-hunk`フラグを処理するカスタム`hunkList`タイプを
 - エラータイプ: FileNotFound、Parsing、GitCommand、HunkNotFound等を明確に分類
 
 **依存関係**:
-- 実行時: `git`, `filterdiff`（patchutils）
+- 実行時: `git`
 - ビルド時: `github.com/bluekeyes/go-gitdiff`（パッチ解析）
 - テスト時: `go-git`ライブラリ
-- CI: patchutils自動インストール付きGitHub Actions
+- CI: GitHub Actions（go-gitdiffベースの完全実装により外部依存関係不要）
 
 **パフォーマンス**: 20関数・12ハンクのファイルを~230msで処理（5秒目標を大幅クリア）
 

@@ -54,11 +54,7 @@ index abc1234..def5678 100644
  func main() {}`
 				f.WriteString(validPatch)
 				
-				// Mock filterdiff to return valid patch ID calculation
-				mock.Commands["filterdiff [-i *file.go --hunks=1 "+f.Name()+"]"] = executor.MockResponse{
-					Output: []byte(validPatch),
-					Error:  nil,
-				}
+				// Mock patch extraction - not needed since we use go-gitdiff now
 				
 				// Mock git patch-id for initial calculation
 				mock.Commands["git [patch-id --stable]"] = executor.MockResponse{
