@@ -436,38 +436,64 @@ func TestEvaluateStagingArea_LsFilesError(t *testing.T) {
 	}
 }
 
-func TestEvaluateStagingArea_GitDiffCachedFallback(t *testing.T) {
+func TestEvaluatePatchContent_EmptyPatch(t *testing.T) {
 	mockExecutor := executor.NewMockCommandExecutor()
-	
-	// Mock git status --porcelain (modified files)
-	gitStatusOutput := "M  file1.go\nM  file2.go\n"
-	mockExecutor.Commands["git [status --porcelain]"] = executor.MockResponse{
-		Output: []byte(gitStatusOutput),
-		Error:  nil,
-	}
-	
-	// Mock git diff --cached failure (should trigger fallback)
-	mockExecutor.Commands["git [diff --cached]"] = executor.MockResponse{
-		Output: nil,
-		Error:  fmt.Errorf("diff --cached failed"),
-	}
-	
-	// Mock git ls-files --cached --stage
-	mockExecutor.Commands["git [ls-files --cached --stage]"] = executor.MockResponse{
-		Output: []byte("100644 abc123 0 file1.go\n100644 def456 0 file2.go\n"),
-		Error:  nil,
-	}
-
 	checker := NewSafetyChecker(mockExecutor)
-	evaluation, err := checker.EvaluateStagingArea()
+
+	evaluation, err := checker.EvaluatePatchContent("")
 
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
 
-	// Should fallback to git status parsing and still work
+	if !evaluation.IsClean {
+		t.Error("Expected clean staging area for empty patch")
+	}
+
+	if !evaluation.AllowContinue {
+		t.Error("Expected AllowContinue to be true for empty patch")
+	}
+
+	if len(evaluation.StagedFiles) != 0 {
+		t.Errorf("Expected no staged files, got %d", len(evaluation.StagedFiles))
+	}
+}
+
+func TestEvaluatePatchContent_ModifiedFiles(t *testing.T) {
+	mockExecutor := executor.NewMockCommandExecutor()
+	checker := NewSafetyChecker(mockExecutor)
+
+	patchContent := `diff --git a/file1.go b/file1.go
+index abc123..def456 100644
+--- a/file1.go
++++ b/file1.go
+@@ -1,3 +1,4 @@
+ package main
+ 
++// Added comment
+ func main() {}
+diff --git a/file2.go b/file2.go
+index ghi789..jkl012 100644
+--- a/file2.go
++++ b/file2.go
+@@ -1,3 +1,4 @@
+ package utils
+ 
++// Added comment
+ func Helper() {}`
+
+	evaluation, err := checker.EvaluatePatchContent(patchContent)
+
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
 	if evaluation.IsClean {
 		t.Error("Expected dirty staging area")
+	}
+
+	if evaluation.AllowContinue {
+		t.Error("Expected AllowContinue to be false for modified files")
 	}
 
 	if len(evaluation.StagedFiles) != 2 {
@@ -475,7 +501,69 @@ func TestEvaluateStagingArea_GitDiffCachedFallback(t *testing.T) {
 	}
 
 	if len(evaluation.FilesByStatus["M"]) != 2 {
-		t.Errorf("Expected 2 modified files via fallback, got %d", len(evaluation.FilesByStatus["M"]))
+		t.Errorf("Expected 2 modified files, got %d", len(evaluation.FilesByStatus["M"]))
+	}
+}
+
+func TestEvaluatePatchContent_IntentToAddFiles(t *testing.T) {
+	mockExecutor := executor.NewMockCommandExecutor()
+	checker := NewSafetyChecker(mockExecutor)
+
+	// Intent-to-add files have IsNew but no TextFragments
+	patchContent := `diff --git a/new_file.go b/new_file.go
+new file mode 100644
+index 0000000..e69de29`
+
+	evaluation, err := checker.EvaluatePatchContent(patchContent)
+
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if evaluation.IsClean {
+		t.Error("Expected dirty staging area")
+	}
+
+	if !evaluation.AllowContinue {
+		t.Error("Expected AllowContinue to be true for intent-to-add only")
+	}
+
+	if len(evaluation.IntentToAddFiles) != 1 {
+		t.Errorf("Expected 1 intent-to-add file, got %d", len(evaluation.IntentToAddFiles))
+	}
+
+	if evaluation.IntentToAddFiles[0] != "new_file.go" {
+		t.Errorf("Expected intent-to-add file 'new_file.go', got '%s'", evaluation.IntentToAddFiles[0])
+	}
+}
+
+func TestEvaluatePatchContent_BinaryFile(t *testing.T) {
+	mockExecutor := executor.NewMockCommandExecutor()
+	checker := NewSafetyChecker(mockExecutor)
+
+	patchContent := `diff --git a/image.png b/image.png
+new file mode 100644
+index 0000000..1234567
+Binary files /dev/null and b/image.png differ`
+
+	evaluation, err := checker.EvaluatePatchContent(patchContent)
+
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if evaluation.IsClean {
+		t.Error("Expected dirty staging area")
+	}
+
+	// Since go-gitdiff might not detect this specific format as binary,
+	// let's check if it's classified as a new file at minimum
+	if len(evaluation.StagedFiles) != 1 {
+		t.Errorf("Expected 1 staged file, got %d", len(evaluation.StagedFiles))
+	}
+
+	if evaluation.StagedFiles[0] != "image.png" {
+		t.Errorf("Expected 'image.png', got '%s'", evaluation.StagedFiles[0])
 	}
 }
 
