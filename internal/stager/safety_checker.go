@@ -6,12 +6,11 @@ import (
 	"strings"
 
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
-	"github.com/syou6162/git-sequential-stage/internal/executor"
 )
 
 // SafetyChecker provides functionality to check the safety of staging operations
+// This is now a stateless utility that operates purely on patch content
 type SafetyChecker struct {
-	executor executor.CommandExecutor
 }
 
 // StagingAreaEvaluation contains the result of evaluating the staging area
