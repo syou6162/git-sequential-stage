@@ -424,7 +424,7 @@ func (s *SafetyChecker) adjustEvaluationForTargetFiles(evaluation *StagingAreaEv
 	if evaluation.AllowContinue {
 		return
 	}
-	
+
 	if s.shouldAllowTargetFileStaging(evaluation, targetFiles) {
 		s.updateEvaluationToAllow(evaluation, targetFiles)
 	}
@@ -436,7 +436,7 @@ func (s *SafetyChecker) shouldAllowTargetFileStaging(evaluation *StagingAreaEval
 	if s.allStagedFilesAreValid(evaluation, targetFiles) {
 		return true
 	}
-	
+
 	// Special case: If we couldn't detect intent-to-add files properly,
 	// but all staged files are in the target list, allow continuation
 	return s.handleIntentToAddDetectionFallback(evaluation, targetFiles)
@@ -445,20 +445,20 @@ func (s *SafetyChecker) shouldAllowTargetFileStaging(evaluation *StagingAreaEval
 // allStagedFilesAreValid checks if all staged files are either intent-to-add or target files
 func (s *SafetyChecker) allStagedFilesAreValid(evaluation *StagingAreaEvaluation, targetFiles map[string]bool) bool {
 	intentToAddMap := s.createIntentToAddMap(evaluation.IntentToAddFiles)
-	
+
 	for _, stagedFile := range evaluation.StagedFiles {
 		// If it's an intent-to-add file, it's allowed
 		if intentToAddMap[stagedFile] {
 			continue
 		}
-		
+
 		// Check if this staged file is in the target files
 		if !targetFiles[stagedFile] {
 			// Found a staged file that is neither intent-to-add nor a target file
 			return false
 		}
 	}
-	
+
 	return true
 }
 
@@ -477,21 +477,21 @@ func (s *SafetyChecker) handleIntentToAddDetectionFallback(evaluation *StagingAr
 	if len(evaluation.IntentToAddFiles) > 0 {
 		return false
 	}
-	
+
 	// Re-check if all staged files are in target files
 	for _, stagedFile := range evaluation.StagedFiles {
 		if !targetFiles[stagedFile] {
 			return false
 		}
 	}
-	
+
 	return true
 }
 
 // updateEvaluationToAllow updates the evaluation to allow continuation
 func (s *SafetyChecker) updateEvaluationToAllow(evaluation *StagingAreaEvaluation, targetFiles map[string]bool) {
 	evaluation.AllowContinue = true
-	
+
 	// Check if there are non-intent-to-add staged files to update messaging
 	nonIntentToAddStaged := s.filterNonIntentToAdd(evaluation.StagedFiles, evaluation.IntentToAddFiles)
 	if len(nonIntentToAddStaged) > 0 {
