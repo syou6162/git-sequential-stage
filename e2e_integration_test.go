@@ -33,6 +33,17 @@ func TestE2E_FinalIntegration(t *testing.T) {
 
 // S1: Test staging area state detection
 func testStagingAreaDetection(t *testing.T) {
+	// Enable safety check for this test
+	originalSafetyCheck := os.Getenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK")
+	os.Setenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK", "true")
+	defer func() {
+		if originalSafetyCheck != "" {
+			os.Setenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK", originalSafetyCheck)
+		} else {
+			os.Unsetenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK")
+		}
+	}()
+
 	dir, repo, cleanup := testutils.CreateTestRepo(t, "test-s1-*")
 	defer cleanup()
 
@@ -117,6 +128,17 @@ func testIntentToAddIntegration(t *testing.T) {
 
 // S3: Test file type specific error messages
 func testFileTypeErrorMessages(t *testing.T) {
+	// Enable safety check for this test
+	originalSafetyCheck := os.Getenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK")
+	os.Setenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK", "true")
+	defer func() {
+		if originalSafetyCheck != "" {
+			os.Setenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK", originalSafetyCheck)
+		} else {
+			os.Unsetenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK")
+		}
+	}()
+
 	dir, repo, cleanup := testutils.CreateTestRepo(t, "test-s3-*")
 	defer cleanup()
 
