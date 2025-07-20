@@ -1,12 +1,12 @@
 package stager
 
 import (
-	"os"
 	"os/exec"
 	"strings"
 	"testing"
 
 	"github.com/syou6162/git-sequential-stage/internal/executor"
+	"github.com/syou6162/git-sequential-stage/testutils"
 )
 
 // TestStageHunks_E2E_AmbiguousFilename tests git-sequential-stage with files that have ambiguous names
@@ -28,56 +28,30 @@ func TestStageHunks_E2E_AmbiguousFilename(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Create a temporary directory for the test
-			tmpDir, err := os.MkdirTemp("", "stager_e2e_test_*")
-			if err != nil {
-				t.Fatalf("Failed to create temp dir: %v", err)
-			}
-			defer os.RemoveAll(tmpDir)
-
-			// Change to temp directory
-			originalDir, err := os.Getwd()
-			if err != nil {
-				t.Fatalf("Failed to get current dir: %v", err)
-			}
-			if err := os.Chdir(tmpDir); err != nil {
-				t.Fatalf("Failed to change to temp dir: %v", err)
-			}
-			defer os.Chdir(originalDir)
-
-			// Initialize git repo
-			runCommand(t, "git", "init")
-			runCommand(t, "git", "config", "user.email", "test@example.com")
-			runCommand(t, "git", "config", "user.name", "Test User")
+			// Create test repository
+			testRepo := testutils.NewTestRepo(t, "stager_e2e_test_*")
+			defer testRepo.Cleanup()
+			defer testRepo.Chdir()()
 
 			// Create initial commit
-			if err := os.WriteFile("README.md", []byte("initial"), 0644); err != nil {
-				t.Fatalf("Failed to create README: %v", err)
-			}
-			runCommand(t, "git", "add", "README.md")
-			runCommand(t, "git", "commit", "-m", "Initial commit")
+			testRepo.CreateAndCommitFile("README.md", "initial", "Initial commit")
 
 			// Create a file with ambiguous name and commit it
 			initialContent := "line 1\nline 2\nline 3\n"
-			if err := os.WriteFile(tc.filename, []byte(initialContent), 0644); err != nil {
-				t.Fatalf("Failed to create file: %v", err)
-			}
-			runCommand(t, "git", "add", tc.filename)
-			runCommand(t, "git", "commit", "-m", "Add file")
+			testRepo.CreateAndCommitFile(tc.filename, initialContent, "Add file")
 
 			// Modify the file to create a diff
 			modifiedContent := "line 1\nline 2\nline 3\nline 4\n"
-			if err := os.WriteFile(tc.filename, []byte(modifiedContent), 0644); err != nil {
-				t.Fatalf("Failed to modify file: %v", err)
-			}
+			testRepo.ModifyFile(tc.filename, modifiedContent)
 
 			// Generate patch file
 			patchFile := "changes.patch"
 			// Note: git diff needs -- to avoid ambiguity when generating the patch
-			output := runCommand(t, "git", "diff", "HEAD", "--", tc.filename)
-			if err := os.WriteFile(patchFile, output, 0644); err != nil {
-				t.Fatalf("Failed to write patch file: %v", err)
+			output, err := testRepo.RunCommand("git", "diff", "HEAD", "--", tc.filename)
+			if err != nil {
+				t.Fatalf("Failed to generate diff: %v", err)
 			}
+			testRepo.CreateFile(patchFile, output)
 
 			// Use StageHunks directly to test the fix
 			realExec := executor.NewRealCommandExecutor()
@@ -94,7 +68,10 @@ func TestStageHunks_E2E_AmbiguousFilename(t *testing.T) {
 			}
 
 			// Verify the file was staged correctly
-			statusOutput := string(runCommand(t, "git", "status", "--porcelain"))
+			statusOutput, err := testRepo.RunCommand("git", "status", "--porcelain")
+			if err != nil {
+				t.Fatalf("Failed to get status: %v", err)
+			}
 			expectedStatus := "M  " + tc.filename
 			if !strings.Contains(statusOutput, expectedStatus) {
 				t.Errorf("File '%s' was not staged properly.\nExpected: %s\nGot: %s",
@@ -102,7 +79,10 @@ func TestStageHunks_E2E_AmbiguousFilename(t *testing.T) {
 			}
 
 			// Verify the correct hunk was staged
-			diffCachedOutput := string(runCommand(t, "git", "diff", "--cached"))
+			diffCachedOutput, err := testRepo.RunCommand("git", "diff", "--cached")
+			if err != nil {
+				t.Fatalf("Failed to get cached diff: %v", err)
+			}
 			if !strings.Contains(diffCachedOutput, "+line 4") {
 				t.Errorf("The correct hunk was not staged for file '%s'", tc.filename)
 			}
@@ -110,14 +90,3 @@ func TestStageHunks_E2E_AmbiguousFilename(t *testing.T) {
 	}
 }
 
-// runCommand executes a command and returns its output, failing the test if it errors
-func runCommand(t *testing.T, name string, args ...string) []byte {
-	t.Helper()
-	cmd := exec.Command(name, args...)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("Command failed: %s %s\nOutput: %s\nError: %v",
-			name, strings.Join(args, " "), output, err)
-	}
-	return output
-}
