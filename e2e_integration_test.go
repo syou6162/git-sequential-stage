@@ -226,45 +226,40 @@ def goodbye():
 
 // S6: Test workflow non-destructive guarantee
 func testWorkflowPreservation(t *testing.T) {
-	dir, err := ioutil.TempDir("", "test-s6-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir, repo, cleanup := testutils.CreateTestRepo(t, "test-s6-*")
+	defer cleanup()
 
-	repo, _ := git.PlainInit(dir, false)
-	originalDir, _ := os.Getwd()
-	os.Chdir(dir)
-	defer os.Chdir(originalDir)
+	resetDir := testutils.SetupTestDir(t, dir)
+	defer resetDir()
 
 	// Create and modify file
-	createAndCommitFile(t, dir, repo, "test.py", "def foo():\n    pass", "Initial")
-	ioutil.WriteFile("test.py", []byte("def foo():\n    print('modified')\n\ndef bar():\n    pass"), 0644)
+	testutils.CreateAndCommitFile(t, dir, repo, "test.py", "def foo():\n    pass", "Initial")
+	os.WriteFile("test.py", []byte("def foo():\n    print('modified')\n\ndef bar():\n    pass"), 0644)
 
 	// Generate patch
 	patchFile := filepath.Join(dir, "changes.patch")
-	output, _ := runCommand(t, dir, "git", "diff", "HEAD")
-	ioutil.WriteFile(patchFile, []byte(output), 0644)
+	output, _ := testutils.RunCommand(t, dir, "git", "diff", "HEAD")
+	os.WriteFile(patchFile, []byte(output), 0644)
 
 	// Get initial state
-	statusBefore, _ := runCommand(t, dir, "git", "status", "--porcelain")
+	statusBefore, _ := testutils.RunCommand(t, dir, "git", "status", "--porcelain")
 
 	// Run git-sequential-stage (should succeed with clean staging area)
-	err = runGitSequentialStage([]string{"test.py:1"}, patchFile)
+	err := runGitSequentialStage([]string{"test.py:1"}, patchFile)
 	
 	if err != nil {
 		t.Fatalf("Failed to stage hunks in clean repo: %v", err)
 	}
 
 	// Verify partial staging worked
-	statusAfter, _ := runCommand(t, dir, "git", "status", "--porcelain")
+	statusAfter, _ := testutils.RunCommand(t, dir, "git", "status", "--porcelain")
 	
 	if statusBefore == statusAfter {
 		t.Error("No changes were staged")
 	}
 
 	// Verify only specified hunk was staged
-	stagedDiff, _ := runCommand(t, dir, "git", "diff", "--cached")
+	stagedDiff, _ := testutils.RunCommand(t, dir, "git", "diff", "--cached")
 	if !strings.Contains(stagedDiff, "print('modified')") {
 		t.Error("Expected change not staged")
 	}
