@@ -39,19 +39,19 @@ func testStagingAreaDetection(t *testing.T) {
 	resetDir := testutils.SetupTestDir(t, dir)
 	defer resetDir()
 
-	// Create and commit initial file
+	// Create and commit initial files
 	testutils.CreateAndCommitFile(t, dir, repo, "test.txt", "initial content", "Initial commit")
+	testutils.CreateAndCommitFile(t, dir, repo, "other.txt", "other content", "Add other file")
 
-	// Modify file
+	// Create a patch for test.txt
 	os.WriteFile("test.txt", []byte("modified content"), 0644)
-
-	// Stage the file
-	testutils.RunCommand(t, dir, "git", "add", "test.txt")
-
-	// Generate patch
 	patchFile := filepath.Join(dir, "changes.patch")
 	output, _ := testutils.RunCommand(t, dir, "git", "diff", "HEAD")
 	os.WriteFile(patchFile, []byte(output), 0644)
+
+	// Stage a different file to make staging area dirty
+	os.WriteFile("other.txt", []byte("modified other content"), 0644)
+	testutils.RunCommand(t, dir, "git", "add", "other.txt")
 
 	// Try to run git-sequential-stage - should fail with staging area not clean
 	err := runGitSequentialStage([]string{"test.txt:1"}, patchFile)
@@ -69,7 +69,7 @@ func testStagingAreaDetection(t *testing.T) {
 		"SAFETY_CHECK_FAILED",
 		"staging_area_not_clean",
 		"STAGED_FILES",
-		"MODIFIED: test.txt",
+		"MODIFIED: other.txt",
 		"git commit",
 		"git reset HEAD",
 	}
