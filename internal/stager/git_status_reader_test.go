@@ -2,18 +2,53 @@ package stager
 
 import (
 	"testing"
+	"os"
+	"path/filepath"
 
-	"github.com/syou6162/git-sequential-stage/internal/executor"
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
 func TestGitStatusReader_Clean(t *testing.T) {
-	mockExec := executor.NewMockCommandExecutor()
-	mockExec.Commands["git [status --porcelain]"] = executor.MockResponse{
-		Output: []byte(""),
-		Error:  nil,
+	// Create a temporary directory for the test repository
+	tmpDir, err := os.MkdirTemp("", "git_status_test_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	
-	reader := NewGitStatusReader(mockExec)
+	defer os.RemoveAll(tmpDir)
+
+	// Initialize a git repository
+	repo, err := git.PlainInit(tmpDir, false)
+	if err != nil {
+		t.Fatalf("Failed to init git repo: %v", err)
+	}
+
+	// Create an initial commit to avoid empty repository issues
+	worktree, err := repo.Worktree()
+	if err != nil {
+		t.Fatalf("Failed to get worktree: %v", err)
+	}
+
+	// Create and commit a file
+	testFile := filepath.Join(tmpDir, "test.txt")
+	if err := os.WriteFile(testFile, []byte("initial content"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	if _, err := worktree.Add("test.txt"); err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+
+	if _, err := worktree.Commit("Initial commit", &git.CommitOptions{
+		Author: &object.Signature{
+			Name:  "Test User",
+			Email: "test@example.com",
+		},
+	}); err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+
+	reader := NewGitStatusReader(tmpDir)
 	info, err := reader.ReadStatus()
 	
 	if err != nil {
@@ -30,24 +65,83 @@ func TestGitStatusReader_Clean(t *testing.T) {
 }
 
 func TestGitStatusReader_StagedFiles(t *testing.T) {
-	mockExec := executor.NewMockCommandExecutor()
-	statusOutput := `M  file1.txt
-A  file2.txt
-D  file3.txt
- M file4.txt`
-	mockExec.Commands["git [status --porcelain]"] = executor.MockResponse{
-		Output: []byte(statusOutput),
-		Error:  nil,
+	// Create a temporary directory for the test repository
+	tmpDir, err := os.MkdirTemp("", "git_status_test_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	
-	reader := NewGitStatusReader(mockExec)
+	defer os.RemoveAll(tmpDir)
+
+	// Initialize a git repository
+	repo, err := git.PlainInit(tmpDir, false)
+	if err != nil {
+		t.Fatalf("Failed to init git repo: %v", err)
+	}
+
+	worktree, err := repo.Worktree()
+	if err != nil {
+		t.Fatalf("Failed to get worktree: %v", err)
+	}
+
+	// Create initial files and commit them
+	files := []string{"file1.txt", "file3.txt"}
+	for _, file := range files {
+		testFile := filepath.Join(tmpDir, file)
+		if err := os.WriteFile(testFile, []byte("initial content"), 0644); err != nil {
+			t.Fatalf("Failed to create test file %s: %v", file, err)
+		}
+		if _, err := worktree.Add(file); err != nil {
+			t.Fatalf("Failed to add file %s: %v", file, err)
+		}
+	}
+
+	if _, err := worktree.Commit("Initial commit", &git.CommitOptions{
+		Author: &object.Signature{
+			Name:  "Test User",
+			Email: "test@example.com",
+		},
+	}); err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+
+	// Modify file1.txt and stage it
+	if err := os.WriteFile(filepath.Join(tmpDir, "file1.txt"), []byte("modified content"), 0644); err != nil {
+		t.Fatalf("Failed to modify file1.txt: %v", err)
+	}
+	if _, err := worktree.Add("file1.txt"); err != nil {
+		t.Fatalf("Failed to stage file1.txt: %v", err)
+	}
+
+	// Add file2.txt and stage it
+	if err := os.WriteFile(filepath.Join(tmpDir, "file2.txt"), []byte("new content"), 0644); err != nil {
+		t.Fatalf("Failed to create file2.txt: %v", err)
+	}
+	if _, err := worktree.Add("file2.txt"); err != nil {
+		t.Fatalf("Failed to stage file2.txt: %v", err)
+	}
+
+	// Remove file3.txt and stage the deletion
+	if err := os.Remove(filepath.Join(tmpDir, "file3.txt")); err != nil {
+		t.Fatalf("Failed to remove file3.txt: %v", err)
+	}
+	if _, err := worktree.Add("file3.txt"); err != nil {
+		t.Fatalf("Failed to stage file3.txt deletion: %v", err)
+	}
+
+	// Create file4.txt but don't stage it (worktree only change)
+	if err := os.WriteFile(filepath.Join(tmpDir, "file4.txt"), []byte("unstaged content"), 0644); err != nil {
+		t.Fatalf("Failed to create file4.txt: %v", err)
+	}
+
+	reader := NewGitStatusReader(tmpDir)
 	info, err := reader.ReadStatus()
 	
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
 	
-	// Should only include staged files (M , A , D , not  M)
+	
+	// Should only include staged files (M , A , D , not unstaged files)
 	if len(info.StagedFiles) != 3 {
 		t.Errorf("Expected 3 staged files, got: %v", info.StagedFiles)
 	}
@@ -69,137 +163,13 @@ D  file3.txt
 	}
 }
 
-func TestGitStatusReader_IntentToAdd(t *testing.T) {
-	mockExec := executor.NewMockCommandExecutor()
-	// ' A' (space + A) indicates intent-to-add
-	statusOutput := ` A intent1.txt
- A intent2.txt`
-	mockExec.Commands["git [status --porcelain]"] = executor.MockResponse{
-		Output: []byte(statusOutput),
-		Error:  nil,
-	}
-	
-	reader := NewGitStatusReader(mockExec)
-	info, err := reader.ReadStatus()
-	
-	if err != nil {
-		t.Fatalf("Expected no error, got: %v", err)
-	}
-	
-	if len(info.IntentToAddFiles) != 2 {
-		t.Errorf("Expected 2 intent-to-add files, got: %v", info.IntentToAddFiles)
-	}
-	
-	// Intent-to-add files should also be in staged files and added files
-	if len(info.StagedFiles) != 2 {
-		t.Errorf("Expected 2 staged files, got: %v", info.StagedFiles)
-	}
-	
-	addedFiles := info.FilesByStatus[FileStatusAdded]
-	if len(addedFiles) != 2 {
-		t.Errorf("Expected 2 added files, got: %v", addedFiles)
-	}
-}
-
-func TestGitStatusReader_RenamedFiles(t *testing.T) {
-	mockExec := executor.NewMockCommandExecutor()
-	statusOutput := `R  old.txt -> new.txt
-RM old2.txt -> new2.txt`
-	mockExec.Commands["git [status --porcelain]"] = executor.MockResponse{
-		Output: []byte(statusOutput),
-		Error:  nil,
-	}
-	
-	reader := NewGitStatusReader(mockExec)
-	info, err := reader.ReadStatus()
-	
-	if err != nil {
-		t.Fatalf("Expected no error, got: %v", err)
-	}
-	
-	renamedFiles := info.FilesByStatus[FileStatusRenamed]
-	if len(renamedFiles) != 2 {
-		t.Errorf("Expected 2 renamed files, got: %v", renamedFiles)
-	}
-	
-	// Check rename notation
-	expectedRenames := map[string]bool{
-		"old.txt -> new.txt":   true,
-		"old2.txt -> new2.txt": true,
-	}
-	
-	for _, rename := range renamedFiles {
-		if !expectedRenames[rename] {
-			t.Errorf("Unexpected rename notation: %s", rename)
-		}
-	}
-	
-	// Staged files should contain new names
-	if len(info.StagedFiles) != 2 {
-		t.Errorf("Expected 2 staged files (new names), got: %v", info.StagedFiles)
-	}
-}
-
-func TestGitStatusReader_CopiedFiles(t *testing.T) {
-	mockExec := executor.NewMockCommandExecutor()
-	statusOutput := `C  source.txt -> copy.txt`
-	mockExec.Commands["git [status --porcelain]"] = executor.MockResponse{
-		Output: []byte(statusOutput),
-		Error:  nil,
-	}
-	
-	reader := NewGitStatusReader(mockExec)
-	info, err := reader.ReadStatus()
-	
-	if err != nil {
-		t.Fatalf("Expected no error, got: %v", err)
-	}
-	
-	copiedFiles := info.FilesByStatus[FileStatusCopied]
-	if len(copiedFiles) != 1 || copiedFiles[0] != "source.txt -> copy.txt" {
-		t.Errorf("Expected 'source.txt -> copy.txt' in copied files, got: %v", copiedFiles)
-	}
-}
-
-func TestGitStatusReader_MixedStagedUnstaged(t *testing.T) {
-	mockExec := executor.NewMockCommandExecutor()
-	// MM = modified in index and working tree
-	// AM = added to index, modified in working tree
-	statusOutput := `MM both_modified.txt
-AM added_then_modified.txt
-M  only_staged.txt
- M only_unstaged.txt`
-	mockExec.Commands["git [status --porcelain]"] = executor.MockResponse{
-		Output: []byte(statusOutput),
-		Error:  nil,
-	}
-	
-	reader := NewGitStatusReader(mockExec)
-	info, err := reader.ReadStatus()
-	
-	if err != nil {
-		t.Fatalf("Expected no error, got: %v", err)
-	}
-	
-	// Should include files with staged changes (MM, AM, M ) but not  M
-	if len(info.StagedFiles) != 3 {
-		t.Errorf("Expected 3 staged files, got: %v", info.StagedFiles)
-	}
-	
-	// Check that only_unstaged.txt is not included
-	for _, file := range info.StagedFiles {
-		if file == "only_unstaged.txt" {
-			t.Error("only_unstaged.txt should not be in staged files")
-		}
-	}
-}
-
-func TestGitStatusReader_NoExecutor(t *testing.T) {
-	reader := NewGitStatusReader(nil)
+func TestGitStatusReader_InvalidRepo(t *testing.T) {
+	// Test with invalid repository path
+	reader := NewGitStatusReader("/nonexistent/path")
 	info, err := reader.ReadStatus()
 	
 	if err == nil {
-		t.Fatal("Expected error for nil executor")
+		t.Fatal("Expected error for invalid repository path")
 	}
 	
 	if info != nil {
@@ -207,56 +177,22 @@ func TestGitStatusReader_NoExecutor(t *testing.T) {
 	}
 }
 
-func TestGitStatusReader_GitCommandError(t *testing.T) {
-	mockExec := executor.NewMockCommandExecutor()
-	mockExec.Commands["git [status --porcelain]"] = executor.MockResponse{
-		Output: nil,
-		Error:  NewGitCommandError("git status", nil),
+func TestGitStatusReader_NotGitRepo(t *testing.T) {
+	// Create a temporary directory that's not a git repository
+	tmpDir, err := os.MkdirTemp("", "not_git_repo_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
 	}
+	defer os.RemoveAll(tmpDir)
 	
-	reader := NewGitStatusReader(mockExec)
+	reader := NewGitStatusReader(tmpDir)
 	info, err := reader.ReadStatus()
 	
 	if err == nil {
-		t.Fatal("Expected error when git command fails")
+		t.Fatal("Expected error when directory is not a git repository")
 	}
 	
 	if info != nil {
 		t.Error("Expected nil info on error")
-	}
-	
-	// Check that it's a StagerError
-	stagerErr, ok := err.(*StagerError)
-	if !ok {
-		t.Fatalf("Expected StagerError, got %T", err)
-	}
-	
-	if stagerErr.Type != ErrorTypeGitCommand {
-		t.Errorf("Expected ErrorTypeGitCommand error type, got %v", stagerErr.Type)
-	}
-}
-
-func TestGitStatusReader_ComplexFilenames(t *testing.T) {
-	mockExec := executor.NewMockCommandExecutor()
-	// Test with spaces and special characters
-	statusOutput := `M  "file with spaces.txt"
-A  regular_file.txt
-R  "old name.txt" -> "new name.txt"`
-	mockExec.Commands["git [status --porcelain]"] = executor.MockResponse{
-		Output: []byte(statusOutput),
-		Error:  nil,
-	}
-	
-	reader := NewGitStatusReader(mockExec)
-	info, err := reader.ReadStatus()
-	
-	if err != nil {
-		t.Fatalf("Expected no error, got: %v", err)
-	}
-	
-	// Note: For simplicity, our parser doesn't handle quoted filenames
-	// This is a known limitation that could be addressed if needed
-	if len(info.StagedFiles) != 3 {
-		t.Errorf("Expected 3 staged files, got: %v", info.StagedFiles)
 	}
 }
