@@ -1,6 +1,7 @@
 package stager
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"strings"
@@ -9,25 +10,41 @@ import (
 	"github.com/syou6162/git-sequential-stage/internal/executor"
 )
 
-// TestSemanticCommitWorkflow_BasicIntentToAdd tests the basic intent-to-add workflow
-// git add -N → patch generation → hunk staging → commit
-func TestSemanticCommitWorkflow_BasicIntentToAdd(t *testing.T) {
-	// Enable safety check for this test
+// testRepo represents a test git repository setup
+type testRepo struct {
+	t       *testing.T
+	tmpDir  string
+	execCmd executor.CommandExecutor
+}
+
+// setupTestRepo creates a new test repository with initial commit
+// and returns a testRepo struct for further operations
+func setupTestRepo(t *testing.T, testName string) *testRepo {
+	t.Helper()
+	
+	// Enable safety check for the test
 	oldEnv := os.Getenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK")
-	os.Setenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK", "true")
-	defer os.Setenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK", oldEnv)
-	// Skip if dependencies are not available
+	t.Setenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK", "true")
+	t.Cleanup(func() {
+		os.Setenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK", oldEnv)
+	})
+	
+	// Skip if git is not available
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found in PATH")
 	}
-
+	
 	// Create a temporary directory for the test
-	tmpDir, err := os.MkdirTemp("", "semantic_commit_test_*")
+	tmpDir, err := os.MkdirTemp("", testName+"_*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
-
+	
+	// Ensure cleanup
+	t.Cleanup(func() {
+		os.RemoveAll(tmpDir)
+	})
+	
 	// Change to temp directory
 	originalDir, err := os.Getwd()
 	if err != nil {
@@ -36,8 +53,10 @@ func TestSemanticCommitWorkflow_BasicIntentToAdd(t *testing.T) {
 	if err := os.Chdir(tmpDir); err != nil {
 		t.Fatalf("Failed to change to temp dir: %v", err)
 	}
-	defer os.Chdir(originalDir)
-
+	t.Cleanup(func() {
+		os.Chdir(originalDir)
+	})
+	
 	// Initialize git repository
 	execCmd := executor.NewRealCommandExecutor()
 	if _, err := execCmd.Execute("git", "init"); err != nil {
@@ -49,18 +68,133 @@ func TestSemanticCommitWorkflow_BasicIntentToAdd(t *testing.T) {
 	if _, err := execCmd.Execute("git", "config", "user.email", "test@example.com"); err != nil {
 		t.Fatalf("Failed to set git user email: %v", err)
 	}
+	
+	return &testRepo{
+		t:       t,
+		tmpDir:  tmpDir,
+		execCmd: execCmd,
+	}
+}
 
-	// Create initial commit to have HEAD
+// createInitialCommit creates an initial commit with a dummy file
+func (r *testRepo) createInitialCommit() {
+	r.t.Helper()
+	
 	initialFile := "initial.txt"
 	if err := os.WriteFile(initialFile, []byte("initial content"), 0644); err != nil {
-		t.Fatalf("Failed to create initial file: %v", err)
+		r.t.Fatalf("Failed to create initial file: %v", err)
 	}
-	if _, err := execCmd.Execute("git", "add", initialFile); err != nil {
-		t.Fatalf("Failed to add initial file: %v", err)
+	if _, err := r.execCmd.Execute("git", "add", initialFile); err != nil {
+		r.t.Fatalf("Failed to add initial file: %v", err)
 	}
-	if _, err := execCmd.Execute("git", "commit", "-m", "Initial commit"); err != nil {
-		t.Fatalf("Failed to create initial commit: %v", err)
+	if _, err := r.execCmd.Execute("git", "commit", "-m", "Initial commit"); err != nil {
+		r.t.Fatalf("Failed to create initial commit: %v", err)
 	}
+}
+
+// createFileWithContent creates a file with the given content
+func (r *testRepo) createFileWithContent(filename, content string) {
+	r.t.Helper()
+	
+	if err := os.WriteFile(filename, []byte(content), 0644); err != nil {
+		r.t.Fatalf("Failed to create file %s: %v", filename, err)
+	}
+}
+
+// gitAddIntentToAdd runs git add -N on the specified file
+func (r *testRepo) gitAddIntentToAdd(filename string) {
+	r.t.Helper()
+	
+	if _, err := r.execCmd.Execute("git", "add", "-N", filename); err != nil {
+		r.t.Fatalf("Failed to intent-to-add file %s: %v", filename, err)
+	}
+}
+
+// gitAdd runs git add on the specified file
+func (r *testRepo) gitAdd(filename string) {
+	r.t.Helper()
+	
+	if _, err := r.execCmd.Execute("git", "add", filename); err != nil {
+		r.t.Fatalf("Failed to add file %s: %v", filename, err)
+	}
+}
+
+// gitCommit creates a commit with the given message
+func (r *testRepo) gitCommit(message string) {
+	r.t.Helper()
+	
+	if _, err := r.execCmd.Execute("git", "commit", "-m", message); err != nil {
+		r.t.Fatalf("Failed to commit: %v", err)
+	}
+}
+
+// generatePatchFile generates a patch file from git diff HEAD
+func (r *testRepo) generatePatchFile(filename string) string {
+	r.t.Helper()
+	
+	patchOutput, err := r.execCmd.Execute("git", "diff", "HEAD")
+	if err != nil {
+		r.t.Fatalf("Failed to generate patch: %v", err)
+	}
+	if err := os.WriteFile(filename, []byte(patchOutput), 0644); err != nil {
+		r.t.Fatalf("Failed to write patch file: %v", err)
+	}
+	return string(patchOutput)
+}
+
+// getGitStatus returns the output of git status --porcelain
+func (r *testRepo) getGitStatus() string {
+	r.t.Helper()
+	
+	output, err := r.execCmd.Execute("git", "status", "--porcelain")
+	if err != nil {
+		r.t.Fatalf("Failed to get git status: %v", err)
+	}
+	return string(output)
+}
+
+// assertSafetyError checks if the error is a SafetyError with the expected type
+func assertSafetyError(t *testing.T, err error, expectedType SafetyErrorType) {
+	t.Helper()
+	
+	if err == nil {
+		t.Fatal("Expected error but got nil")
+	}
+	
+	var safetyErr *SafetyError
+	if !errors.As(err, &safetyErr) {
+		t.Fatalf("Expected SafetyError type, got: %T - %v", err, err)
+	}
+	
+	if safetyErr.Type != expectedType {
+		t.Fatalf("Expected SafetyError type %v, got: %v", expectedType, safetyErr.Type)
+	}
+}
+
+// assertStagerError checks if the error is a StagerError with the expected type
+func assertStagerError(t *testing.T, err error, expectedType ErrorType) {
+	t.Helper()
+	
+	if err == nil {
+		t.Fatal("Expected error but got nil")
+	}
+	
+	var stagerErr *StagerError
+	if !errors.As(err, &stagerErr) {
+		t.Fatalf("Expected StagerError type, got: %T - %v", err, err)
+	}
+	
+	if stagerErr.Type != expectedType {
+		t.Fatalf("Expected StagerError type %v, got: %v", expectedType, stagerErr.Type)
+	}
+}
+
+// TestSemanticCommitWorkflow_BasicIntentToAdd tests the basic intent-to-add workflow
+// git add -N → patch generation → hunk staging → commit
+func TestSemanticCommitWorkflow_BasicIntentToAdd(t *testing.T) {
+	// Setup test repository
+	repo := setupTestRepo(t, "semantic_commit_test")
+	repo.createInitialCommit()
 
 	// Create a new file with content (structured to create multiple hunks)
 	newFileName := "new_file.py"
