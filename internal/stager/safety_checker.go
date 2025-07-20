@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
+	"github.com/syou6162/git-sequential-stage/internal/executor"
 )
 
 // FileStatus represents the modification status of a file
@@ -67,8 +68,9 @@ func (ac ActionCategory) String() string {
 }
 
 // SafetyChecker provides functionality to check the safety of staging operations
-// This is now a stateless utility that operates purely on patch content
+// Uses a hybrid approach: patch-based analysis with git command fallback when necessary
 type SafetyChecker struct {
+	executor executor.CommandExecutor // Used only when patch-based analysis is insufficient
 }
 
 // StagingAreaEvaluation contains the result of evaluating the staging area
@@ -91,9 +93,11 @@ type RecommendedAction struct {
 }
 
 // NewSafetyChecker creates a new SafetyChecker instance
-// No longer requires an executor since all operations are patch-based
-func NewSafetyChecker() *SafetyChecker {
-	return &SafetyChecker{}
+// Accepts an optional executor for hybrid approach (nil = patch-only mode)
+func NewSafetyChecker(executor executor.CommandExecutor) *SafetyChecker {
+	return &SafetyChecker{
+		executor: executor,
+	}
 }
 
 // EvaluatePatchContent evaluates safety from patch content (git-command-free analysis)
@@ -337,4 +341,155 @@ func (s *SafetyChecker) buildRecommendedActions(filesByStatus map[FileStatus][]s
 	})
 
 	return actions
+}
+
+// CheckActualStagingArea checks the actual staging area using git commands
+// This method is more accurate but requires git command execution
+func (s *SafetyChecker) CheckActualStagingArea() (*StagingAreaEvaluation, error) {
+	if s.executor == nil {
+		return nil, NewSafetyError(GitOperationFailed,
+			"Executor not available for git command execution",
+			"Initialize SafetyChecker with an executor for git commands", nil)
+	}
+
+	filesByStatus := make(map[FileStatus][]string)
+	var allStagedFiles []string
+	var intentToAddFiles []string
+
+	// Get the actual staging area status using git status
+	output, err := s.executor.Execute("git", "status", "--porcelain")
+	if err != nil {
+		return nil, NewGitCommandError("git status", err)
+	}
+
+	// Parse git status output
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	if len(lines) == 1 && lines[0] == "" {
+		// Empty output means clean staging area
+		return &StagingAreaEvaluation{
+			IsClean:          true,
+			StagedFiles:      []string{},
+			IntentToAddFiles: []string{},
+			AllowContinue:    true,
+			FilesByStatus:    filesByStatus,
+		}, nil
+	}
+
+	// Process each line of git status output
+	for _, line := range lines {
+		if len(line) < 3 {
+			continue
+		}
+
+		statusCode := line[0:2]
+		filename := strings.TrimSpace(line[3:])
+
+		// Only process staged changes (first character is not space)
+		if statusCode[0] == ' ' {
+			continue
+		}
+
+		// Handle rename/copy specially
+		if strings.Contains(line, " -> ") {
+			parts := strings.Split(filename, " -> ")
+			if len(parts) == 2 {
+				oldName := parts[0]
+				newName := parts[1]
+				if statusCode[0] == 'R' {
+					filesByStatus[FileStatusRenamed] = append(filesByStatus[FileStatusRenamed], oldName+" -> "+newName)
+					allStagedFiles = append(allStagedFiles, newName)
+				} else if statusCode[0] == 'C' {
+					filesByStatus[FileStatusCopied] = append(filesByStatus[FileStatusCopied], oldName+" -> "+newName)
+					allStagedFiles = append(allStagedFiles, newName)
+				}
+				continue
+			}
+		}
+
+		// Add to staged files list
+		allStagedFiles = append(allStagedFiles, filename)
+
+		// Categorize based on status code
+		switch statusCode[0] {
+		case 'M':
+			filesByStatus[FileStatusModified] = append(filesByStatus[FileStatusModified], filename)
+		case 'A':
+			filesByStatus[FileStatusAdded] = append(filesByStatus[FileStatusAdded], filename)
+			// Check if this is an intent-to-add file
+			if s.isIntentToAdd(filename) {
+				intentToAddFiles = append(intentToAddFiles, filename)
+			}
+		case 'D':
+			filesByStatus[FileStatusDeleted] = append(filesByStatus[FileStatusDeleted], filename)
+		}
+	}
+
+	// Determine if staging area is clean
+	nonIntentToAddStaged := s.filterNonIntentToAdd(allStagedFiles, intentToAddFiles)
+	isClean := len(allStagedFiles) == 0
+	allowContinue := len(nonIntentToAddStaged) == 0
+
+	evaluation := &StagingAreaEvaluation{
+		IsClean:          isClean,
+		StagedFiles:      allStagedFiles,
+		IntentToAddFiles: intentToAddFiles,
+		AllowContinue:    allowContinue,
+		FilesByStatus:    filesByStatus,
+	}
+
+	// Generate error message and recommended actions if not clean
+	if !isClean {
+		evaluation.ErrorMessage = s.buildStagingErrorMessage(filesByStatus, intentToAddFiles)
+		evaluation.RecommendedActions = s.buildRecommendedActions(filesByStatus, intentToAddFiles)
+	}
+
+	return evaluation, nil
+}
+
+// isIntentToAdd checks if a file is intent-to-add using git ls-files
+func (s *SafetyChecker) isIntentToAdd(filename string) bool {
+	if s.executor == nil {
+		return false
+	}
+
+	// Check if file is in intent-to-add state
+	output, err := s.executor.Execute("git", "ls-files", "--cached", "--", filename)
+	if err != nil || len(output) == 0 {
+		return false
+	}
+
+	// For intent-to-add files, git diff --cached shows no content
+	diffOutput, err := s.executor.Execute("git", "diff", "--cached", "--", filename)
+	if err != nil {
+		return false
+	}
+
+	// Intent-to-add files have empty diff in staged area
+	return strings.TrimSpace(string(diffOutput)) == ""
+}
+
+// EvaluateWithFallback performs hybrid evaluation: patch-first with git command fallback
+// This is the recommended API for safety checking
+func (s *SafetyChecker) EvaluateWithFallback(patchContent string) (*StagingAreaEvaluation, error) {
+	// First, try patch-based evaluation
+	patchEval, err := s.EvaluatePatchContent(patchContent)
+	if err != nil {
+		return nil, err
+	}
+
+	// If patch shows changes and we have an executor, verify with actual staging area
+	if len(patchEval.StagedFiles) > 0 && s.executor != nil {
+		// Get actual staging area state
+		actualEval, err := s.CheckActualStagingArea()
+		if err != nil {
+			// If we can't check actual state, fall back to patch evaluation
+			return patchEval, nil
+		}
+
+		// Use actual evaluation as it's more accurate
+		return actualEval, nil
+	}
+
+	// For empty patches or no executor, patch evaluation is sufficient
+	return patchEval, nil
 }
