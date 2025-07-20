@@ -136,12 +136,22 @@ func collectTargetFiles(hunkSpecs []string) (map[string]bool, error) {
 
 // buildTargetIDs builds a list of patch IDs from hunk specifications
 func buildTargetIDs(hunkSpecs []string, allHunks []HunkInfo) ([]string, error) {
-	// First, build a map of file -> max hunk numbers for better error reporting
+	// Build maps for O(1) lookup performance
 	fileHunkCounts := make(map[string]int)
+	fileHunkMap := make(map[string]map[int]string) // file -> (hunkIndex -> patchID)
+
+	// Single pass to build both maps - O(H)
 	for _, hunk := range allHunks {
+		// Track max hunk counts for error reporting
 		if hunk.IndexInFile > fileHunkCounts[hunk.FilePath] {
 			fileHunkCounts[hunk.FilePath] = hunk.IndexInFile
 		}
+
+		// Build file->hunk->patchID map for O(1) lookup
+		if fileHunkMap[hunk.FilePath] == nil {
+			fileHunkMap[hunk.FilePath] = make(map[int]string)
+		}
+		fileHunkMap[hunk.FilePath][hunk.IndexInFile] = hunk.PatchID
 	}
 
 	var targetIDs []string
@@ -169,19 +179,14 @@ func buildTargetIDs(hunkSpecs []string, allHunks []HunkInfo) ([]string, error) {
 			return nil, NewHunkCountExceededError(filePath, maxHunks, invalidHunks)
 		}
 
-		// Find matching hunks in allHunks
+		// Find matching hunks using O(1) map lookup - O(N) total
+		hunkLookup := fileHunkMap[filePath]
 		for _, hunkNum := range hunkNumbers {
-			found := false
-			for _, hunk := range allHunks {
-				if hunk.FilePath == filePath && hunk.IndexInFile == hunkNum {
-					targetIDs = append(targetIDs, hunk.PatchID)
-					found = true
-					break
-				}
-			}
+			patchID, found := hunkLookup[hunkNum]
 			if !found {
 				return nil, NewHunkNotFoundError(fmt.Sprintf("hunk %d in file %s", hunkNum, filePath), nil)
 			}
+			targetIDs = append(targetIDs, patchID)
 		}
 	}
 	return targetIDs, nil
