@@ -19,7 +19,7 @@ type Stager struct {
 }
 
 // NewStager creates a new Stager instance with the provided command executor.
-// The executor is used to run Git and filterdiff commands.
+// The executor is used to run Git commands.
 func NewStager(exec executor.CommandExecutor) *Stager {
 	return &Stager{
 		executor: exec,
@@ -273,7 +273,7 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
 
 		diffLines := strings.Split(string(diffOutput), "\n")
 
-		// Create temp file for filterdiff
+		// Create temp file for hunk processing
 		tmpFileName, cleanup, err := s.createTempDiffFile(diffOutput)
 		if err != nil {
 			return err

@@ -20,9 +20,6 @@ func TestSemanticCommitWorkflow_BasicIntentToAdd(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found in PATH")
 	}
-	if _, err := exec.LookPath("filterdiff"); err != nil {
-		t.Skip("filterdiff not found in PATH")
-	}
 
 	// Create a temporary directory for the test
 	tmpDir, err := os.MkdirTemp("", "semantic_commit_test_*")
@@ -178,9 +175,6 @@ func TestSemanticCommitWorkflow_MixedStagingScenario(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found in PATH")
 	}
-	if _, err := exec.LookPath("filterdiff"); err != nil {
-		t.Skip("filterdiff not found in PATH")
-	}
 
 	// Create a temporary directory for the test
 	tmpDir, err := os.MkdirTemp("", "semantic_commit_mixed_test_*")
@@ -285,9 +279,6 @@ func TestSemanticCommitWorkflow_MultipleIntentToAddFiles(t *testing.T) {
 	// Skip if dependencies are not available
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found in PATH")
-	}
-	if _, err := exec.LookPath("filterdiff"); err != nil {
-		t.Skip("filterdiff not found in PATH")
 	}
 
 	// Create a temporary directory for the test
@@ -415,9 +406,6 @@ func TestSemanticCommitWorkflow_PartialStagingLargeFile(t *testing.T) {
 	// Skip if dependencies are not available
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found in PATH")
-	}
-	if _, err := exec.LookPath("filterdiff"); err != nil {
-		t.Skip("filterdiff not found in PATH")
 	}
 
 	// Create a temporary directory for the test
@@ -550,9 +538,6 @@ func TestSemanticCommitWorkflow_ErrorHandling(t *testing.T) {
 	// Skip if dependencies are not available
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found in PATH")
-	}
-	if _, err := exec.LookPath("filterdiff"); err != nil {
-		t.Skip("filterdiff not found in PATH")
 	}
 
 	// Create a temporary directory for the test
