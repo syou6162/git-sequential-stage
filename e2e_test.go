@@ -1537,8 +1537,7 @@ func TestHunkCountExceededError(t *testing.T) {
 	defer testRepo.Cleanup()
 
 	// 初期コミットを作成
-	testRepo.CreateFile("README.md", "# Test Project\n")
-	testRepo.CommitChanges("Initial commit")
+	testRepo.CreateAndCommitFile("README.md", "# Test Project\n", "Initial commit")
 
 	// 既存ファイルを修正して複数ハンクを作成
 	originalContent := `package main
@@ -1547,8 +1546,7 @@ func original() {
 	println("Original")
 }
 `
-	testRepo.CreateFile("main.go", originalContent)
-	testRepo.CommitChanges("Add main.go")
+	testRepo.CreateAndCommitFile("main.go", originalContent, "Add main.go")
 
 	// 修正して2つのハンクを作成
 	modifiedContent := `package main
@@ -1618,15 +1616,13 @@ func TestMultipleInvalidHunks(t *testing.T) {
 	defer testRepo.Cleanup()
 
 	// 初期コミットを作成
-	testRepo.CreateFile("README.md", "# Test Project\n")
-	testRepo.CommitChanges("Initial commit")
+	testRepo.CreateAndCommitFile("README.md", "# Test Project\n", "Initial commit")
 
 	// 既存ファイルに1つのハンクを作成
 	originalContent := `func original() {
 	println("Original")
 }`
-	testRepo.CreateFile("single.go", originalContent)
-	testRepo.CommitChanges("Add single.go")
+	testRepo.CreateAndCommitFile("single.go", originalContent, "Add single.go")
 
 	// 修正して1つのハンクを作成
 	modifiedContent := `func original() {
