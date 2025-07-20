@@ -83,8 +83,8 @@ func (ac ActionCategory) String() string {
 // SafetyChecker provides functionality to check the safety of staging operations
 // Uses a hybrid approach: patch-based analysis with git command fallback when necessary
 type SafetyChecker struct {
-	statusReader   GitStatusReader
-	patchAnalyzer  PatchAnalyzer
+	statusReader  GitStatusReader
+	patchAnalyzer PatchAnalyzer
 }
 
 // StagingAreaEvaluation contains the result of evaluating the staging area
@@ -346,7 +346,6 @@ func (s *SafetyChecker) CheckActualStagingArea() (*StagingAreaEvaluation, error)
 
 	return evaluation, nil
 }
-
 
 // EvaluateWithFallback performs hybrid evaluation: patch-first with git command fallback
 // This is the recommended API for safety checking
