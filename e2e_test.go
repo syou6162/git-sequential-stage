@@ -1380,7 +1380,7 @@ func TestBinaryFileHandling(t *testing.T) {
 	// should either:
 	// 1. Skip binary files with an appropriate message
 	// 2. Stage the entire binary file change (since hunks don't apply)
-	// The exact behavior depends on git and filterdiff's handling of binary files
+	// The exact behavior depends on git's handling of binary files
 	err = runGitSequentialStage([]string{"image.png:1"}, absPatchPath)
 	if err == nil {
 		// If it succeeds, verify the binary file is staged
