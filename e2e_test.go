@@ -1464,9 +1464,6 @@ func main() {
 		t.Fatalf("Failed to add file with intent-to-add: %v", err)
 	}
 	
-	// デバッグ: git statusの状態を確認
-	statusOutput, _ := exec.Command("git", "status", "--porcelain").Output()
-	t.Logf("Git status after add -N:\n%s", string(statusOutput))
 
 	// git diff でパッチを生成
 	diffOutput, err := exec.Command("git", "diff", "HEAD").Output()
@@ -1480,8 +1477,6 @@ func main() {
 		t.Fatalf("Failed to write patch file: %v", err)
 	}
 	
-	// デバッグ用: パッチファイルの内容を表示
-	t.Logf("Patch content:\n%s", string(diffOutput))
 
 	// パッチファイルの絶対パスを取得
 	absPatchPath, err := filepath.Abs(patchPath)
