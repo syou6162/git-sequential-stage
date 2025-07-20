@@ -172,14 +172,11 @@ func testFileTypeErrorMessages(t *testing.T) {
 
 // S4: Test Git operation error handling
 func testGitOperationErrorHandling(t *testing.T) {
-	dir, err := ioutil.TempDir("", "test-s4-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	_, _, cleanup := testutils.CreateTestRepo(t, "test-s4-*")
+	defer cleanup()
 
 	// Test with non-existent patch file
-	err = runGitSequentialStage([]string{"test.txt:1"}, "/non/existent/patch.file")
+	err := runGitSequentialStage([]string{"test.txt:1"}, "/non/existent/patch.file")
 	
 	if err == nil {
 		t.Error("Expected error for non-existent patch file")
