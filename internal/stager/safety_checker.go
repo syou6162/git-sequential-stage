@@ -73,13 +73,13 @@ type SafetyChecker struct {
 
 // StagingAreaEvaluation contains the result of evaluating the staging area
 type StagingAreaEvaluation struct {
-	IsClean              bool
-	StagedFiles          []string
-	IntentToAddFiles     []string
-	ErrorMessage         string
-	AllowContinue        bool
-	RecommendedActions   []RecommendedAction
-	FilesByStatus        map[FileStatus][]string
+	IsClean            bool
+	StagedFiles        []string
+	IntentToAddFiles   []string
+	ErrorMessage       string
+	AllowContinue      bool
+	RecommendedActions []RecommendedAction
+	FilesByStatus      map[FileStatus][]string
 }
 
 // RecommendedAction represents an action that can be taken to resolve a staging issue
@@ -96,7 +96,6 @@ func NewSafetyChecker() *SafetyChecker {
 	return &SafetyChecker{}
 }
 
-
 // EvaluatePatchContent evaluates safety from patch content (git-command-free analysis)
 func (s *SafetyChecker) EvaluatePatchContent(patchContent string) (*StagingAreaEvaluation, error) {
 	filesByStatus := make(map[FileStatus][]string)
@@ -106,11 +105,11 @@ func (s *SafetyChecker) EvaluatePatchContent(patchContent string) (*StagingAreaE
 	// If no patch content, staging area is clean
 	if strings.TrimSpace(patchContent) == "" {
 		return &StagingAreaEvaluation{
-			IsClean:           true,
-			StagedFiles:       []string{},
-			IntentToAddFiles:  []string{},
-			AllowContinue:     true,
-			FilesByStatus:     filesByStatus,
+			IsClean:          true,
+			StagedFiles:      []string{},
+			IntentToAddFiles: []string{},
+			AllowContinue:    true,
+			FilesByStatus:    filesByStatus,
 		}, nil
 	}
 
@@ -121,7 +120,7 @@ func (s *SafetyChecker) EvaluatePatchContent(patchContent string) (*StagingAreaE
 			"Failed to parse patch content",
 			"Check if the patch content is valid", err)
 	}
-	
+
 	// Check if we have a valid patch with actual file changes
 	if len(files) == 0 && strings.TrimSpace(patchContent) != "" {
 		// Non-empty content but no files parsed - likely invalid patch format
@@ -174,11 +173,11 @@ func (s *SafetyChecker) EvaluatePatchContent(patchContent string) (*StagingAreaE
 	allowContinue := len(nonIntentToAddStaged) == 0
 
 	evaluation := &StagingAreaEvaluation{
-		IsClean:           isClean,
-		StagedFiles:       allStagedFiles,
-		IntentToAddFiles:  intentToAddFiles,
-		AllowContinue:     allowContinue,
-		FilesByStatus:     filesByStatus,
+		IsClean:          isClean,
+		StagedFiles:      allStagedFiles,
+		IntentToAddFiles: intentToAddFiles,
+		AllowContinue:    allowContinue,
+		FilesByStatus:    filesByStatus,
 	}
 
 	// Generate error message and recommended actions if not clean
@@ -189,7 +188,6 @@ func (s *SafetyChecker) EvaluatePatchContent(patchContent string) (*StagingAreaE
 
 	return evaluation, nil
 }
-
 
 // filterNonIntentToAdd removes intent-to-add files from the staged files list
 func (s *SafetyChecker) filterNonIntentToAdd(stagedFiles, intentToAddFiles []string) []string {

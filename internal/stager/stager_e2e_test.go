@@ -24,7 +24,7 @@ func TestStageHunks_E2E_AmbiguousFilename(t *testing.T) {
 		filename string
 	}{
 		{"file named master", "master"},
-		{"file named main", "main"}, 
+		{"file named main", "main"},
 		{"file named HEAD", "HEAD"},
 		{"file with tag-like name", "v1.0.0"},
 	}
@@ -100,7 +100,7 @@ func TestStageHunks_E2E_AmbiguousFilename(t *testing.T) {
 			statusOutput := string(runCommand(t, "git", "status", "--porcelain"))
 			expectedStatus := "M  " + tc.filename
 			if !strings.Contains(statusOutput, expectedStatus) {
-				t.Errorf("File '%s' was not staged properly.\nExpected: %s\nGot: %s", 
+				t.Errorf("File '%s' was not staged properly.\nExpected: %s\nGot: %s",
 					tc.filename, expectedStatus, statusOutput)
 			}
 
@@ -119,7 +119,7 @@ func runCommand(t *testing.T, name string, args ...string) []byte {
 	cmd := exec.Command(name, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("Command failed: %s %s\nOutput: %s\nError: %v", 
+		t.Fatalf("Command failed: %s %s\nOutput: %s\nError: %v",
 			name, strings.Join(args, " "), output, err)
 	}
 	return output

@@ -42,7 +42,7 @@ func TestStager_StageHunks_ErrorCases(t *testing.T) {
 					f.Close()
 					os.Remove(f.Name())
 				})
-				
+
 				validPatch := `diff --git a/file.go b/file.go
 index abc1234..def5678 100644
 --- a/file.go
@@ -53,21 +53,21 @@ index abc1234..def5678 100644
 +import "fmt"
  func main() {}`
 				f.WriteString(validPatch)
-				
+
 				// Mock patch extraction - not needed since we use go-gitdiff now
-				
+
 				// Mock git patch-id for initial calculation
 				mock.Commands["git [patch-id --stable]"] = executor.MockResponse{
 					Output: []byte("abc12345 def67890"),
 					Error:  nil,
 				}
-				
+
 				// Mock git diff to fail
 				mock.Commands["git [diff HEAD -- file.go]"] = executor.MockResponse{
 					Output: nil,
 					Error:  fmt.Errorf("git diff failed"),
 				}
-				
+
 				return f.Name(), nil
 			},
 			expectErr: true,
@@ -87,7 +87,7 @@ index abc1234..def5678 100644
 					f.Close()
 					os.Remove(f.Name())
 				})
-				
+
 				validPatch := `diff --git a/file.go b/file.go
 index abc1234..def5678 100644
 --- a/file.go
@@ -98,7 +98,7 @@ index abc1234..def5678 100644
 +import "fmt"
  func main() {}`
 				f.WriteString(validPatch)
-				
+
 				return f.Name(), nil
 			},
 			expectErr: true,
@@ -113,11 +113,11 @@ index abc1234..def5678 100644
 			if setupErr != nil {
 				t.Fatalf("Failed to setup test: %v", setupErr)
 			}
-			
+
 			stager := NewStager(mock)
-			
+
 			err := stager.StageHunks(tt.hunkSpecs, patchFile)
-			
+
 			if tt.expectErr && err == nil {
 				t.Error("Expected error but got none")
 			}

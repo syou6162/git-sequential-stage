@@ -67,7 +67,6 @@ func NewStagerError(errType ErrorType, message string, err error) *StagerError {
 	}
 }
 
-
 // Common error constructors
 
 // NewFileNotFoundError creates a file not found error
@@ -183,7 +182,6 @@ func (e *SafetyError) Is(target error) bool {
 func (e *SafetyError) Unwrap() error {
 	return e.Underlying
 }
-
 
 // String returns a string representation of the error type
 func (t SafetyErrorType) String() string {

@@ -9,18 +9,15 @@ import (
 
 // HunkInfo represents information about a single hunk
 type HunkInfo struct {
-	GlobalIndex   int                   // Global hunk number in the patch file (1, 2, 3, ...)
-	FilePath      string                // File path this hunk belongs to (new path for renames)
-	OldFilePath   string                // Old file path (for renames)
-	IndexInFile   int                   // Hunk number within the file (1, 2, 3, ...)
-	PatchID       string                // Unique patch ID calculated using git patch-id
-	IsBinary      bool                  // Whether this is a binary file
-	Fragment      *gitdiff.TextFragment // Original fragment from go-gitdiff
-	File          *gitdiff.File         // Original file from go-gitdiff
+	GlobalIndex int                   // Global hunk number in the patch file (1, 2, 3, ...)
+	FilePath    string                // File path this hunk belongs to (new path for renames)
+	OldFilePath string                // Old file path (for renames)
+	IndexInFile int                   // Hunk number within the file (1, 2, 3, ...)
+	PatchID     string                // Unique patch ID calculated using git patch-id
+	IsBinary    bool                  // Whether this is a binary file
+	Fragment    *gitdiff.TextFragment // Original fragment from go-gitdiff
+	File        *gitdiff.File         // Original file from go-gitdiff
 }
-
-
-
 
 // ParseHunkSpec parses a hunk specification like "file.go:1,3"
 func ParseHunkSpec(spec string) (filePath string, hunkNumbers []int, err error) {
@@ -28,10 +25,10 @@ func ParseHunkSpec(spec string) (filePath string, hunkNumbers []int, err error) 
 	if len(parts) != 2 {
 		return "", nil, NewInvalidArgumentError(fmt.Sprintf("invalid hunk spec format: %s (expected file:numbers)", spec), nil)
 	}
-	
+
 	filePath = parts[0]
 	numbersPart := parts[1]
-	
+
 	// Parse comma-separated numbers
 	for _, numStr := range strings.Split(numbersPart, ",") {
 		numStr = strings.TrimSpace(numStr)
@@ -44,6 +41,6 @@ func ParseHunkSpec(spec string) (filePath string, hunkNumbers []int, err error) 
 		}
 		hunkNumbers = append(hunkNumbers, num)
 	}
-	
+
 	return filePath, hunkNumbers, nil
 }

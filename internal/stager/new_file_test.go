@@ -39,23 +39,23 @@ index abc1234..def5678 100644
 // parseAndValidateHunk is a helper to parse patch file and validate hunk extraction
 func parseAndValidateHunk(t *testing.T, patchContent string, hunkIndex int) HunkInfo {
 	t.Helper()
-	
+
 	hunks, err := parsePatchFileWithGitDiff(patchContent)
 	if err != nil {
 		t.Fatalf("Failed to parse patch: %v", err)
 	}
-	
+
 	if hunkIndex >= len(hunks) {
 		t.Fatalf("Hunk index %d out of range, only %d hunks found", hunkIndex, len(hunks))
 	}
-	
+
 	return hunks[hunkIndex]
 }
 
 // assertHunkProperties validates common hunk properties
 func assertHunkProperties(t *testing.T, hunk HunkInfo, expectedFile string, expectedGlobalIndex, expectedIndexInFile int) {
 	t.Helper()
-	
+
 	if hunk.FilePath != expectedFile {
 		t.Errorf("Expected file path %q, got %q", expectedFile, hunk.FilePath)
 	}
@@ -199,7 +199,7 @@ index 0000000..999888
 			resultNorm := strings.TrimSpace(resultStr)
 			// Remove "\ No newline at end of file" markers for comparison
 			resultNorm = strings.ReplaceAll(resultNorm, "\n\\ No newline at end of file", "")
-			
+
 			if expectedNorm != resultNorm {
 				t.Errorf("File.String() result mismatch\nExpected:\n%s\n\nGot:\n%s", tt.expectedOutput, resultStr)
 			}
@@ -293,11 +293,11 @@ index 1234567..0000000
 // relationships in both single and multi-file patches.
 func TestParsePatchFile_NewFiles(t *testing.T) {
 	tests := []struct {
-		name           string
-		patchContent   string
-		expectedHunks  int
-		expectedFiles  []string
-		validateHunks  func(t *testing.T, hunks []HunkInfo)
+		name          string
+		patchContent  string
+		expectedHunks int
+		expectedFiles []string
+		validateHunks func(t *testing.T, hunks []HunkInfo)
 	}{
 		{
 			name: "single new file",
