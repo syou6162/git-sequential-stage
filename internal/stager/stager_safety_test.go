@@ -126,11 +126,6 @@ index 0000000..e69de29
 }
 
 func TestStager_StageHunks_WithSafetyCheck_Clean(t *testing.T) {
-	// Enable safety check for this test
-	oldEnv := os.Getenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK")
-	os.Setenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK", "true")
-	defer os.Setenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK", oldEnv)
-
 	// Create a temporary directory for test
 	tmpDir, err := os.MkdirTemp("", "stage_hunks_safety_test")
 	if err != nil {
