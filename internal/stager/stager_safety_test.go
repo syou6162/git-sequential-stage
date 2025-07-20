@@ -3,6 +3,7 @@ package stager
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/syou6162/git-sequential-stage/internal/executor"
@@ -129,7 +130,7 @@ func TestStager_StageHunks_WithSafetyCheck_Clean(t *testing.T) {
 	oldEnv := os.Getenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK")
 	os.Setenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK", "true")
 	defer os.Setenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK", oldEnv)
-	
+
 	// Create a temporary directory for test
 	tmpDir, err := os.MkdirTemp("", "stage_hunks_safety_test")
 	if err != nil {
@@ -146,10 +147,10 @@ func TestStager_StageHunks_WithSafetyCheck_Clean(t *testing.T) {
 
 	mockExecutor := executor.NewMockCommandExecutor()
 	stager := NewStager(mockExecutor)
-	
+
 	// This should succeed because empty patch = clean staging area
 	err = stager.StageHunks([]string{}, patchFile)
-	
+
 	if err != nil {
 		t.Fatalf("Expected successful with clean staging area (empty patch), got error: %v", err)
 	}
@@ -160,7 +161,7 @@ func TestStager_StageHunks_WithSafetyCheck_Dirty(t *testing.T) {
 	oldEnv := os.Getenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK")
 	os.Setenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK", "true")
 	defer os.Setenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK", oldEnv)
-	
+
 	// Create a temporary directory for test
 	tmpDir, err := os.MkdirTemp("", "stage_hunks_safety_test")
 	if err != nil {
@@ -184,19 +185,19 @@ index 257cc56..5716ca5 100644
 
 	mockExecutor := executor.NewMockCommandExecutor()
 	stager := NewStager(mockExecutor)
-	
+
 	// This should fail because the patch shows modified files (dirty staging area)
 	err = stager.StageHunks([]string{"already_staged.txt:1"}, patchFile)
-	
+
 	if err == nil {
 		t.Fatal("Expected error for dirty staging area")
 	}
-	
+
 	safetyErr, ok := err.(*SafetyError)
 	if !ok {
 		t.Fatalf("Expected SafetyError, got %T", err)
 	}
-	
+
 	if safetyErr.Type != StagingAreaNotClean {
 		t.Errorf("Expected StagingAreaNotClean error type, got %v", safetyErr.Type)
 	}
@@ -207,7 +208,7 @@ func TestStager_StageHunks_WithSafetyCheck_NewFile(t *testing.T) {
 	oldEnv := os.Getenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK")
 	os.Setenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK", "true")
 	defer os.Setenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK", oldEnv)
-	
+
 	// Create a temporary directory for test
 	tmpDir, err := os.MkdirTemp("", "stage_hunks_safety_test")
 	if err != nil {
@@ -231,19 +232,19 @@ index 0000000..257cc56
 
 	mockExecutor := executor.NewMockCommandExecutor()
 	stager := NewStager(mockExecutor)
-	
+
 	// This should fail because new files are considered "dirty" staging area
 	err = stager.StageHunks([]string{"new_file.txt:1"}, patchFile)
-	
+
 	if err == nil {
 		t.Fatal("Expected error for new file in staging area")
 	}
-	
+
 	safetyErr, ok := err.(*SafetyError)
 	if !ok {
 		t.Fatalf("Expected SafetyError, got %T", err)
 	}
-	
+
 	if safetyErr.Type != StagingAreaNotClean {
 		t.Errorf("Expected StagingAreaNotClean error type, got %v", safetyErr.Type)
 	}
@@ -268,7 +269,7 @@ func TestStager_generateDetailedStagingError(t *testing.T) {
 				Category:    ActionCategoryCommit,
 			},
 			{
-				Description: "Unstage all files", 
+				Description: "Unstage all files",
 				Commands:    []string{"git reset HEAD"},
 				Priority:    2,
 				Category:    ActionCategoryUnstage,
@@ -288,30 +289,16 @@ func TestStager_generateDetailedStagingError(t *testing.T) {
 	}
 
 	// Check error contains the evaluation message
-	if !contains(safetyErr.Message, "Files are already staged") {
+	if !strings.Contains(safetyErr.Message, "Files are already staged") {
 		t.Errorf("Error message should contain evaluation message, got: %s", safetyErr.Message)
 	}
 
 	// Check advice contains recommended actions
-	if !contains(safetyErr.Advice, "git commit") {
+	if !strings.Contains(safetyErr.Advice, "git commit") {
 		t.Errorf("Advice should contain git commit command, got: %s", safetyErr.Advice)
 	}
 
-	if !contains(safetyErr.Advice, "git reset HEAD") {
+	if !strings.Contains(safetyErr.Advice, "git reset HEAD") {
 		t.Errorf("Advice should contain git reset command, got: %s", safetyErr.Advice)
 	}
-}
-
-// Helper function
-func contains(s, substr string) bool {
-	return len(s) > 0 && len(substr) > 0 && (s == substr || len(s) > len(substr) && containsSubstring(s, substr))
-}
-
-func containsSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

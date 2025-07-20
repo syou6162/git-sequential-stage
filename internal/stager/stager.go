@@ -27,9 +27,6 @@ func NewStager(exec executor.CommandExecutor) *Stager {
 	}
 }
 
-
-
-
 // extractHunkContent extracts the content for a specific hunk
 func (s *Stager) extractHunkContent(hunk *HunkInfo, patchFile string) ([]byte, error) {
 	// For new files or binary files, return the entire file diff
@@ -39,22 +36,22 @@ func (s *Stager) extractHunkContent(hunk *HunkInfo, patchFile string) ([]byte, e
 		}
 		return nil, fmt.Errorf("file object is nil for %s", hunk.FilePath)
 	}
-	
+
 	// For single hunks with Fragment
 	if hunk.Fragment != nil && hunk.File != nil {
 		return s.generateHunkPatch(hunk)
 	}
-	
+
 	return nil, fmt.Errorf("fragment or file object is nil for %s", hunk.FilePath)
 }
 
 // generateHunkPatch generates a patch for a single hunk using go-gitdiff objects
 func (s *Stager) generateHunkPatch(hunk *HunkInfo) ([]byte, error) {
 	var result strings.Builder
-	
+
 	file := hunk.File
 	fragment := hunk.Fragment
-	
+
 	// Write file header
 	result.WriteString(fmt.Sprintf("diff --git a/%s b/%s\n", file.OldName, file.NewName))
 	if file.OldMode != file.NewMode && file.OldMode != 0 && file.NewMode != 0 {
@@ -71,7 +68,7 @@ func (s *Stager) generateHunkPatch(hunk *HunkInfo) ([]byte, error) {
 		result.WriteString(fmt.Sprintf("rename from %s\n", file.OldName))
 		result.WriteString(fmt.Sprintf("rename to %s\n", file.NewName))
 	}
-	
+
 	// Write index line
 	if file.OldOIDPrefix != "" && file.NewOIDPrefix != "" {
 		result.WriteString(fmt.Sprintf("index %s..%s", file.OldOIDPrefix, file.NewOIDPrefix))
@@ -80,14 +77,14 @@ func (s *Stager) generateHunkPatch(hunk *HunkInfo) ([]byte, error) {
 		}
 		result.WriteString("\n")
 	}
-	
+
 	// Write file paths
 	result.WriteString(fmt.Sprintf("--- a/%s\n", file.OldName))
 	result.WriteString(fmt.Sprintf("+++ b/%s\n", file.NewName))
-	
+
 	// Write the fragment
 	result.WriteString(fragment.String())
-	
+
 	return []byte(result.String()), nil
 }
 
@@ -106,12 +103,12 @@ func (s *Stager) calculatePatchIDsForHunks(allHunks []HunkInfo, patchContent str
 			setFallbackPatchID(&allHunks[i])
 			continue
 		}
-		
+
 		if len(hunkContent) == 0 {
 			setFallbackPatchID(&allHunks[i])
 			continue
 		}
-		
+
 		patchID, err := s.calculatePatchIDStable(hunkContent)
 		if err != nil {
 			// Continue without patch ID
@@ -120,7 +117,7 @@ func (s *Stager) calculatePatchIDsForHunks(allHunks []HunkInfo, patchContent str
 			allHunks[i].PatchID = patchID
 		}
 	}
-	
+
 	return nil
 }
 
@@ -145,7 +142,7 @@ func buildTargetIDs(hunkSpecs []string, allHunks []HunkInfo) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		
+
 		// Find matching hunks in allHunks
 		for _, hunkNum := range hunkNumbers {
 			found := false
@@ -173,7 +170,7 @@ func (s *Stager) performSafetyChecks(patchContent string) error {
 			"Failed to evaluate patch content safety",
 			"Check if the patch content is valid", err)
 	}
-	
+
 	// Intent-to-add files are allowed to continue
 	if evaluation.AllowContinue {
 		if len(evaluation.IntentToAddFiles) > 0 {
@@ -182,12 +179,12 @@ func (s *Stager) performSafetyChecks(patchContent string) error {
 		}
 		return nil
 	}
-	
+
 	// Not clean and not allowed to continue
 	if !evaluation.IsClean {
 		return s.generateDetailedStagingError(evaluation)
 	}
-	
+
 	return nil
 }
 
@@ -195,17 +192,17 @@ func (s *Stager) performSafetyChecks(patchContent string) error {
 func (s *Stager) generateDetailedStagingError(evaluation *StagingAreaEvaluation) error {
 	// Build a comprehensive error message
 	message := "Staging area is not clean. " + evaluation.ErrorMessage
-	
+
 	// Build advice from recommended actions
 	var advice strings.Builder
 	advice.WriteString("Please resolve the staging area issues first:\n")
-	
+
 	// Group actions by category for better organization
 	actionsByCategory := make(map[ActionCategory][]RecommendedAction)
 	for _, action := range evaluation.RecommendedActions {
 		actionsByCategory[action.Category] = append(actionsByCategory[action.Category], action)
 	}
-	
+
 	// Display actions in a logical order
 	categories := []ActionCategory{ActionCategoryInfo, ActionCategoryCommit, ActionCategoryUnstage, ActionCategoryReset}
 	for _, category := range categories {
@@ -220,7 +217,7 @@ func (s *Stager) generateDetailedStagingError(evaluation *StagingAreaEvaluation)
 			}
 		}
 	}
-	
+
 	return NewSafetyError(StagingAreaNotClean, message, advice.String(), nil)
 }
 
@@ -234,24 +231,24 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
 		if err != nil {
 			return NewFileNotFoundError(patchFile, err)
 		}
-		
+
 		if err := s.performSafetyChecks(string(patchContent)); err != nil {
 			return err
 		}
 	}
-	
+
 	// Phase 1: Preparation
 	allHunks, err := s.preparePatchData(patchFile)
 	if err != nil {
 		return err
 	}
-	
+
 	// Build target ID list
 	targetIDs, err := buildTargetIDs(hunkSpecs, allHunks)
 	if err != nil {
 		return err
 	}
-	
+
 	// Phase 2: Execution - Sequential staging loop
 	for len(targetIDs) > 0 {
 		// Get target files
@@ -259,42 +256,42 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
 		if err != nil {
 			return NewInvalidArgumentError("failed to collect target files", err)
 		}
-		
+
 		// Get current diff
 		diffOutput, err := s.getCurrentDiff(targetFiles)
 		if err != nil {
 			return err
 		}
-		
+
 		// Parse current diff
 		currentHunks, err := parsePatchFileWithGitDiff(string(diffOutput))
 		if err != nil {
 			s.logger.Error("Failed to parse current diff: %v", err)
 			return NewParsingError("current diff", err)
 		}
-		
+
 		diffLines := strings.Split(string(diffOutput), "\n")
-		
+
 		// Create temp file for filterdiff
 		tmpFileName, cleanup, err := s.createTempDiffFile(diffOutput)
 		if err != nil {
 			return err
 		}
 		defer cleanup()
-		
+
 		// Find and apply matching hunk
 		newTargetIDs, applied, err := s.findAndApplyMatchingHunk(currentHunks, diffLines, tmpFileName, targetIDs)
 		if err != nil {
 			return err
 		}
-		
+
 		if !applied {
 			return NewHunkNotFoundError(fmt.Sprintf("hunks with patch IDs: %v", targetIDs), nil)
 		}
-		
+
 		targetIDs = newTargetIDs
 	}
-	
+
 	return nil
 }
 
@@ -305,18 +302,18 @@ func (s *Stager) preparePatchData(patchFile string) ([]HunkInfo, error) {
 		return nil, NewFileNotFoundError(patchFile, err)
 	}
 	patchContent := string(content)
-	
+
 	allHunks, err := parsePatchFileWithGitDiff(patchContent)
 	if err != nil {
 		return nil, NewParsingError("patch file", err)
 	}
-	
+
 	// Calculate patch IDs for all hunks
 	if err := s.calculatePatchIDsForHunks(allHunks, patchContent, patchFile); err != nil {
 		s.logger.Error("Failed to calculate patch IDs: %v", err)
 		return nil, NewGitCommandError("patch-id calculation", err)
 	}
-	
+
 	return allHunks, nil
 }
 
@@ -327,12 +324,12 @@ func (s *Stager) getCurrentDiff(targetFiles map[string]bool) ([]byte, error) {
 	for file := range targetFiles {
 		diffArgs = append(diffArgs, file)
 	}
-	
+
 	diffOutput, err := s.executor.Execute("git", diffArgs...)
 	if err != nil {
 		return nil, NewGitCommandError("git diff", err)
 	}
-	
+
 	return diffOutput, nil
 }
 
@@ -342,17 +339,17 @@ func (s *Stager) createTempDiffFile(diffOutput []byte) (string, func(), error) {
 	if err != nil {
 		return "", nil, NewIOError("create temp file", err)
 	}
-	
+
 	cleanup := func() {
 		tmpFile.Close()
 		os.Remove(tmpFile.Name())
 	}
-	
+
 	if _, err := tmpFile.Write(diffOutput); err != nil {
 		cleanup()
 		return "", nil, NewIOError("write temp file", err)
 	}
-	
+
 	tmpFile.Close()
 	return tmpFile.Name(), cleanup, nil
 }
@@ -364,12 +361,12 @@ func (s *Stager) findAndApplyMatchingHunk(currentHunks []HunkInfo, diffLines []s
 		if err != nil || len(hunkContent) == 0 {
 			continue
 		}
-		
+
 		currentPatchID, err := s.calculatePatchIDStable(hunkContent)
 		if err != nil {
 			continue
 		}
-		
+
 		// Check if this hunk matches any target
 		for i, targetID := range targetIDs {
 			if currentPatchID == targetID {
@@ -378,14 +375,14 @@ func (s *Stager) findAndApplyMatchingHunk(currentHunks []HunkInfo, diffLines []s
 				if err := s.applyHunk(hunkContent, targetID); err != nil {
 					return nil, false, err
 				}
-				
+
 				// Remove from target list
 				targetIDs = append(targetIDs[:i], targetIDs[i+1:]...)
 				return targetIDs, true, nil
 			}
 		}
 	}
-	
+
 	return targetIDs, false, nil
 }
 
@@ -406,7 +403,7 @@ func (s *Stager) calculatePatchIDStable(hunkPatch []byte) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	// git patch-id output format: "patch-id commit-id"
 	parts := strings.Fields(string(output))
 	if len(parts) > 0 {
@@ -416,10 +413,6 @@ func (s *Stager) calculatePatchIDStable(hunkPatch []byte) (string, error) {
 		}
 		return parts[0], nil
 	}
-	
+
 	return "", NewGitCommandError("git patch-id", fmt.Errorf("unexpected output"))
 }
-
-
-
-
