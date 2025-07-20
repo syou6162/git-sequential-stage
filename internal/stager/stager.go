@@ -162,10 +162,10 @@ func buildTargetIDs(hunkSpecs []string, allHunks []HunkInfo) ([]string, error) {
 }
 
 // performSafetyChecks checks the safety of the staging area using hybrid approach
-func (s *Stager) performSafetyChecks(patchContent string) error {
+func (s *Stager) performSafetyChecks(patchContent string, targetFiles map[string]bool) error {
 	// Use hybrid approach: patch-first with git command fallback
 	checker := NewSafetyChecker(".")
-	evaluation, err := checker.EvaluateWithFallback(patchContent)
+	evaluation, err := checker.EvaluateWithFallbackAndTargets(patchContent, targetFiles)
 	if err != nil {
 		return NewSafetyError(GitOperationFailed,
 			"Failed to evaluate staging area safety",
@@ -232,7 +232,13 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
 		return NewFileNotFoundError(patchFile, err)
 	}
 
-	if err := s.performSafetyChecks(string(patchContent)); err != nil {
+	// Get target files for safety check
+	targetFiles, err := collectTargetFiles(hunkSpecs)
+	if err != nil {
+		return NewInvalidArgumentError("failed to collect target files", err)
+	}
+
+	if err := s.performSafetyChecks(string(patchContent), targetFiles); err != nil {
 		return err
 	}
 

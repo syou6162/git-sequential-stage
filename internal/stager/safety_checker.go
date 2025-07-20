@@ -379,6 +379,12 @@ func (s *SafetyChecker) CheckActualStagingArea() (*StagingAreaEvaluation, error)
 // EvaluateWithFallback performs hybrid evaluation: patch-first with git command fallback
 // This is the recommended API for safety checking
 func (s *SafetyChecker) EvaluateWithFallback(patchContent string) (*StagingAreaEvaluation, error) {
+	return s.EvaluateWithFallbackAndTargets(patchContent, nil)
+}
+
+// EvaluateWithFallbackAndTargets performs hybrid evaluation with target files consideration
+// When targetFiles is provided, intent-to-add files in the target list are allowed to have staged hunks
+func (s *SafetyChecker) EvaluateWithFallbackAndTargets(patchContent string, targetFiles map[string]bool) (*StagingAreaEvaluation, error) {
 	// First, try patch-based evaluation
 	patchEval, err := s.EvaluatePatchContent(patchContent)
 	if err != nil {
@@ -394,10 +400,73 @@ func (s *SafetyChecker) EvaluateWithFallback(patchContent string) (*StagingAreaE
 			return patchEval, nil
 		}
 
+		// Apply target files logic if provided
+		if targetFiles != nil {
+			s.adjustEvaluationForTargetFiles(actualEval, targetFiles)
+		}
+		
 		// Use actual evaluation as it's more accurate
 		return actualEval, nil
 	}
 
+	// Apply target files logic if provided
+	if targetFiles != nil {
+		s.adjustEvaluationForTargetFiles(patchEval, targetFiles)
+	}
+
 	// For empty patches or no executor, patch evaluation is sufficient
 	return patchEval, nil
+}
+
+// adjustEvaluationForTargetFiles adjusts the evaluation based on target files
+// If staged files are in the target files list, they are allowed regardless of intent-to-add status
+func (s *SafetyChecker) adjustEvaluationForTargetFiles(evaluation *StagingAreaEvaluation, targetFiles map[string]bool) {
+	// If already allowed to continue, no adjustment needed
+	if evaluation.AllowContinue {
+		return
+	}
+
+	// Check if non-intent-to-add staged files are actually target files
+	nonIntentToAddStaged := s.filterNonIntentToAdd(evaluation.StagedFiles, evaluation.IntentToAddFiles)
+	
+	// Create a map of intent-to-add files for quick lookup
+	intentToAddMap := make(map[string]bool)
+	for _, file := range evaluation.IntentToAddFiles {
+		intentToAddMap[file] = true
+	}
+
+	// Check if all staged files are either:
+	// 1. Intent-to-add files, OR
+	// 2. In the target files list (regardless of intent-to-add status)
+	allowContinue := true
+	for _, stagedFile := range evaluation.StagedFiles {
+		// If it's an intent-to-add file, it's allowed
+		if intentToAddMap[stagedFile] {
+			continue
+		}
+		
+		// Check if this staged file is in the target files
+		// This handles the case where a new file is being staged selectively
+		if !targetFiles[stagedFile] {
+			// Found a staged file that is neither intent-to-add nor a target file
+			allowContinue = false
+			break
+		}
+	}
+
+	// Update the evaluation  
+	if allowContinue {
+		evaluation.AllowContinue = true
+		if len(nonIntentToAddStaged) > 0 {
+			evaluation.ErrorMessage = ""
+			evaluation.RecommendedActions = []RecommendedAction{
+				{
+					Description: "Staging hunks from target files (semantic_commit workflow)",
+					Commands:    []string{"# These changes will be processed normally"},
+					Priority:    1,
+					Category:    ActionCategoryInfo,
+				},
+			}
+		}
+	}
 }
