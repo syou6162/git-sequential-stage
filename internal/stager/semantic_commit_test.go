@@ -22,12 +22,7 @@ type testRepo struct {
 func setupTestRepo(t *testing.T, testName string) *testRepo {
 	t.Helper()
 	
-	// Enable safety check for the test
-	oldEnv := os.Getenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK")
-	t.Setenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK", "true")
-	t.Cleanup(func() {
-		os.Setenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK", oldEnv)
-	})
+	// Safety checks are enabled by default, no need to set environment variable
 	
 	// Skip if git is not available
 	if _, err := exec.LookPath("git"); err != nil {
