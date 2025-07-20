@@ -5,7 +5,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/bluekeyes/go-gitdiff/gitdiff"
 	"github.com/syou6162/git-sequential-stage/internal/executor"
 )
 
@@ -84,7 +83,8 @@ func (ac ActionCategory) String() string {
 // SafetyChecker provides functionality to check the safety of staging operations
 // Uses a hybrid approach: patch-based analysis with git command fallback when necessary
 type SafetyChecker struct {
-	executor executor.CommandExecutor // Used only when patch-based analysis is insufficient
+	statusReader   GitStatusReader
+	patchAnalyzer  PatchAnalyzer
 }
 
 // StagingAreaEvaluation contains the result of evaluating the staging area
@@ -109,99 +109,52 @@ type RecommendedAction struct {
 // NewSafetyChecker creates a new SafetyChecker instance
 // Accepts an optional executor for hybrid approach (nil = patch-only mode)
 func NewSafetyChecker(executor executor.CommandExecutor) *SafetyChecker {
+	var statusReader GitStatusReader
+	if executor != nil {
+		statusReader = NewGitStatusReader(executor)
+	}
 	return &SafetyChecker{
-		executor: executor,
+		statusReader:  statusReader,
+		patchAnalyzer: NewPatchAnalyzer(),
 	}
 }
 
 // EvaluatePatchContent evaluates safety from patch content (git-command-free analysis)
 func (s *SafetyChecker) EvaluatePatchContent(patchContent string) (*StagingAreaEvaluation, error) {
-	filesByStatus := make(map[FileStatus][]string)
-	var allStagedFiles []string
-	var intentToAddFiles []string
+	// Use patch analyzer to analyze the patch
+	analysisResult, err := s.patchAnalyzer.AnalyzePatch(patchContent)
+	if err != nil {
+		return nil, err
+	}
 
-	// If no patch content, staging area is clean
-	if strings.TrimSpace(patchContent) == "" {
+	// If no files in the analysis, staging area is clean
+	if len(analysisResult.AllFiles) == 0 {
 		return &StagingAreaEvaluation{
 			IsClean:          true,
 			StagedFiles:      []string{},
 			IntentToAddFiles: []string{},
 			AllowContinue:    true,
-			FilesByStatus:    filesByStatus,
+			FilesByStatus:    analysisResult.FilesByStatus,
 		}, nil
 	}
 
-	// Parse the patch using go-gitdiff for comprehensive analysis
-	files, _, err := gitdiff.Parse(strings.NewReader(patchContent))
-	if err != nil {
-		return nil, NewSafetyError(GitOperationFailed,
-			"Failed to parse patch content",
-			"Check if the patch content is valid", err)
-	}
-
-	// Check if we have a valid patch with actual file changes
-	if len(files) == 0 && strings.TrimSpace(patchContent) != "" {
-		// Non-empty content but no files parsed - likely invalid patch format
-		return nil, NewSafetyError(GitOperationFailed,
-			"Invalid patch format - no file changes detected",
-			"Ensure the patch content is in valid git diff format", nil)
-	}
-
-	// Extract file information from go-gitdiff analysis
-	for _, file := range files {
-		filename := file.NewName
-		if file.IsDelete {
-			filename = file.OldName
-		}
-
-		// Add to all staged files list
-		allStagedFiles = append(allStagedFiles, filename)
-
-		// Detect intent-to-add files (empty blobs in new files, but not binary)
-		if file.IsNew && len(file.TextFragments) == 0 && !file.IsBinary {
-			intentToAddFiles = append(intentToAddFiles, filename)
-		}
-
-		// Categorize files based on go-gitdiff detection
-		switch {
-		case file.IsBinary:
-			// Handle binary files first (they can also be new/modified/etc)
-			filesByStatus[FileStatusBinary] = append(filesByStatus[FileStatusBinary], filename)
-		case file.IsNew:
-			filesByStatus[FileStatusAdded] = append(filesByStatus[FileStatusAdded], filename)
-		case file.IsDelete:
-			filesByStatus[FileStatusDeleted] = append(filesByStatus[FileStatusDeleted], filename)
-		case file.IsRename:
-			// Store rename with proper notation
-			renameNotation := file.OldName + " -> " + file.NewName
-			filesByStatus[FileStatusRenamed] = append(filesByStatus[FileStatusRenamed], renameNotation)
-		case file.IsCopy:
-			// Store copy with proper notation
-			copyNotation := file.OldName + " -> " + file.NewName
-			filesByStatus[FileStatusCopied] = append(filesByStatus[FileStatusCopied], copyNotation)
-		default:
-			// Regular modifications
-			filesByStatus[FileStatusModified] = append(filesByStatus[FileStatusModified], filename)
-		}
-	}
-
 	// Determine if staging area is clean (only intent-to-add files allowed)
-	nonIntentToAddStaged := s.filterNonIntentToAdd(allStagedFiles, intentToAddFiles)
-	isClean := len(allStagedFiles) == 0
+	nonIntentToAddStaged := s.filterNonIntentToAdd(analysisResult.AllFiles, analysisResult.IntentToAddFiles)
+	isClean := len(analysisResult.AllFiles) == 0
 	allowContinue := len(nonIntentToAddStaged) == 0
 
 	evaluation := &StagingAreaEvaluation{
 		IsClean:          isClean,
-		StagedFiles:      allStagedFiles,
-		IntentToAddFiles: intentToAddFiles,
+		StagedFiles:      analysisResult.AllFiles,
+		IntentToAddFiles: analysisResult.IntentToAddFiles,
 		AllowContinue:    allowContinue,
-		FilesByStatus:    filesByStatus,
+		FilesByStatus:    analysisResult.FilesByStatus,
 	}
 
 	// Generate error message and recommended actions if not clean
 	if !isClean {
-		evaluation.ErrorMessage = s.buildStagingErrorMessage(filesByStatus, intentToAddFiles)
-		evaluation.RecommendedActions = s.buildRecommendedActions(filesByStatus, intentToAddFiles)
+		evaluation.ErrorMessage = s.buildStagingErrorMessage(analysisResult.FilesByStatus, analysisResult.IntentToAddFiles)
+		evaluation.RecommendedActions = s.buildRecommendedActions(analysisResult.FilesByStatus, analysisResult.IntentToAddFiles)
 	}
 
 	return evaluation, nil
@@ -360,110 +313,35 @@ func (s *SafetyChecker) buildRecommendedActions(filesByStatus map[FileStatus][]s
 // CheckActualStagingArea checks the actual staging area using git commands
 // This method is more accurate but requires git command execution
 func (s *SafetyChecker) CheckActualStagingArea() (*StagingAreaEvaluation, error) {
-	if s.executor == nil {
+	if s.statusReader == nil {
 		return nil, NewSafetyError(GitOperationFailed,
-			"Executor not available for git command execution",
+			"GitStatusReader not available for git command execution",
 			"Initialize SafetyChecker with an executor for git commands", nil)
 	}
 
-	filesByStatus := make(map[FileStatus][]string)
-	var allStagedFiles []string
-	var intentToAddFiles []string
-
-	// Get the actual staging area status using git status
-	output, err := s.executor.Execute("git", "status", "--porcelain")
+	// Use status reader to get git status information
+	statusInfo, err := s.statusReader.ReadStatus()
 	if err != nil {
-		return nil, NewGitCommandError("git status", err)
-	}
-
-	// Parse git status output
-	outputStr := string(output)
-	if strings.TrimSpace(outputStr) == "" {
-		// Empty output means clean staging area
-		return &StagingAreaEvaluation{
-			IsClean:          true,
-			StagedFiles:      []string{},
-			IntentToAddFiles: []string{},
-			AllowContinue:    true,
-			FilesByStatus:    filesByStatus,
-		}, nil
-	}
-
-
-	// Process each line of git status output
-	lines := strings.Split(outputStr, "\n")
-	for _, line := range lines {
-		// Skip empty lines
-		if line == "" {
-			continue
-		}
-		if len(line) < 3 {
-			continue
-		}
-
-		statusCode := line[0:2]
-		filename := strings.TrimSpace(line[2:])
-
-		// Only process staged changes (first character is not space)
-		if statusCode[0] == GitStatusCodeSpace {
-			// Special case: ' A' indicates intent-to-add file
-			if statusCode[1] == GitStatusCodeAdded {
-				allStagedFiles = append(allStagedFiles, filename)
-				filesByStatus[FileStatusAdded] = append(filesByStatus[FileStatusAdded], filename)
-				intentToAddFiles = append(intentToAddFiles, filename)
-			}
-			continue
-		}
-
-		// Handle rename/copy specially
-		if strings.Contains(line, " -> ") {
-			parts := strings.Split(filename, " -> ")
-			if len(parts) == 2 {
-				oldName := parts[0]
-				newName := parts[1]
-				if statusCode[0] == GitStatusCodeRenamed {
-					filesByStatus[FileStatusRenamed] = append(filesByStatus[FileStatusRenamed], oldName+" -> "+newName)
-					allStagedFiles = append(allStagedFiles, newName)
-				} else if statusCode[0] == GitStatusCodeCopied {
-					filesByStatus[FileStatusCopied] = append(filesByStatus[FileStatusCopied], oldName+" -> "+newName)
-					allStagedFiles = append(allStagedFiles, newName)
-				}
-				continue
-			}
-		}
-
-		// Add to staged files list
-		allStagedFiles = append(allStagedFiles, filename)
-
-		// Categorize based on status code
-		switch statusCode[0] {
-		case GitStatusCodeModified:
-			filesByStatus[FileStatusModified] = append(filesByStatus[FileStatusModified], filename)
-		case GitStatusCodeAdded:
-			filesByStatus[FileStatusAdded] = append(filesByStatus[FileStatusAdded], filename)
-			// Regular added files (not intent-to-add) are handled here
-		case GitStatusCodeDeleted:
-			filesByStatus[FileStatusDeleted] = append(filesByStatus[FileStatusDeleted], filename)
-		}
+		return nil, err
 	}
 
 	// Determine if staging area is clean
-	nonIntentToAddStaged := s.filterNonIntentToAdd(allStagedFiles, intentToAddFiles)
-	isClean := len(allStagedFiles) == 0
+	nonIntentToAddStaged := s.filterNonIntentToAdd(statusInfo.StagedFiles, statusInfo.IntentToAddFiles)
+	isClean := len(statusInfo.StagedFiles) == 0
 	allowContinue := len(nonIntentToAddStaged) == 0
 
 	evaluation := &StagingAreaEvaluation{
 		IsClean:          isClean,
-		StagedFiles:      allStagedFiles,
-		IntentToAddFiles: intentToAddFiles,
+		StagedFiles:      statusInfo.StagedFiles,
+		IntentToAddFiles: statusInfo.IntentToAddFiles,
 		AllowContinue:    allowContinue,
-		FilesByStatus:    filesByStatus,
+		FilesByStatus:    statusInfo.FilesByStatus,
 	}
 
 	// Generate error message and recommended actions if not clean
 	if !isClean {
-		evaluation.ErrorMessage = s.buildStagingErrorMessage(filesByStatus, intentToAddFiles)
-		evaluation.RecommendedActions = s.buildRecommendedActions(filesByStatus, intentToAddFiles)
+		evaluation.ErrorMessage = s.buildStagingErrorMessage(statusInfo.FilesByStatus, statusInfo.IntentToAddFiles)
+		evaluation.RecommendedActions = s.buildRecommendedActions(statusInfo.FilesByStatus, statusInfo.IntentToAddFiles)
 	}
 
 	return evaluation, nil
@@ -479,8 +357,8 @@ func (s *SafetyChecker) EvaluateWithFallback(patchContent string) (*StagingAreaE
 		return nil, err
 	}
 
-	// If patch shows changes and we have an executor, verify with actual staging area
-	if len(patchEval.StagedFiles) > 0 && s.executor != nil {
+	// If patch shows changes and we have a status reader, verify with actual staging area
+	if len(patchEval.StagedFiles) > 0 && s.statusReader != nil {
 		// Get actual staging area state
 		actualEval, err := s.CheckActualStagingArea()
 		if err != nil {
