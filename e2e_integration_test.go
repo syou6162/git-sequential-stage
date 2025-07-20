@@ -204,16 +204,16 @@ func testSemanticCommitWorkflow(t *testing.T) {
 def goodbye():
     print("Goodbye!")`
 	
-	ioutil.WriteFile("greetings.py", []byte(code), 0644)
-	runCommand(t, dir, "git", "add", "-N", "greetings.py")
+	os.WriteFile("greetings.py", []byte(code), 0644)
+	testutils.RunCommand(t, dir, "git", "add", "-N", "greetings.py")
 
 	// Step 2: Generate patch
 	patchFile := filepath.Join(dir, "changes.patch")
-	output, _ := runCommand(t, dir, "git", "diff", "HEAD")
-	ioutil.WriteFile(patchFile, []byte(output), 0644)
+	output, _ := testutils.RunCommand(t, dir, "git", "diff", "HEAD")
+	os.WriteFile(patchFile, []byte(output), 0644)
 
 	// Step 3: Try to stage specific hunks
-	err = runGitSequentialStage([]string{"greetings.py:1"}, patchFile)
+	err := runGitSequentialStage([]string{"greetings.py:1"}, patchFile)
 	
 	// Note: Current implementation detects intent-to-add as staged NEW file
 	if err != nil {
