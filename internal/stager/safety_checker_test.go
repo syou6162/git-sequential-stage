@@ -6,7 +6,7 @@ import (
 )
 
 func TestNewSafetyChecker(t *testing.T) {
-	checker := NewSafetyChecker()
+	checker := NewSafetyChecker(nil)
 
 	if checker == nil {
 		t.Fatal("NewSafetyChecker returned nil")
@@ -14,7 +14,7 @@ func TestNewSafetyChecker(t *testing.T) {
 }
 
 func TestEvaluatePatchContent_EmptyPatch(t *testing.T) {
-	checker := NewSafetyChecker()
+	checker := NewSafetyChecker(nil) // nil executor for patch-only mode
 
 	evaluation, err := checker.EvaluatePatchContent("")
 
@@ -40,7 +40,7 @@ func TestEvaluatePatchContent_EmptyPatch(t *testing.T) {
 }
 
 func TestEvaluatePatchContent_ModifiedFiles(t *testing.T) {
-	checker := NewSafetyChecker()
+	checker := NewSafetyChecker(nil)
 
 	// Example patch with modified files
 	patchContent := `diff --git a/file1.txt b/file1.txt
@@ -106,7 +106,7 @@ index 606c2a0..5716ca5 100644
 }
 
 func TestEvaluatePatchContent_NewFiles(t *testing.T) {
-	checker := NewSafetyChecker()
+	checker := NewSafetyChecker(nil)
 
 	// Example patch with new files
 	patchContent := `diff --git a/new_file.txt b/new_file.txt
@@ -139,7 +139,7 @@ index 0000000..257cc56
 }
 
 func TestEvaluatePatchContent_DeletedFiles(t *testing.T) {
-	checker := NewSafetyChecker()
+	checker := NewSafetyChecker(nil)
 
 	// Example patch with deleted files
 	patchContent := `diff --git a/deleted_file.txt b/deleted_file.txt
@@ -172,7 +172,7 @@ index 257cc56..0000000
 }
 
 func TestEvaluatePatchContent_RenamedFiles(t *testing.T) {
-	checker := NewSafetyChecker()
+	checker := NewSafetyChecker(nil)
 
 	// Example patch with renamed files
 	patchContent := `diff --git a/old_name.txt b/new_name.txt
@@ -202,7 +202,7 @@ rename to new_name.txt
 }
 
 func TestEvaluatePatchContent_IntentToAddFiles(t *testing.T) {
-	checker := NewSafetyChecker()
+	checker := NewSafetyChecker(nil)
 
 	// Example patch with intent-to-add files (new file with no content)
 	patchContent := `diff --git a/intent_to_add.txt b/intent_to_add.txt
@@ -234,7 +234,7 @@ index 0000000..e69de29
 }
 
 func TestEvaluatePatchContent_MixedFiles(t *testing.T) {
-	checker := NewSafetyChecker()
+	checker := NewSafetyChecker(nil)
 
 	// Example patch with mixed file types
 	patchContent := `diff --git a/modified.txt b/modified.txt
@@ -275,7 +275,7 @@ index 0000000..e69de29
 }
 
 func TestEvaluatePatchContent_InvalidPatch(t *testing.T) {
-	checker := NewSafetyChecker()
+	checker := NewSafetyChecker(nil)
 
 	// Invalid patch content
 	patchContent := `This is not a valid patch`
@@ -302,7 +302,7 @@ func TestEvaluatePatchContent_InvalidPatch(t *testing.T) {
 }
 
 func TestEvaluatePatchContent_BinaryFiles(t *testing.T) {
-	checker := NewSafetyChecker()
+	checker := NewSafetyChecker(nil)
 
 	// Example patch with binary files
 	patchContent := `diff --git a/image.png b/image.png
