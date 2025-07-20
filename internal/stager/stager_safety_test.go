@@ -18,7 +18,7 @@ func TestStager_performSafetyChecks_CleanStagingArea(t *testing.T) {
 	}
 
 	// Empty patch content = clean staging area
-	err := stager.performSafetyChecks("")
+	err := stager.performSafetyChecks("", nil)
 
 	if err != nil {
 		t.Fatalf("Expected no error for clean staging area, got: %v", err)
@@ -42,7 +42,7 @@ index 257cc56..5716ca5 100644
 +bar
 `
 
-	err := stager.performSafetyChecks(patchContent)
+	err := stager.performSafetyChecks(patchContent, nil)
 
 	if err == nil {
 		t.Fatal("Expected error for modified files in staging area")
@@ -80,7 +80,7 @@ new file mode 100644
 index 0000000..e69de29
 `
 
-	err := stager.performSafetyChecks(patchContent)
+	err := stager.performSafetyChecks(patchContent, nil)
 
 	// Should not error for intent-to-add files
 	if err != nil {
@@ -108,7 +108,7 @@ new file mode 100644
 index 0000000..e69de29
 `
 
-	err := stager.performSafetyChecks(patchContent)
+	err := stager.performSafetyChecks(patchContent, nil)
 
 	// Should error because of modified file (not just intent-to-add)
 	if err == nil {

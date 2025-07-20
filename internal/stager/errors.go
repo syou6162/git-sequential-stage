@@ -2,6 +2,7 @@ package stager
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -27,6 +28,8 @@ const (
 	ErrorTypeIO
 	// ErrorTypePatchApplication is when applying a patch fails
 	ErrorTypePatchApplication
+	// ErrorTypeHunkCountExceeded is when requested hunk numbers exceed available hunks
+	ErrorTypeHunkCountExceeded
 )
 
 // StagerError represents a custom error with type classification
@@ -115,6 +118,26 @@ func NewIOError(operation string, err error) *StagerError {
 func NewPatchApplicationError(patchID string, err error) *StagerError {
 	return NewStagerError(ErrorTypePatchApplication,
 		fmt.Sprintf("failed to apply patch with ID %s", patchID), err)
+}
+
+// NewHunkCountExceededError creates an error when requested hunk numbers exceed available hunks
+func NewHunkCountExceededError(filePath string, maxHunks int, invalidHunks []int) *StagerError {
+	// Convert int slice to string slice
+	invalidHunksStr := make([]string, len(invalidHunks))
+	for i, hunk := range invalidHunks {
+		invalidHunksStr[i] = strconv.Itoa(hunk)
+	}
+
+	// Helper function to format plural correctly
+	pluralS := ""
+	if maxHunks != 1 {
+		pluralS = "s"
+	}
+
+	message := fmt.Sprintf("%s has %d hunk%s but requested [%s]",
+		filePath, maxHunks, pluralS, strings.Join(invalidHunksStr, ", "))
+
+	return NewStagerError(ErrorTypeHunkCountExceeded, message, nil)
 }
 
 // SafetyErrorType represents the type of safety-related error

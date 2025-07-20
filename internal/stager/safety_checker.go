@@ -379,6 +379,12 @@ func (s *SafetyChecker) CheckActualStagingArea() (*StagingAreaEvaluation, error)
 // EvaluateWithFallback performs hybrid evaluation: patch-first with git command fallback
 // This is the recommended API for safety checking
 func (s *SafetyChecker) EvaluateWithFallback(patchContent string) (*StagingAreaEvaluation, error) {
+	return s.EvaluateWithFallbackAndTargets(patchContent, nil)
+}
+
+// EvaluateWithFallbackAndTargets performs hybrid evaluation with target files consideration
+// When targetFiles is provided, intent-to-add files in the target list are allowed to have staged hunks
+func (s *SafetyChecker) EvaluateWithFallbackAndTargets(patchContent string, targetFiles map[string]bool) (*StagingAreaEvaluation, error) {
 	// First, try patch-based evaluation
 	patchEval, err := s.EvaluatePatchContent(patchContent)
 	if err != nil {
@@ -394,10 +400,109 @@ func (s *SafetyChecker) EvaluateWithFallback(patchContent string) (*StagingAreaE
 			return patchEval, nil
 		}
 
+		// Apply target files logic if provided
+		if targetFiles != nil {
+			s.adjustEvaluationForTargetFiles(actualEval, targetFiles)
+		}
+
 		// Use actual evaluation as it's more accurate
 		return actualEval, nil
 	}
 
+	// Apply target files logic if provided
+	if targetFiles != nil {
+		s.adjustEvaluationForTargetFiles(patchEval, targetFiles)
+	}
+
 	// For empty patches or no executor, patch evaluation is sufficient
 	return patchEval, nil
+}
+
+// adjustEvaluationForTargetFiles adjusts the evaluation based on target files
+// If staged files are in the target files list, they are allowed regardless of intent-to-add status
+func (s *SafetyChecker) adjustEvaluationForTargetFiles(evaluation *StagingAreaEvaluation, targetFiles map[string]bool) {
+	if evaluation.AllowContinue {
+		return
+	}
+
+	if s.shouldAllowTargetFileStaging(evaluation, targetFiles) {
+		s.updateEvaluationToAllow(evaluation, targetFiles)
+	}
+}
+
+// shouldAllowTargetFileStaging determines if staging should be allowed based on target files
+func (s *SafetyChecker) shouldAllowTargetFileStaging(evaluation *StagingAreaEvaluation, targetFiles map[string]bool) bool {
+	// First check: all staged files are either intent-to-add or target files
+	if s.allStagedFilesAreValid(evaluation, targetFiles) {
+		return true
+	}
+
+	// Special case: If we couldn't detect intent-to-add files properly,
+	// but all staged files are in the target list, allow continuation
+	return s.handleIntentToAddDetectionFallback(evaluation, targetFiles)
+}
+
+// allStagedFilesAreValid checks if all staged files are either intent-to-add or target files
+func (s *SafetyChecker) allStagedFilesAreValid(evaluation *StagingAreaEvaluation, targetFiles map[string]bool) bool {
+	intentToAddMap := s.createIntentToAddMap(evaluation.IntentToAddFiles)
+
+	for _, stagedFile := range evaluation.StagedFiles {
+		// If it's an intent-to-add file, it's allowed
+		if intentToAddMap[stagedFile] {
+			continue
+		}
+
+		// Check if this staged file is in the target files
+		if !targetFiles[stagedFile] {
+			// Found a staged file that is neither intent-to-add nor a target file
+			return false
+		}
+	}
+
+	return true
+}
+
+// createIntentToAddMap creates a map for quick lookup of intent-to-add files
+func (s *SafetyChecker) createIntentToAddMap(intentToAddFiles []string) map[string]bool {
+	intentToAddMap := make(map[string]bool)
+	for _, file := range intentToAddFiles {
+		intentToAddMap[file] = true
+	}
+	return intentToAddMap
+}
+
+// handleIntentToAddDetectionFallback handles the case where intent-to-add detection might have failed
+func (s *SafetyChecker) handleIntentToAddDetectionFallback(evaluation *StagingAreaEvaluation, targetFiles map[string]bool) bool {
+	// Only apply fallback if no intent-to-add files were detected
+	if len(evaluation.IntentToAddFiles) > 0 {
+		return false
+	}
+
+	// Re-check if all staged files are in target files
+	for _, stagedFile := range evaluation.StagedFiles {
+		if !targetFiles[stagedFile] {
+			return false
+		}
+	}
+
+	return true
+}
+
+// updateEvaluationToAllow updates the evaluation to allow continuation
+func (s *SafetyChecker) updateEvaluationToAllow(evaluation *StagingAreaEvaluation, targetFiles map[string]bool) {
+	evaluation.AllowContinue = true
+
+	// Check if there are non-intent-to-add staged files to update messaging
+	nonIntentToAddStaged := s.filterNonIntentToAdd(evaluation.StagedFiles, evaluation.IntentToAddFiles)
+	if len(nonIntentToAddStaged) > 0 {
+		evaluation.ErrorMessage = ""
+		evaluation.RecommendedActions = []RecommendedAction{
+			{
+				Description: "Staging hunks from target files (semantic_commit workflow)",
+				Commands:    []string{"# These changes will be processed normally"},
+				Priority:    1,
+				Category:    ActionCategoryInfo,
+			},
+		}
+	}
 }

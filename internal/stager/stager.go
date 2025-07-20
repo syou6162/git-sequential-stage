@@ -136,6 +136,24 @@ func collectTargetFiles(hunkSpecs []string) (map[string]bool, error) {
 
 // buildTargetIDs builds a list of patch IDs from hunk specifications
 func buildTargetIDs(hunkSpecs []string, allHunks []HunkInfo) ([]string, error) {
+	// Build maps for O(1) lookup performance
+	fileHunkCounts := make(map[string]int)
+	fileHunkMap := make(map[string]map[int]string) // file -> (hunkIndex -> patchID)
+
+	// Single pass to build both maps - O(H)
+	for _, hunk := range allHunks {
+		// Track max hunk counts for error reporting
+		if hunk.IndexInFile > fileHunkCounts[hunk.FilePath] {
+			fileHunkCounts[hunk.FilePath] = hunk.IndexInFile
+		}
+
+		// Build file->hunk->patchID map for O(1) lookup
+		if fileHunkMap[hunk.FilePath] == nil {
+			fileHunkMap[hunk.FilePath] = make(map[int]string)
+		}
+		fileHunkMap[hunk.FilePath][hunk.IndexInFile] = hunk.PatchID
+	}
+
 	var targetIDs []string
 	for _, spec := range hunkSpecs {
 		filePath, hunkNumbers, err := ParseHunkSpec(spec)
@@ -143,29 +161,42 @@ func buildTargetIDs(hunkSpecs []string, allHunks []HunkInfo) ([]string, error) {
 			return nil, err
 		}
 
-		// Find matching hunks in allHunks
+		// Check if file exists in patch
+		maxHunks, fileExists := fileHunkCounts[filePath]
+		if !fileExists {
+			return nil, NewHunkNotFoundError(fmt.Sprintf("file %s not found in patch", filePath), nil)
+		}
+
+		// Check for hunk numbers that exceed available hunks
+		var invalidHunks []int
 		for _, hunkNum := range hunkNumbers {
-			found := false
-			for _, hunk := range allHunks {
-				if hunk.FilePath == filePath && hunk.IndexInFile == hunkNum {
-					targetIDs = append(targetIDs, hunk.PatchID)
-					found = true
-					break
-				}
+			if hunkNum > maxHunks {
+				invalidHunks = append(invalidHunks, hunkNum)
 			}
+		}
+
+		if len(invalidHunks) > 0 {
+			return nil, NewHunkCountExceededError(filePath, maxHunks, invalidHunks)
+		}
+
+		// Find matching hunks using O(1) map lookup - O(N) total
+		hunkLookup := fileHunkMap[filePath]
+		for _, hunkNum := range hunkNumbers {
+			patchID, found := hunkLookup[hunkNum]
 			if !found {
 				return nil, NewHunkNotFoundError(fmt.Sprintf("hunk %d in file %s", hunkNum, filePath), nil)
 			}
+			targetIDs = append(targetIDs, patchID)
 		}
 	}
 	return targetIDs, nil
 }
 
 // performSafetyChecks checks the safety of the staging area using hybrid approach
-func (s *Stager) performSafetyChecks(patchContent string) error {
+func (s *Stager) performSafetyChecks(patchContent string, targetFiles map[string]bool) error {
 	// Use hybrid approach: patch-first with git command fallback
 	checker := NewSafetyChecker(".")
-	evaluation, err := checker.EvaluateWithFallback(patchContent)
+	evaluation, err := checker.EvaluateWithFallbackAndTargets(patchContent, targetFiles)
 	if err != nil {
 		return NewSafetyError(GitOperationFailed,
 			"Failed to evaluate staging area safety",
@@ -232,7 +263,13 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
 		return NewFileNotFoundError(patchFile, err)
 	}
 
-	if err := s.performSafetyChecks(string(patchContent)); err != nil {
+	// Get target files for safety check
+	targetFiles, err := collectTargetFiles(hunkSpecs)
+	if err != nil {
+		return NewInvalidArgumentError("failed to collect target files", err)
+	}
+
+	if err := s.performSafetyChecks(string(patchContent), targetFiles); err != nil {
 		return err
 	}
 
