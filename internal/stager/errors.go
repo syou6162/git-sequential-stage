@@ -27,6 +27,8 @@ const (
 	ErrorTypeIO
 	// ErrorTypePatchApplication is when applying a patch fails
 	ErrorTypePatchApplication
+	// ErrorTypeHunkCountExceeded is when requested hunk numbers exceed available hunks
+	ErrorTypeHunkCountExceeded
 )
 
 // StagerError represents a custom error with type classification
@@ -115,6 +117,22 @@ func NewIOError(operation string, err error) *StagerError {
 func NewPatchApplicationError(patchID string, err error) *StagerError {
 	return NewStagerError(ErrorTypePatchApplication,
 		fmt.Sprintf("failed to apply patch with ID %s", patchID), err)
+}
+
+// NewHunkCountExceededError creates an error when requested hunk numbers exceed available hunks
+func NewHunkCountExceededError(filePath string, maxHunks int, invalidHunks []int) *StagerError {
+	var invalidHunksList strings.Builder
+	for i, hunk := range invalidHunks {
+		if i > 0 {
+			invalidHunksList.WriteString(", ")
+		}
+		invalidHunksList.WriteString(fmt.Sprintf("%d", hunk))
+	}
+	
+	message := fmt.Sprintf("hunk count exceeded for file %s: file has %d hunks, but requested hunks [%s]", 
+		filePath, maxHunks, invalidHunksList.String())
+	
+	return NewStagerError(ErrorTypeHunkCountExceeded, message, nil)
 }
 
 // SafetyErrorType represents the type of safety-related error

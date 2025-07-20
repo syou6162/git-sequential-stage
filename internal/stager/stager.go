@@ -136,11 +136,37 @@ func collectTargetFiles(hunkSpecs []string) (map[string]bool, error) {
 
 // buildTargetIDs builds a list of patch IDs from hunk specifications
 func buildTargetIDs(hunkSpecs []string, allHunks []HunkInfo) ([]string, error) {
+	// First, build a map of file -> max hunk numbers for better error reporting
+	fileHunkCounts := make(map[string]int)
+	for _, hunk := range allHunks {
+		if hunk.IndexInFile > fileHunkCounts[hunk.FilePath] {
+			fileHunkCounts[hunk.FilePath] = hunk.IndexInFile
+		}
+	}
+
 	var targetIDs []string
 	for _, spec := range hunkSpecs {
 		filePath, hunkNumbers, err := ParseHunkSpec(spec)
 		if err != nil {
 			return nil, err
+		}
+
+		// Check if file exists in patch
+		maxHunks, fileExists := fileHunkCounts[filePath]
+		if !fileExists {
+			return nil, NewHunkNotFoundError(fmt.Sprintf("file %s not found in patch", filePath), nil)
+		}
+
+		// Check for hunk numbers that exceed available hunks
+		var invalidHunks []int
+		for _, hunkNum := range hunkNumbers {
+			if hunkNum > maxHunks {
+				invalidHunks = append(invalidHunks, hunkNum)
+			}
+		}
+
+		if len(invalidHunks) > 0 {
+			return nil, NewHunkCountExceededError(filePath, maxHunks, invalidHunks)
 		}
 
 		// Find matching hunks in allHunks
