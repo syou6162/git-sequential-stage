@@ -22,8 +22,6 @@ type testRepo struct {
 func setupTestRepo(t *testing.T, testName string) *testRepo {
 	t.Helper()
 	
-	// Safety checks are enabled by default, no need to set environment variable
-	
 	// Skip if git is not available
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found in PATH")

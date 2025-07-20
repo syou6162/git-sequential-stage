@@ -33,8 +33,6 @@ func TestE2E_FinalIntegration(t *testing.T) {
 
 // S1: Test staging area state detection
 func testStagingAreaDetection(t *testing.T) {
-	// Safety checks are enabled by default, no need to set environment variable
-
 	dir, repo, cleanup := testutils.CreateTestRepo(t, "test-s1-*")
 	defer cleanup()
 
@@ -119,8 +117,6 @@ func testIntentToAddIntegration(t *testing.T) {
 
 // S3: Test file type specific error messages
 func testFileTypeErrorMessages(t *testing.T) {
-	// Safety checks are enabled by default, no need to set environment variable
-
 	dir, repo, cleanup := testutils.CreateTestRepo(t, "test-s3-*")
 	defer cleanup()
 
