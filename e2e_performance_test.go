@@ -71,7 +71,7 @@ func TestE2E_PerformanceWithSafetyChecks(t *testing.T) {
 	// Test with staged files (safety check should detect and error quickly)
 	t.Run("staged_files_early_exit", func(t *testing.T) {
 		// Stage a file
-		runCommand(t, tmpDir, "git", "add", "large_module.py")
+		testutils.RunCommand(t, tmpDir, "git", "add", "large_module.py")
 		
 		start := time.Now()
 		err := runGitSequentialStage([]string{"large_module.py:1"}, patchFile)

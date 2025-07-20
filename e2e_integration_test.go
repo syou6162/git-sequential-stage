@@ -83,31 +83,26 @@ func testStagingAreaDetection(t *testing.T) {
 
 // S2: Test intent-to-add file integration
 func testIntentToAddIntegration(t *testing.T) {
-	dir, err := ioutil.TempDir("", "test-s2-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir, repo, cleanup := testutils.CreateTestRepo(t, "test-s2-*")
+	defer cleanup()
 
-	repo, _ := git.PlainInit(dir, false)
-	originalDir, _ := os.Getwd()
-	os.Chdir(dir)
-	defer os.Chdir(originalDir)
+	resetDir := testutils.SetupTestDir(t, dir)
+	defer resetDir()
 
 	// Create initial commit
-	createAndCommitFile(t, dir, repo, "existing.txt", "existing", "Initial commit")
+	testutils.CreateAndCommitFile(t, dir, repo, "existing.txt", "existing", "Initial commit")
 
 	// Create new file with intent-to-add
-	ioutil.WriteFile("new_file.py", []byte("print('hello')"), 0644)
-	runCommand(t, dir, "git", "add", "-N", "new_file.py")
+	os.WriteFile("new_file.py", []byte("print('hello')"), 0644)
+	testutils.RunCommand(t, dir, "git", "add", "-N", "new_file.py")
 
 	// Generate patch
 	patchFile := filepath.Join(dir, "changes.patch")
-	output, _ := runCommand(t, dir, "git", "diff", "HEAD")
-	ioutil.WriteFile(patchFile, []byte(output), 0644)
+	output, _ := testutils.RunCommand(t, dir, "git", "diff", "HEAD")
+	os.WriteFile(patchFile, []byte(output), 0644)
 
 	// Run git-sequential-stage - should succeed with intent-to-add
-	err = runGitSequentialStage([]string{"new_file.py:1"}, patchFile)
+	err := runGitSequentialStage([]string{"new_file.py:1"}, patchFile)
 	
 	// Note: Current implementation treats intent-to-add as staged, so it will fail
 	// This is the expected behavior based on the semantic_commit_test.go
