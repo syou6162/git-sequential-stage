@@ -12,9 +12,9 @@ import (
 // This is expected and doesn't affect the actual functionality since we have a fallback.
 func TestParsePatchFileComparison(t *testing.T) {
 	testCases := []struct {
-		name        string
+		name         string
 		patchContent string
-		description string
+		description  string
 	}{
 		{
 			name: "single_file_single_hunk",
@@ -146,7 +146,7 @@ Binary files /dev/null and b/image.png differ`,
 			t.Logf("\n=== Test: %s ===", tc.name)
 			t.Logf("Description: %s", tc.description)
 			t.Logf("\nExisting parser found %d hunks", len(existingHunks))
-			
+
 			// Count hunks from go-gitdiff
 			gitdiffHunkCount := 0
 			for _, file := range files {
@@ -162,7 +162,7 @@ Binary files /dev/null and b/image.png differ`,
 				if file.IsNew {
 					t.Logf("go-gitdiff: New file detected: %s", file.NewName)
 				}
-				
+
 				for _, frag := range file.TextFragments {
 					gitdiffHunkCount++
 					t.Logf("go-gitdiff: Hunk in %s at lines %d-%d (old) %d-%d (new)",
@@ -170,9 +170,9 @@ Binary files /dev/null and b/image.png differ`,
 						frag.NewPosition, frag.NewPosition+frag.NewLines)
 				}
 			}
-			
+
 			t.Logf("go-gitdiff found %d hunks across %d files", gitdiffHunkCount, len(files))
-			
+
 			// Log existing parser results
 			for i, hunk := range existingHunks {
 				t.Logf("Existing parser: Hunk %d in %s (file hunk %d)",
@@ -181,7 +181,7 @@ Binary files /dev/null and b/image.png differ`,
 
 			// Check if counts match (note: they might not for special cases)
 			if len(existingHunks) != gitdiffHunkCount {
-				t.Logf("WARNING: Hunk count mismatch - existing: %d, go-gitdiff: %d", 
+				t.Logf("WARNING: Hunk count mismatch - existing: %d, go-gitdiff: %d",
 					len(existingHunks), gitdiffHunkCount)
 			}
 		})

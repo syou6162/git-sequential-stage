@@ -67,7 +67,6 @@ func NewStagerError(errType ErrorType, message string, err error) *StagerError {
 	}
 }
 
-
 // Common error constructors
 
 // NewFileNotFoundError creates a file not found error
@@ -134,8 +133,6 @@ const (
 	GitOperationFailed
 	// IntentToAddProcessing indicates an error during intent-to-add file processing
 	IntentToAddProcessing
-	// DeprecatedMethod indicates a deprecated method was called
-	DeprecatedMethod
 )
 
 // SafetyError represents a safety-related error with detailed context
@@ -186,7 +183,6 @@ func (e *SafetyError) Unwrap() error {
 	return e.Underlying
 }
 
-
 // String returns a string representation of the error type
 func (t SafetyErrorType) String() string {
 	switch t {
@@ -202,8 +198,6 @@ func (t SafetyErrorType) String() string {
 		return "GitOperationFailed"
 	case IntentToAddProcessing:
 		return "IntentToAddProcessing"
-	case DeprecatedMethod:
-		return "DeprecatedMethod"
 	default:
 		return "Unknown"
 	}

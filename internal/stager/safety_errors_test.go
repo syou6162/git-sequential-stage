@@ -7,12 +7,12 @@ import (
 
 func TestNewSafetyError(t *testing.T) {
 	tests := []struct {
-		name           string
-		errorType      SafetyErrorType
-		message        string
-		advice         string
-		underlying     error
-		expectedError  string
+		name          string
+		errorType     SafetyErrorType
+		message       string
+		advice        string
+		underlying    error
+		expectedError string
 	}{
 		{
 			name:          "staging area not clean error",
@@ -43,19 +43,19 @@ func TestNewSafetyError(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := NewSafetyError(tt.errorType, tt.message, tt.advice, tt.underlying)
-			
+
 			if err.Type != tt.errorType {
 				t.Errorf("expected error type %v, got %v", tt.errorType, err.Type)
 			}
-			
+
 			if err.Message != tt.message {
 				t.Errorf("expected message %q, got %q", tt.message, err.Message)
 			}
-			
+
 			if err.Advice != tt.advice {
 				t.Errorf("expected advice %q, got %q", tt.advice, err.Advice)
 			}
-			
+
 			if err.Error() != tt.expectedError {
 				t.Errorf("expected error string:\n%q\ngot:\n%q", tt.expectedError, err.Error())
 			}
@@ -96,7 +96,6 @@ func TestSafetyError_Unwrap(t *testing.T) {
 	}
 }
 
-
 func TestSafetyErrorType_String(t *testing.T) {
 	tests := []struct {
 		errorType SafetyErrorType
@@ -119,4 +118,3 @@ func TestSafetyErrorType_String(t *testing.T) {
 		})
 	}
 }
-
