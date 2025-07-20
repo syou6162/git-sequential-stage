@@ -1530,8 +1530,8 @@ func main() {
 	}
 }
 
-// TestHunkCountExceededError tests error handling when requesting more hunks than available
-func TestHunkCountExceededError(t *testing.T) {
+// TestErrorCases_HunkCountExceeded tests error handling when requesting more hunks than available
+func TestErrorCases_HunkCountExceeded(t *testing.T) {
 	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-e2e-*")
 	defer testRepo.Cleanup()
 
@@ -1656,9 +1656,9 @@ func TestErrorCases_MultipleInvalidHunks(t *testing.T) {
 		t.Errorf("Expected error message to mention multiple invalid hunks '[2, 3, 4]', got: %s", errorMsg)
 	}
 
-	// 実際のハンク数が含まれている
-	if !strings.Contains(errorMsg, "has 1 hunks") {
-		t.Errorf("Expected error message to mention '1 hunks', got: %s", errorMsg)
+	// 実際のハンク数が含まれている（新しい簡潔な形式）
+	if !strings.Contains(errorMsg, "has 1 hunk") {
+		t.Errorf("Expected error message to mention '1 hunk', got: %s", errorMsg)
 	}
 }
 
