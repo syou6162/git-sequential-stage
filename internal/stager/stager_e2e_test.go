@@ -89,4 +89,3 @@ func TestStageHunks_E2E_AmbiguousFilename(t *testing.T) {
 		})
 	}
 }
-

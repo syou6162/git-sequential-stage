@@ -18,10 +18,6 @@ const (
 	performanceTargetSeconds = 5
 )
 
-
-
-
-
 // TestBasicSetup は基本的なセットアップが動作することを確認します
 // このテストは、テスト環境の基本動作（リポジトリ作成、ファイル作成、コミット）が正常に機能していることを
 // 保証するために重要です。他のすべてのテストの前提条件となる基盤機能の動作を検証します。
@@ -51,10 +47,6 @@ func TestBasicSetup(t *testing.T) {
 	}
 }
 
-
-
-
-
 // TestSingleFileSingleHunk は1ファイル1ハンクのケースをテストします
 // このテストは、最も基本的なケース（1つのファイルの1つのハンクのみを選択的にステージング）が
 // 正常に動作することを保証するために重要です。git-sequential-stageの核心機能の最小単位を検証します。
@@ -75,8 +67,8 @@ def main():
 if __name__ == "__main__":
     main()
 `
-	testRepo.CreateFile( "calculator.py", initialCode)
-	testRepo.CommitChanges( "Initial commit")
+	testRepo.CreateFile("calculator.py", initialCode)
+	testRepo.CommitChanges("Initial commit")
 
 	// ファイルを修正（1つのハンクの変更）
 	modifiedCode := `#!/usr/bin/env python3
@@ -93,11 +85,11 @@ def main():
 if __name__ == "__main__":
     main()
 `
-	testRepo.ModifyFile( "calculator.py", modifiedCode)
+	testRepo.ModifyFile("calculator.py", modifiedCode)
 
 	// パッチファイルを生成
 	patchPath := filepath.Join(testRepo.Path, "changes.patch")
-	output, err := testRepo.RunCommand( "sh", "-c", "git diff > changes.patch")
+	output, err := testRepo.RunCommand("sh", "-c", "git diff > changes.patch")
 	if err != nil {
 		t.Fatalf("Failed to create patch file: %v\nOutput: %s", err, output)
 	}
@@ -195,8 +187,8 @@ def main():
 if __name__ == "__main__":
     main()
 `
-	testRepo.CreateFile( "math_operations.py", initialCode)
-	testRepo.CommitChanges( "Initial commit")
+	testRepo.CreateFile("math_operations.py", initialCode)
+	testRepo.CommitChanges("Initial commit")
 
 	// ファイルを修正（複数のハンクが生成される変更）
 	modifiedCode := `#!/usr/bin/env python3
@@ -231,11 +223,11 @@ def main():
 if __name__ == "__main__":
     main()
 `
-	testRepo.ModifyFile( "math_operations.py", modifiedCode)
+	testRepo.ModifyFile("math_operations.py", modifiedCode)
 
 	// パッチファイルを生成
 	patchPath := filepath.Join(testRepo.Path, "changes.patch")
-	output, err := testRepo.RunCommand( "sh", "-c", "git diff > changes.patch")
+	output, err := testRepo.RunCommand("sh", "-c", "git diff > changes.patch")
 	if err != nil {
 		t.Fatalf("Failed to create patch file: %v\nOutput: %s", err, output)
 	}
@@ -268,13 +260,13 @@ if __name__ == "__main__":
 	}
 
 	// 検証2: ステージングエリアにハンク2の変更のみが含まれているか
-	stagedDiff, err := testRepo.RunCommand( "git", "diff", "--cached")
+	stagedDiff, err := testRepo.RunCommand("git", "diff", "--cached")
 	if err != nil {
 		t.Fatalf("Failed to get staged diff: %v", err)
 	}
 
 	// 検証3: ワーキングディレクトリにハンク1の変更が残っているか
-	workingDiff, err := testRepo.RunCommand( "git", "diff")
+	workingDiff, err := testRepo.RunCommand("git", "diff")
 	if err != nil {
 		t.Fatalf("Failed to get working diff: %v", err)
 	}
@@ -350,7 +342,7 @@ class UserManager:
             return True
         return False
 `
-	testRepo.CreateFile( "user_manager.py", userManagerCode)
+	testRepo.CreateFile("user_manager.py", userManagerCode)
 
 	// 初期ファイル2を作成（データバリデーター）
 	validatorCode := `#!/usr/bin/env python3
@@ -367,9 +359,9 @@ class DataValidator:
     def validate_username(username):
         return len(username) >= 3 and username.isalnum()
 `
-	testRepo.CreateFile( "validator.py", validatorCode)
+	testRepo.CreateFile("validator.py", validatorCode)
 
-	testRepo.CommitChanges( "Initial commit")
+	testRepo.CommitChanges("Initial commit")
 
 	// ファイル1を修正（複数のハンクが生成される変更）
 	modifiedUserManagerCode := `#!/usr/bin/env python3
@@ -401,7 +393,7 @@ class UserManager:
             return True
         return False
 `
-	testRepo.ModifyFile( "user_manager.py", modifiedUserManagerCode)
+	testRepo.ModifyFile("user_manager.py", modifiedUserManagerCode)
 
 	// ファイル2を修正（複数のハンクが生成される変更）
 	modifiedValidatorCode := `#!/usr/bin/env python3
@@ -431,11 +423,11 @@ class DataValidator:
             return False
         return len(password) >= 8 and any(c.isupper() for c in password) and any(c.islower() for c in password)
 `
-	testRepo.ModifyFile( "validator.py", modifiedValidatorCode)
+	testRepo.ModifyFile("validator.py", modifiedValidatorCode)
 
 	// パッチファイルを生成
 	patchPath := filepath.Join(testRepo.Path, "changes.patch")
-	output, err := testRepo.RunCommand( "sh", "-c", "git diff > changes.patch")
+	output, err := testRepo.RunCommand("sh", "-c", "git diff > changes.patch")
 	if err != nil {
 		t.Fatalf("Failed to create patch file: %v\nOutput: %s", err, output)
 	}
@@ -482,7 +474,7 @@ class DataValidator:
 	}
 
 	// 検証2: ステージングエリアに特定のハンクのみが含まれているか
-	stagedDiff, err := testRepo.RunCommand( "git", "diff", "--cached")
+	stagedDiff, err := testRepo.RunCommand("git", "diff", "--cached")
 	if err != nil {
 		t.Fatalf("Failed to get staged diff: %v", err)
 	}
@@ -539,7 +531,7 @@ class DataValidator:
 	}
 
 	// 検証3: ワーキングディレクトリに残りの変更があるか
-	workingDiff, err := testRepo.RunCommand( "git", "diff")
+	workingDiff, err := testRepo.RunCommand("git", "diff")
 	if err != nil {
 		t.Fatalf("Failed to get working diff: %v", err)
 	}
@@ -666,8 +658,8 @@ def health_check():
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
 `
-	testRepo.CreateFile( "web_server.py", initialWebServerCode)
-	testRepo.CommitChanges( "Initial commit")
+	testRepo.CreateFile("web_server.py", initialWebServerCode)
+	testRepo.CommitChanges("Initial commit")
 
 	// ファイルを修正（3つの異なる意味の変更を含む）
 	modifiedWebServerCode := `#!/usr/bin/env python3
@@ -717,11 +709,11 @@ if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=True, port=port)
 `
-	testRepo.ModifyFile( "web_server.py", modifiedWebServerCode)
+	testRepo.ModifyFile("web_server.py", modifiedWebServerCode)
 
 	// パッチファイルを生成
 	patchPath := filepath.Join(testRepo.Path, "changes.patch")
-	output, err := testRepo.RunCommand( "sh", "-c", "git diff > changes.patch")
+	output, err := testRepo.RunCommand("sh", "-c", "git diff > changes.patch")
 	if err != nil {
 		t.Fatalf("Failed to create patch file: %v\nOutput: %s", err, output)
 	}
@@ -747,7 +739,7 @@ if __name__ == '__main__':
 	}
 
 	// 検証1: ロギング関連の変更のみがステージングされているか
-	stagedDiff, err := testRepo.RunCommand( "git", "diff", "--cached")
+	stagedDiff, err := testRepo.RunCommand("git", "diff", "--cached")
 	if err != nil {
 		t.Fatalf("Failed to get staged diff: %v", err)
 	}
@@ -789,7 +781,7 @@ if __name__ == '__main__':
 	}
 
 	// 最初のコミットを作成（ロギング機能追加）
-	_, err = testRepo.RunCommand( "git", "commit", "-m", "feat: add logging infrastructure for request tracking")
+	_, err = testRepo.RunCommand("git", "commit", "-m", "feat: add logging infrastructure for request tracking")
 	if err != nil {
 		t.Fatalf("Failed to commit logging changes: %v", err)
 	}
@@ -802,7 +794,7 @@ if __name__ == '__main__':
 	}
 
 	// 検証2: バリデーション関連の変更のみがステージングされているか
-	stagedDiff, err = testRepo.RunCommand( "git", "diff", "--cached")
+	stagedDiff, err = testRepo.RunCommand("git", "diff", "--cached")
 	if err != nil {
 		t.Fatalf("Failed to get staged diff: %v", err)
 	}
@@ -839,7 +831,7 @@ if __name__ == '__main__':
 	}
 
 	// 2番目のコミットを作成（バリデーション機能追加）
-	_, err = testRepo.RunCommand( "git", "commit", "-m", "feat: add input validation for user creation endpoint")
+	_, err = testRepo.RunCommand("git", "commit", "-m", "feat: add input validation for user creation endpoint")
 	if err != nil {
 		t.Fatalf("Failed to commit validation changes: %v", err)
 	}
@@ -852,7 +844,7 @@ if __name__ == '__main__':
 	}
 
 	// 検証3: 設定とAPI改善の変更がステージングされているか
-	stagedDiff, err = testRepo.RunCommand( "git", "diff", "--cached")
+	stagedDiff, err = testRepo.RunCommand("git", "diff", "--cached")
 	if err != nil {
 		t.Fatalf("Failed to get staged diff: %v", err)
 	}
@@ -876,13 +868,13 @@ if __name__ == '__main__':
 	}
 
 	// 3番目のコミットを作成（設定とAPI改善）
-	_, err = testRepo.RunCommand( "git", "commit", "-m", "improve: enhance health check endpoint and add configurable port")
+	_, err = testRepo.RunCommand("git", "commit", "-m", "improve: enhance health check endpoint and add configurable port")
 	if err != nil {
 		t.Fatalf("Failed to commit config/api improvements: %v", err)
 	}
 
 	// 最終検証: ワーキングディレクトリにもうステージングするものがないか
-	workingDiff, err := testRepo.RunCommand( "git", "diff")
+	workingDiff, err := testRepo.RunCommand("git", "diff")
 	if err != nil {
 		t.Fatalf("Failed to get working diff: %v", err)
 	}
@@ -906,15 +898,15 @@ func TestErrorCases_NonExistentFile(t *testing.T) {
 	defer testRepo.Cleanup()
 
 	// 初期ファイルを作成
-	testRepo.CreateFile( "existing.py", "print('Hello, World!')")
-	testRepo.CommitChanges( "Initial commit")
+	testRepo.CreateFile("existing.py", "print('Hello, World!')")
+	testRepo.CommitChanges("Initial commit")
 
 	// ファイルを修正
-	testRepo.ModifyFile( "existing.py", "print('Hello, Updated World!')")
+	testRepo.ModifyFile("existing.py", "print('Hello, Updated World!')")
 
 	// パッチファイルを生成
 	patchPath := filepath.Join(testRepo.Path, "changes.patch")
-	output, err := testRepo.RunCommand( "sh", "-c", "git diff > changes.patch")
+	output, err := testRepo.RunCommand("sh", "-c", "git diff > changes.patch")
 	if err != nil {
 		t.Fatalf("Failed to create patch file: %v\nOutput: %s", err, output)
 	}
@@ -969,15 +961,15 @@ func TestErrorCases_InvalidHunkNumber(t *testing.T) {
 	defer testRepo.Cleanup()
 
 	// 初期ファイルを作成
-	testRepo.CreateFile( "simple.py", "print('First line')")
-	testRepo.CommitChanges( "Initial commit")
+	testRepo.CreateFile("simple.py", "print('First line')")
+	testRepo.CommitChanges("Initial commit")
 
 	// ファイルを修正（1つのハンクのみ生成される変更）
-	testRepo.ModifyFile( "simple.py", "print('Modified line')")
+	testRepo.ModifyFile("simple.py", "print('Modified line')")
 
 	// パッチファイルを生成
 	patchPath := filepath.Join(testRepo.Path, "changes.patch")
-	output, err := testRepo.RunCommand( "sh", "-c", "git diff > changes.patch")
+	output, err := testRepo.RunCommand("sh", "-c", "git diff > changes.patch")
 	if err != nil {
 		t.Fatalf("Failed to create patch file: %v\nOutput: %s", err, output)
 	}
@@ -1033,8 +1025,8 @@ func TestErrorCases_EmptyPatchFile(t *testing.T) {
 	defer testRepo.Cleanup()
 
 	// 初期ファイルを作成
-	testRepo.CreateFile( "test.py", "print('Hello, World!')")
-	testRepo.CommitChanges( "Initial commit")
+	testRepo.CreateFile("test.py", "print('Hello, World!')")
+	testRepo.CommitChanges("Initial commit")
 
 	// 空のパッチファイルを作成
 	emptyPatchPath := filepath.Join(testRepo.Path, "empty.patch")
