@@ -128,10 +128,10 @@ func NewHunkCountExceededError(filePath string, maxHunks int, invalidHunks []int
 		}
 		invalidHunksList.WriteString(fmt.Sprintf("%d", hunk))
 	}
-	
-	message := fmt.Sprintf("hunk count exceeded for file %s: file has %d hunks, but requested hunks [%s]", 
+
+	message := fmt.Sprintf("hunk count exceeded for file %s: file has %d hunks, but requested hunks [%s]",
 		filePath, maxHunks, invalidHunksList.String())
-	
+
 	return NewStagerError(ErrorTypeHunkCountExceeded, message, nil)
 }
 

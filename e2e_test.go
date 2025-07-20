@@ -1447,7 +1447,7 @@ func main() {
 }
 `
 	testRepo.CreateFile("main.go", newFile)
-	
+
 	// testRepoのディレクトリに移動
 	origDir, err := os.Getwd()
 	if err != nil {
@@ -1463,7 +1463,6 @@ func main() {
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("Failed to add file with intent-to-add: %v", err)
 	}
-	
 
 	// git diff でパッチを生成
 	diffOutput, err := exec.Command("git", "diff", "HEAD").Output()
@@ -1476,7 +1475,6 @@ func main() {
 	if err := os.WriteFile(patchPath, diffOutput, 0644); err != nil {
 		t.Fatalf("Failed to write patch file: %v", err)
 	}
-	
 
 	// パッチファイルの絶対パスを取得
 	absPatchPath, err := filepath.Abs(patchPath)
@@ -1499,12 +1497,12 @@ func main() {
 	}
 
 	stagedContent := string(stagedDiff)
-	
+
 	// existing関数の変更がステージングされていることを確認
 	if !strings.Contains(stagedContent, "Modified function") {
 		t.Errorf("Expected existing function changes to be staged")
 	}
-	
+
 	// newFunc関数はステージングされていないことを確認
 	if strings.Contains(stagedContent, "func newFunc()") {
 		t.Errorf("Expected newFunc NOT to be staged yet")
@@ -1580,7 +1578,7 @@ func newFunction() {
 	// ディレクトリを変更
 	defer testRepo.Chdir()()
 
-	// 存在しないハンク番号（2,3番）を指定してエラーを発生させる  
+	// 存在しないハンク番号（2,3番）を指定してエラーを発生させる
 	err = runGitSequentialStage([]string{"main.go:1,2,3"}, absPatchPath)
 	if err == nil {
 		t.Fatal("Expected error when requesting non-existent hunk, but got none")
@@ -1588,17 +1586,17 @@ func newFunction() {
 
 	// エラーメッセージの内容を確認
 	errorMsg := err.Error()
-	
+
 	// ファイル名が含まれている
 	if !strings.Contains(errorMsg, "main.go") {
 		t.Errorf("Expected error message to contain file name 'main.go', got: %s", errorMsg)
 	}
-	
+
 	// 実際のハンク数が含まれている
 	if !strings.Contains(errorMsg, "has 1 hunks") {
 		t.Errorf("Expected error message to mention '1 hunks', got: %s", errorMsg)
 	}
-	
+
 	// 要求された無効なハンク番号が含まれている
 	if !strings.Contains(errorMsg, "[2, 3]") || !strings.Contains(errorMsg, "requested") {
 		t.Errorf("Expected error message to mention requested hunks '[2, 3]', got: %s", errorMsg)
@@ -1656,12 +1654,12 @@ func TestMultipleInvalidHunks(t *testing.T) {
 	}
 
 	errorMsg := err.Error()
-	
+
 	// 複数の無効なハンク番号が含まれている
 	if !strings.Contains(errorMsg, "[2, 3, 4]") {
 		t.Errorf("Expected error message to mention multiple invalid hunks '[2, 3, 4]', got: %s", errorMsg)
 	}
-	
+
 	// 実際のハンク数が含まれている
 	if !strings.Contains(errorMsg, "has 1 hunks") {
 		t.Errorf("Expected error message to mention '1 hunks', got: %s", errorMsg)
