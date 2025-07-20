@@ -332,7 +332,7 @@ Binary files /dev/null and b/image.png differ
 }
 
 func TestRecommendedActions_Prioritization(t *testing.T) {
-	checker := NewSafetyChecker(nil)
+	checker := NewSafetyChecker("")
 
 	// Patch with multiple file types to test action prioritization
 	patchContent := `diff --git a/deleted.txt b/deleted.txt
