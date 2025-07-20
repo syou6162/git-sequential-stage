@@ -7,42 +7,29 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/syou6162/git-sequential-stage/testutils"
 )
 
 // TestE2E_PerformanceWithSafetyChecks tests that safety checks don't significantly impact performance
 func TestE2E_PerformanceWithSafetyChecks(t *testing.T) {
 	// Create a temporary directory for our test repository
-	tmpDir, err := ioutil.TempDir("", "git-sequential-stage-performance-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	// Initialize git repository
-	repo, err := git.PlainInit(tmpDir, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	tmpDir, repo, cleanup := testutils.CreateTestRepo(t, "git-sequential-stage-performance-test-*")
+	defer cleanup()
 
 	// Change to the repository directory
-	originalDir, _ := os.Getwd()
-	if err := os.Chdir(tmpDir); err != nil {
-		t.Fatal(err)
-	}
-	defer os.Chdir(originalDir)
+	resetDir := testutils.SetupTestDir(t, tmpDir)
+	defer resetDir()
 
 	// Create a large file with many hunks
-	createLargeFileWithManyHunks(t, tmpDir, repo)
+	testutils.CreateLargeFileWithManyHunks(t, tmpDir, repo)
 
 	// Generate patch
 	patchFile := filepath.Join(tmpDir, "changes.patch")
-	output, err := runCommand(t, tmpDir, "git", "diff", "HEAD")
+	output, err := testutils.RunCommand(t, tmpDir, "git", "diff", "HEAD")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := ioutil.WriteFile(patchFile, []byte(output), 0644); err != nil {
+	if err := os.WriteFile(patchFile, []byte(output), 0644); err != nil {
 		t.Fatal(err)
 	}
 

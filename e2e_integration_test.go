@@ -5,33 +5,19 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/syou6162/git-sequential-stage/testutils"
 )
 
 // TestE2E_FinalIntegration tests all safety improvements requirements
 func TestE2E_FinalIntegration(t *testing.T) {
 	// Create a temporary directory for our test repository
-	tmpDir, err := ioutil.TempDir("", "git-sequential-stage-integration-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	// Initialize git repository
-	_, err = git.PlainInit(tmpDir, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	tmpDir, _, cleanup := testutils.CreateTestRepo(t, "git-sequential-stage-integration-test-*")
+	defer cleanup()
 
 	// Change to the repository directory
-	originalDir, _ := os.Getwd()
-	if err := os.Chdir(tmpDir); err != nil {
-		t.Fatal(err)
-	}
-	defer os.Chdir(originalDir)
+	resetDir := testutils.SetupTestDir(t, tmpDir)
+	defer resetDir()
 
 	// Run all requirement scenarios
 	t.Run("S1_staging_area_detection", testStagingAreaDetection)
