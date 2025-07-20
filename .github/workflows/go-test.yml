@@ -1,6 +1,6 @@
 name: Fast Tests
 
-on: [push, pull_request]
+on: push
 
 jobs:
   test:
