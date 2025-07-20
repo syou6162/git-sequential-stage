@@ -21,6 +21,20 @@ const (
 	FileStatusBinary
 )
 
+// Git status codes from git status --porcelain
+// These are the character codes used in git status output
+const (
+	GitStatusCodeModified  = 'M'
+	GitStatusCodeAdded     = 'A'
+	GitStatusCodeDeleted   = 'D'
+	GitStatusCodeRenamed   = 'R'
+	GitStatusCodeCopied    = 'C'
+	GitStatusCodeUnmerged  = 'U'
+	GitStatusCodeUntracked = '?'
+	GitStatusCodeIgnored   = '!'
+	GitStatusCodeSpace     = ' '
+)
+
 // String returns the string representation of FileStatus
 func (fs FileStatus) String() string {
 	switch fs {
@@ -407,10 +421,10 @@ func (s *SafetyChecker) CheckActualStagingArea() (*StagingAreaEvaluation, error)
 			if len(parts) == 2 {
 				oldName := parts[0]
 				newName := parts[1]
-				if statusCode[0] == 'R' {
+				if statusCode[0] == GitStatusCodeRenamed {
 					filesByStatus[FileStatusRenamed] = append(filesByStatus[FileStatusRenamed], oldName+" -> "+newName)
 					allStagedFiles = append(allStagedFiles, newName)
-				} else if statusCode[0] == 'C' {
+				} else if statusCode[0] == GitStatusCodeCopied {
 					filesByStatus[FileStatusCopied] = append(filesByStatus[FileStatusCopied], oldName+" -> "+newName)
 					allStagedFiles = append(allStagedFiles, newName)
 				}
@@ -423,15 +437,12 @@ func (s *SafetyChecker) CheckActualStagingArea() (*StagingAreaEvaluation, error)
 
 		// Categorize based on status code
 		switch statusCode[0] {
-		case 'M':
+		case GitStatusCodeModified:
 			filesByStatus[FileStatusModified] = append(filesByStatus[FileStatusModified], filename)
-		case 'A':
+		case GitStatusCodeAdded:
 			filesByStatus[FileStatusAdded] = append(filesByStatus[FileStatusAdded], filename)
-			// Check if this is an intent-to-add file
-			if s.isIntentToAdd(filename) {
-				intentToAddFiles = append(intentToAddFiles, filename)
-			}
-		case 'D':
+			// Regular added files (not intent-to-add) are handled here
+		case GitStatusCodeDeleted:
 			filesByStatus[FileStatusDeleted] = append(filesByStatus[FileStatusDeleted], filename)
 		}
 	}
