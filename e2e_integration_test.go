@@ -361,57 +361,30 @@ func testErrorCases(t *testing.T) {
 
 // S9: Test basic operation consistency
 func testBasicConsistency(t *testing.T) {
-	dir, err := ioutil.TempDir("", "test-s9-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir, repo, cleanup := testutils.CreateTestRepo(t, "test-s9-*")
+	defer cleanup()
 
-	repo, _ := git.PlainInit(dir, false)
-	originalDir, _ := os.Getwd()
-	os.Chdir(dir)
-	defer os.Chdir(originalDir)
+	resetDir := testutils.SetupTestDir(t, dir)
+	defer resetDir()
 
 	// Test basic functionality remains unchanged
-	createAndCommitFile(t, dir, repo, "test.py", "def old():\n    pass", "Initial")
-	ioutil.WriteFile("test.py", []byte("def new():\n    print('new')"), 0644)
+	testutils.CreateAndCommitFile(t, dir, repo, "test.py", "def old():\n    pass", "Initial")
+	os.WriteFile("test.py", []byte("def new():\n    print('new')"), 0644)
 
 	patchFile := filepath.Join(dir, "changes.patch")
-	output, _ := runCommand(t, dir, "git", "diff", "HEAD")
-	ioutil.WriteFile(patchFile, []byte(output), 0644)
+	output, _ := testutils.RunCommand(t, dir, "git", "diff", "HEAD")
+	os.WriteFile(patchFile, []byte(output), 0644)
 
 	// Should work normally with clean staging area
-	err = runGitSequentialStage([]string{"test.py:1"}, patchFile)
+	err := runGitSequentialStage([]string{"test.py:1"}, patchFile)
 	
 	if err != nil {
 		t.Fatalf("Basic operation failed: %v", err)
 	}
 
 	// Verify changes were staged
-	status, _ := runCommand(t, dir, "git", "status", "--porcelain")
+	status, _ := testutils.RunCommand(t, dir, "git", "status", "--porcelain")
 	if !strings.Contains(status, "M  test.py") {
 		t.Error("File was not staged correctly")
-	}
-}
-
-// Helper function to create and commit a file
-func createAndCommitFile(t *testing.T, dir string, repo *git.Repository, filename, content, message string) {
-	if err := ioutil.WriteFile(filename, []byte(content), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	w, _ := repo.Worktree()
-	w.Add(filename)
-	
-	_, err := w.Commit(message, &git.CommitOptions{
-		Author: &object.Signature{
-			Name:  "Test User",
-			Email: "test@example.com",
-			When:  time.Now(),
-		},
-	})
-	
-	if err != nil {
-		t.Fatal(err)
 	}
 }
