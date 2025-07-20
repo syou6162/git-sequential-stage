@@ -177,39 +177,72 @@ func (s *SafetyChecker) filterNonIntentToAdd(stagedFiles, intentToAddFiles []str
 	return nonIntentToAdd
 }
 
+// fileStatusOrder defines the order in which file statuses should be processed
+var fileStatusOrder = []FileStatus{
+	FileStatusModified,
+	FileStatusAdded,
+	FileStatusDeleted,
+	FileStatusRenamed,
+	FileStatusCopied,
+	FileStatusBinary,
+}
+
+// getFilesForStatus returns files for a given status, with special handling for intent-to-add
+func (s *SafetyChecker) getFilesForStatus(status FileStatus, filesByStatus map[FileStatus][]string, intentToAddFiles []string) []string {
+	files, exists := filesByStatus[status]
+	if !exists || len(files) == 0 {
+		return nil
+	}
+
+	// Special handling for added files - filter out intent-to-add
+	if status == FileStatusAdded {
+		return s.filterNonIntentToAdd(files, intentToAddFiles)
+	}
+
+	return files
+}
+
 // buildStagingErrorMessage builds a detailed error message about staging area state
 func (s *SafetyChecker) buildStagingErrorMessage(filesByStatus map[FileStatus][]string, intentToAddFiles []string) string {
 	var message strings.Builder
 	message.WriteString("SAFETY_CHECK_FAILED: staging_area_not_clean\n\n")
 	message.WriteString("STAGED_FILES:\n")
 
-	if files, exists := filesByStatus[FileStatusModified]; exists && len(files) > 0 {
-		message.WriteString(fmt.Sprintf("  MODIFIED: %s\n", strings.Join(files, ",")))
-	}
-	if files, exists := filesByStatus[FileStatusAdded]; exists && len(files) > 0 {
-		// Filter out intent-to-add files from newly added files
-		nonIntentToAdd := s.filterNonIntentToAdd(files, intentToAddFiles)
-		if len(nonIntentToAdd) > 0 {
-			message.WriteString(fmt.Sprintf("  NEW: %s\n", strings.Join(nonIntentToAdd, ",")))
+	// Process file statuses in defined order
+	for _, status := range fileStatusOrder {
+		files := s.getFilesForStatus(status, filesByStatus, intentToAddFiles)
+		if len(files) > 0 {
+			label := s.getStatusLabel(status)
+			message.WriteString(fmt.Sprintf("  %s: %s\n", label, strings.Join(files, ",")))
 		}
 	}
+
+	// Handle intent-to-add files separately
 	if len(intentToAddFiles) > 0 {
 		message.WriteString(fmt.Sprintf("  INTENT_TO_ADD: %s\n", strings.Join(intentToAddFiles, ",")))
 	}
-	if files, exists := filesByStatus[FileStatusDeleted]; exists && len(files) > 0 {
-		message.WriteString(fmt.Sprintf("  DELETED: %s\n", strings.Join(files, ",")))
-	}
-	if files, exists := filesByStatus[FileStatusRenamed]; exists && len(files) > 0 {
-		message.WriteString(fmt.Sprintf("  RENAMED: %s\n", strings.Join(files, ",")))
-	}
-	if files, exists := filesByStatus[FileStatusCopied]; exists && len(files) > 0 {
-		message.WriteString(fmt.Sprintf("  COPIED: %s\n", strings.Join(files, ",")))
-	}
-	if files, exists := filesByStatus[FileStatusBinary]; exists && len(files) > 0 {
-		message.WriteString(fmt.Sprintf("  BINARY: %s\n", strings.Join(files, ",")))
-	}
 
 	return message.String()
+}
+
+// getStatusLabel returns the display label for a file status
+func (s *SafetyChecker) getStatusLabel(status FileStatus) string {
+	switch status {
+	case FileStatusModified:
+		return "MODIFIED"
+	case FileStatusAdded:
+		return "NEW"
+	case FileStatusDeleted:
+		return "DELETED"
+	case FileStatusRenamed:
+		return "RENAMED"
+	case FileStatusCopied:
+		return "COPIED"
+	case FileStatusBinary:
+		return "BINARY"
+	default:
+		return "UNKNOWN"
+	}
 }
 
 // buildRecommendedActions builds recommended actions for resolving staging issues
@@ -226,51 +259,23 @@ func (s *SafetyChecker) buildRecommendedActions(filesByStatus map[FileStatus][]s
 		})
 	}
 
-	// Handle deletions first (highest priority)
-	if files, exists := filesByStatus[FileStatusDeleted]; exists && len(files) > 0 {
+	// Handle specific file statuses with individual commit recommendations
+	specificStatuses := []FileStatus{FileStatusDeleted, FileStatusRenamed, FileStatusCopied}
+	for _, status := range specificStatuses {
+		files := s.getFilesForStatus(status, filesByStatus, intentToAddFiles)
 		for _, file := range files {
-			actions = append(actions, RecommendedAction{
-				Description: fmt.Sprintf("Commit deletion of %s", file),
-				Commands:    []string{fmt.Sprintf("git commit -m \"Remove %s\"", file)},
-				Priority:    1,
-				Category:    ActionCategoryCommit,
-			})
+			action := s.createCommitAction(status, file)
+			if action != nil {
+				actions = append(actions, *action)
+			}
 		}
 	}
 
-	// Handle renames and copies
-	if files, exists := filesByStatus[FileStatusRenamed]; exists && len(files) > 0 {
-		for _, file := range files {
-			actions = append(actions, RecommendedAction{
-				Description: fmt.Sprintf("Commit rename of %s", file),
-				Commands:    []string{fmt.Sprintf("git commit -m \"Rename %s\"", file)},
-				Priority:    1,
-				Category:    ActionCategoryCommit,
-			})
-		}
-	}
-
-	if files, exists := filesByStatus[FileStatusCopied]; exists && len(files) > 0 {
-		for _, file := range files {
-			actions = append(actions, RecommendedAction{
-				Description: fmt.Sprintf("Commit copy of %s", file),
-				Commands:    []string{fmt.Sprintf("git commit -m \"Copy %s\"", file)},
-				Priority:    1,
-				Category:    ActionCategoryCommit,
-			})
-		}
-	}
-
-	// Handle modifications and non-intent-to-add new files
+	// Collect all problematic files (modifications, non-intent-to-add new files, and binary files)
 	var problematicFiles []string
-	if files, exists := filesByStatus[FileStatusModified]; exists {
-		problematicFiles = append(problematicFiles, files...)
-	}
-	if files, exists := filesByStatus[FileStatusAdded]; exists {
-		nonIntentToAdd := s.filterNonIntentToAdd(files, intentToAddFiles)
-		problematicFiles = append(problematicFiles, nonIntentToAdd...)
-	}
-	if files, exists := filesByStatus[FileStatusBinary]; exists {
+	problematicStatuses := []FileStatus{FileStatusModified, FileStatusAdded, FileStatusBinary}
+	for _, status := range problematicStatuses {
+		files := s.getFilesForStatus(status, filesByStatus, intentToAddFiles)
 		problematicFiles = append(problematicFiles, files...)
 	}
 
@@ -308,6 +313,32 @@ func (s *SafetyChecker) buildRecommendedActions(filesByStatus map[FileStatus][]s
 	})
 
 	return actions
+}
+
+// createCommitAction creates a commit action for a specific file status
+func (s *SafetyChecker) createCommitAction(status FileStatus, file string) *RecommendedAction {
+	var description, commitMsg string
+
+	switch status {
+	case FileStatusDeleted:
+		description = fmt.Sprintf("Commit deletion of %s", file)
+		commitMsg = fmt.Sprintf("Remove %s", file)
+	case FileStatusRenamed:
+		description = fmt.Sprintf("Commit rename of %s", file)
+		commitMsg = fmt.Sprintf("Rename %s", file)
+	case FileStatusCopied:
+		description = fmt.Sprintf("Commit copy of %s", file)
+		commitMsg = fmt.Sprintf("Copy %s", file)
+	default:
+		return nil
+	}
+
+	return &RecommendedAction{
+		Description: description,
+		Commands:    []string{fmt.Sprintf("git commit -m \"%s\"", commitMsg)},
+		Priority:    1,
+		Category:    ActionCategoryCommit,
+	}
 }
 
 // CheckActualStagingArea checks the actual staging area using git commands
