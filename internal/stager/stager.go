@@ -226,16 +226,14 @@ func (s *Stager) generateDetailedStagingError(evaluation *StagingAreaEvaluation)
 // hunkSpecs should be in the format "file:hunk_numbers" (e.g., "main.go:1,3").
 // The function uses patch IDs to track hunks across changes, solving the drift problem.
 func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
-	// Phase 0: Safety checks (only if enabled)
-	if os.Getenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK") == "true" {
-		patchContent, err := os.ReadFile(patchFile)
-		if err != nil {
-			return NewFileNotFoundError(patchFile, err)
-		}
+	// Phase 0: Safety checks (always enabled)
+	patchContent, err := os.ReadFile(patchFile)
+	if err != nil {
+		return NewFileNotFoundError(patchFile, err)
+	}
 
-		if err := s.performSafetyChecks(string(patchContent)); err != nil {
-			return err
-		}
+	if err := s.performSafetyChecks(string(patchContent)); err != nil {
+		return err
 	}
 
 	// Phase 1: Preparation
