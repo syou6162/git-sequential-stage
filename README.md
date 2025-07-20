@@ -109,23 +109,57 @@ The tool now uses the `go-gitdiff` library for more robust patch parsing, provid
 - **Custom Error Types**: Structured error handling with context information
 - **Better Test Coverage**: Enhanced test suite covering edge cases
 
+## Safety Features
+
+The tool includes built-in safety checks to prevent accidental data loss and ensure proper Git workflow:
+
+### Default Safety Checks
+
+- **Staging Area Protection**: Detects and prevents operations when the staging area is not clean
+- **Intent-to-add Detection**: Identifies and handles `git add -N` files appropriately  
+- **File Type Awareness**: Provides specific guidance for different file operations (NEW, MODIFIED, DELETED, RENAMED)
+- **LLM Agent Friendly Messages**: Structured error messages with `SAFETY_CHECK_FAILED` tags for automated processing
+
+### Error Message Format
+
+When safety checks fail, the tool provides detailed, actionable error messages:
+
+```
+SAFETY_CHECK_FAILED: staging_area_not_clean
+
+STAGED_FILES:
+  MODIFIED: file1.txt
+  NEW: file2.py
+
+Advice: Please resolve the staging area issues first:
+
+Commit all staged changes:
+  git commit -m "Your commit message"
+
+Unstage all changes:
+  git reset HEAD
+```
+
+These structured messages enable LLM agents to automatically understand and resolve staging conflicts.
+
 ## How It Works
 
 The tool uses patch IDs internally to ensure reliable hunk identification and sequential staging:
 
 ### Internal Process
 
-1. **Validation**: Checks that `git` command is available
-2. **Parsing**: Parses the hunk numbers from the command line
-3. **Patch ID Assignment**: When you specify hunk numbers (e.g., 1,3,5), the tool:
+1. **Safety Checks**: Validates staging area state and provides guidance for resolution
+2. **Validation**: Checks that `git` command is available
+3. **Parsing**: Parses the hunk numbers from the command line
+4. **Patch ID Assignment**: When you specify hunk numbers (e.g., 1,3,5), the tool:
    - Parses the entire patch file
    - Assigns a unique patch ID to each hunk based on its content
    - Uses these IDs internally to track and apply hunks
-4. **Sequential Staging**: For each requested hunk number:
+5. **Sequential Staging**: For each requested hunk number:
    - Extracts the single hunk using go-gitdiff library
    - Calculates its patch ID using `git patch-id`
    - Applies it to the staging area using `git apply --cached`
-5. **Error Handling**: If any hunk fails to apply, the tool stops and reports the error with detailed information
+6. **Error Handling**: If any hunk fails to apply, the tool stops and reports the error with detailed information
 
 ### Solving the "Hunk Number Drift" Problem
 

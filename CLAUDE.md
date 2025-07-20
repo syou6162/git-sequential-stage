@@ -28,6 +28,7 @@ git-sequential-stage/
 - **依存性注入**: `executor.CommandExecutor`インターフェースによるテストでのモック化
 - **パッチIDシステム**: `git patch-id`によるコンテンツベースのハンク識別
 - **逐次処理**: 依存関係を処理するためのハンク1つずつの適用
+- **安全性最優先**: デフォルト有効の安全性チェックによるステージングエリア保護
 - **エラーハンドリング**: `StagerError`型によるコンテキスト付きエラー管理
 - **解析戦略**: go-gitdiffを優先し、レガシーパーサーへのフォールバック
 
@@ -42,6 +43,10 @@ go test -v ./...
 
 # E2Eテストのみ実行
 go test -v -run "Test.*" .
+
+# 安全性機能テスト実行
+go test -v -run TestE2E_FinalIntegration     # 9つの安全性要件（S1-S9）検証
+go test -v -run TestE2E_PerformanceWithSafetyChecks  # パフォーマンス要件確認
 
 # 重要テストの個別実行
 go test -v -run TestMixedSemanticChanges     # セマンティック分割の核心テスト
@@ -116,7 +121,13 @@ CLIは複数の`-hunk`フラグを処理するカスタム`hunkList`タイプを
 - テスト時: `go-git`ライブラリ
 - CI: GitHub Actions（go-gitdiffベースの完全実装により外部依存関係不要）
 
-**パフォーマンス**: 20関数・12ハンクのファイルを~230msで処理（5秒目標を大幅クリア）
+**安全性機能**:
+- **ステージングエリア検証**: デフォルトで有効、意図しない変更の上書きを防止
+- **LLMエージェント対応メッセージ**: `SAFETY_CHECK_FAILED`タグ付きの構造化エラー
+- **ファイル操作分類**: NEW、MODIFIED、DELETED、RENAMED状態の自動検出と適切なアドバイス
+- **Intent-to-add対応**: `git add -N`ファイルの適切な検出と処理
+
+**パフォーマンス**: 20関数・12ハンクのファイルを~230msで処理（5秒目標を大幅クリア）、安全性チェック込みで276ms制限内
 
 ## LLMエージェント統合
 
