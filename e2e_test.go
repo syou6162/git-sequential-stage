@@ -5,13 +5,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/syou6162/git-sequential-stage/testutils"
 )
 
 // Test data constants
@@ -20,142 +18,30 @@ const (
 	performanceTargetSeconds = 5
 )
 
-var (
-	// minimalPNGTransparent is a 1x1 transparent PNG image
-	minimalPNGTransparent = []byte{
-		0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
-		0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, // IHDR chunk
-		0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-		0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
-		0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41, // IDAT chunk
-		0x54, 0x78, 0x9C, 0x62, 0x00, 0x00, 0x00, 0x02,
-		0x00, 0x01, 0xE5, 0x27, 0xDE, 0xFC, 0x00, 0x00, // IEND chunk
-		0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42,
-		0x60, 0x82,
-	}
 
-	// minimalPNGRed is a 1x1 red PNG image
-	minimalPNGRed = []byte{
-		0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
-		0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, // IHDR chunk
-		0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-		0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53,
-		0xDE, 0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41, // IDAT chunk
-		0x54, 0x08, 0x99, 0x63, 0xF8, 0xCF, 0xC0, 0x00,
-		0x00, 0x03, 0x01, 0x01, 0x00, 0x18, 0xDD, 0x8D, // IEND chunk
-		0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E,
-		0x44, 0xAE, 0x42, 0x60, 0x82,
-	}
-)
 
-// setupTestRepo はテスト用のGitリポジトリを作成し、クリーンアップ関数を返します
-func setupTestRepo(t *testing.T) (string, func()) {
-	tempDir, err := os.MkdirTemp("", "git-sequential-stage-e2e-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp directory: %v", err)
-	}
 
-	// Gitリポジトリの初期化
-	_, err = git.PlainInit(tempDir, false)
-	if err != nil {
-		os.RemoveAll(tempDir)
-		t.Fatalf("Failed to initialize git repository: %v", err)
-	}
-
-	// Git設定（ユーザー名とメールアドレス）
-	repo, err := git.PlainOpen(tempDir)
-	if err != nil {
-		os.RemoveAll(tempDir)
-		t.Fatalf("Failed to open repository: %v", err)
-	}
-
-	cfg, err := repo.Config()
-	if err != nil {
-		os.RemoveAll(tempDir)
-		t.Fatalf("Failed to get config: %v", err)
-	}
-
-	cfg.User.Name = "Test User"
-	cfg.User.Email = "test@example.com"
-	err = repo.SetConfig(cfg)
-	if err != nil {
-		os.RemoveAll(tempDir)
-		t.Fatalf("Failed to set config: %v", err)
-	}
-
-	// クリーンアップ関数
-	cleanup := func() {
-		os.RemoveAll(tempDir)
-	}
-
-	return tempDir, cleanup
-}
-
-// createFile はテスト用のファイルを作成します
-func createFile(t *testing.T, dir, filename, content string) {
-	filepath := filepath.Join(dir, filename)
-	err := os.WriteFile(filepath, []byte(content), 0644)
-	if err != nil {
-		t.Fatalf("Failed to create file %s: %v", filename, err)
-	}
-}
-
-// commitChanges は変更をコミットします
-func commitChanges(t *testing.T, dir, message string) {
-	repo, err := git.PlainOpen(dir)
-	if err != nil {
-		t.Fatalf("Failed to open repository: %v", err)
-	}
-
-	w, err := repo.Worktree()
-	if err != nil {
-		t.Fatalf("Failed to get worktree: %v", err)
-	}
-
-	// すべてのファイルをステージング
-	_, err = w.Add(".")
-	if err != nil {
-		t.Fatalf("Failed to add files: %v", err)
-	}
-
-	// コミット
-	_, err = w.Commit(message, &git.CommitOptions{
-		Author: &object.Signature{
-			Name:  "Test User",
-			Email: "test@example.com",
-		},
-	})
-	if err != nil {
-		t.Fatalf("Failed to commit: %v", err)
-	}
-}
 
 // TestBasicSetup は基本的なセットアップが動作することを確認します
 // このテストは、テスト環境の基本動作（リポジトリ作成、ファイル作成、コミット）が正常に機能していることを
 // 保証するために重要です。他のすべてのテストの前提条件となる基盤機能の動作を検証します。
 func TestBasicSetup(t *testing.T) {
-	dir, cleanup := setupTestRepo(t)
-	defer cleanup()
+	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-e2e-*")
+	defer testRepo.Cleanup()
 
 	// ファイルを作成
-	createFile(t, dir, "test.txt", "Hello, World!")
+	testRepo.CreateFile("test.txt", "Hello, World!")
 
 	// 変更をコミット
-	commitChanges(t, dir, "Initial commit")
-
-	// リポジトリが正しく作成されたことを確認
-	repo, err := git.PlainOpen(dir)
-	if err != nil {
-		t.Fatalf("Failed to open repository: %v", err)
-	}
+	testRepo.CommitChanges("Initial commit")
 
 	// コミットが存在することを確認
-	ref, err := repo.Head()
+	ref, err := testRepo.Repo.Head()
 	if err != nil {
 		t.Fatalf("Failed to get HEAD: %v", err)
 	}
 
-	commit, err := repo.CommitObject(ref.Hash())
+	commit, err := testRepo.Repo.CommitObject(ref.Hash())
 	if err != nil {
 		t.Fatalf("Failed to get commit: %v", err)
 	}
@@ -165,82 +51,16 @@ func TestBasicSetup(t *testing.T) {
 	}
 }
 
-// runCommand は指定されたディレクトリでコマンドを実行します
-func runCommand(t *testing.T, dir string, command string, args ...string) (string, error) {
-	cmd := exec.Command(command, args...)
-	cmd.Dir = dir
-	output, err := cmd.CombinedOutput()
-	return string(output), err
-}
 
-// modifyFile はファイルの内容を変更します
-func modifyFile(t *testing.T, dir, filename, newContent string) {
-	filepath := filepath.Join(dir, filename)
-	err := os.WriteFile(filepath, []byte(newContent), 0644)
-	if err != nil {
-		t.Fatalf("Failed to modify file %s: %v", filename, err)
-	}
-}
 
-// getCommitCount はリポジトリのコミット数を取得します
-func getCommitCount(t *testing.T, dir string) int {
-	repo, err := git.PlainOpen(dir)
-	if err != nil {
-		t.Fatalf("Failed to open repository: %v", err)
-	}
 
-	iter, err := repo.Log(&git.LogOptions{})
-	if err != nil {
-		t.Fatalf("Failed to get log: %v", err)
-	}
-
-	count := 0
-	err = iter.ForEach(func(c *object.Commit) error {
-		count++
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("Failed to count commits: %v", err)
-	}
-
-	return count
-}
-
-// getStagedFiles はステージングエリアのファイル一覧を取得します
-func getStagedFiles(t *testing.T, dir string) []string {
-	repo, err := git.PlainOpen(dir)
-	if err != nil {
-		t.Fatalf("Failed to open repository: %v", err)
-	}
-
-	w, err := repo.Worktree()
-	if err != nil {
-		t.Fatalf("Failed to get worktree: %v", err)
-	}
-
-	status, err := w.Status()
-	if err != nil {
-		t.Fatalf("Failed to get status: %v", err)
-	}
-
-	var stagedFiles []string
-	for file, fileStatus := range status {
-		// ステージングエリアに変更があるファイルを取得
-		if fileStatus.Staging != git.Untracked && fileStatus.Staging != git.Unmodified {
-			stagedFiles = append(stagedFiles, file)
-		}
-	}
-
-	sort.Strings(stagedFiles)
-	return stagedFiles
-}
 
 // TestSingleFileSingleHunk は1ファイル1ハンクのケースをテストします
 // このテストは、最も基本的なケース（1つのファイルの1つのハンクのみを選択的にステージング）が
 // 正常に動作することを保証するために重要です。git-sequential-stageの核心機能の最小単位を検証します。
 func TestSingleFileSingleHunk(t *testing.T) {
-	dir, cleanup := setupTestRepo(t)
-	defer cleanup()
+	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-e2e-*")
+	defer testRepo.Cleanup()
 
 	// 初期ファイルを作成（シンプルなPythonファイル）
 	initialCode := `#!/usr/bin/env python3
@@ -255,8 +75,8 @@ def main():
 if __name__ == "__main__":
     main()
 `
-	createFile(t, dir, "calculator.py", initialCode)
-	commitChanges(t, dir, "Initial commit")
+	testRepo.CreateFile( "calculator.py", initialCode)
+	testRepo.CommitChanges( "Initial commit")
 
 	// ファイルを修正（1つのハンクの変更）
 	modifiedCode := `#!/usr/bin/env python3
@@ -273,11 +93,11 @@ def main():
 if __name__ == "__main__":
     main()
 `
-	modifyFile(t, dir, "calculator.py", modifiedCode)
+	testRepo.ModifyFile( "calculator.py", modifiedCode)
 
 	// パッチファイルを生成
-	patchPath := filepath.Join(dir, "changes.patch")
-	output, err := runCommand(t, dir, "sh", "-c", "git diff > changes.patch")
+	patchPath := filepath.Join(testRepo.Path, "changes.patch")
+	output, err := testRepo.RunCommand( "sh", "-c", "git diff > changes.patch")
 	if err != nil {
 		t.Fatalf("Failed to create patch file: %v\nOutput: %s", err, output)
 	}
@@ -295,7 +115,7 @@ if __name__ == "__main__":
 	}
 
 	// 一時的にディレクトリを変更してrunGitSequentialStageを実行
-	t.Chdir(dir)
+	defer testRepo.Chdir()()
 
 	err = runGitSequentialStage([]string{"calculator.py:1"}, absPatchPath)
 	if err != nil {
@@ -303,19 +123,19 @@ if __name__ == "__main__":
 	}
 
 	// 検証1: ステージングエリアにファイルがあるか
-	stagedFiles := getStagedFiles(t, dir)
+	stagedFiles := testRepo.GetStagedFiles()
 	if len(stagedFiles) != 1 || stagedFiles[0] != "calculator.py" {
 		t.Errorf("Expected calculator.py to be staged, got: %v", stagedFiles)
 	}
 
 	// 検証2: ステージングエリアの内容が正しいか
-	stagedDiff, err := runCommand(t, dir, "git", "diff", "--cached")
+	stagedDiff, err := testRepo.RunCommand("git", "diff", "--cached")
 	if err != nil {
 		t.Fatalf("Failed to get staged diff: %v", err)
 	}
 
 	// 検証3: ワーキングディレクトリに変更が残っていないか
-	workingDiff, err := runCommand(t, dir, "git", "diff")
+	workingDiff, err := testRepo.RunCommand("git", "diff")
 	if err != nil {
 		t.Fatalf("Failed to get working diff: %v", err)
 	}
@@ -347,8 +167,8 @@ if __name__ == "__main__":
 // このテストは、同一ファイル内の複数ハンクから特定のハンクのみを選択的にステージングする部分選択機能が
 // 正常に動作することを保証するために重要です。関連する変更と無関係な変更を適切に分離する能力を検証します。
 func TestSingleFileMultipleHunks(t *testing.T) {
-	dir, cleanup := setupTestRepo(t)
-	defer cleanup()
+	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-e2e-*")
+	defer testRepo.Cleanup()
 
 	// 初期ファイルを作成（複数の関数を持つPythonファイル）
 	initialCode := `#!/usr/bin/env python3
@@ -375,8 +195,8 @@ def main():
 if __name__ == "__main__":
     main()
 `
-	createFile(t, dir, "math_operations.py", initialCode)
-	commitChanges(t, dir, "Initial commit")
+	testRepo.CreateFile( "math_operations.py", initialCode)
+	testRepo.CommitChanges( "Initial commit")
 
 	// ファイルを修正（複数のハンクが生成される変更）
 	modifiedCode := `#!/usr/bin/env python3
@@ -411,11 +231,11 @@ def main():
 if __name__ == "__main__":
     main()
 `
-	modifyFile(t, dir, "math_operations.py", modifiedCode)
+	testRepo.ModifyFile( "math_operations.py", modifiedCode)
 
 	// パッチファイルを生成
-	patchPath := filepath.Join(dir, "changes.patch")
-	output, err := runCommand(t, dir, "sh", "-c", "git diff > changes.patch")
+	patchPath := filepath.Join(testRepo.Path, "changes.patch")
+	output, err := testRepo.RunCommand( "sh", "-c", "git diff > changes.patch")
 	if err != nil {
 		t.Fatalf("Failed to create patch file: %v\nOutput: %s", err, output)
 	}
@@ -434,7 +254,7 @@ if __name__ == "__main__":
 	}
 
 	// 一時的にディレクトリを変更してrunGitSequentialStageを実行
-	t.Chdir(dir)
+	defer testRepo.Chdir()()
 
 	err = runGitSequentialStage([]string{"math_operations.py:2"}, absPatchPath)
 	if err != nil {
@@ -442,19 +262,19 @@ if __name__ == "__main__":
 	}
 
 	// 検証1: ステージングエリアにファイルがあるか
-	stagedFiles := getStagedFiles(t, dir)
+	stagedFiles := testRepo.GetStagedFiles()
 	if len(stagedFiles) != 1 || stagedFiles[0] != "math_operations.py" {
 		t.Errorf("Expected math_operations.py to be staged, got: %v", stagedFiles)
 	}
 
 	// 検証2: ステージングエリアにハンク2の変更のみが含まれているか
-	stagedDiff, err := runCommand(t, dir, "git", "diff", "--cached")
+	stagedDiff, err := testRepo.RunCommand( "git", "diff", "--cached")
 	if err != nil {
 		t.Fatalf("Failed to get staged diff: %v", err)
 	}
 
 	// 検証3: ワーキングディレクトリにハンク1の変更が残っているか
-	workingDiff, err := runCommand(t, dir, "git", "diff")
+	workingDiff, err := testRepo.RunCommand( "git", "diff")
 	if err != nil {
 		t.Fatalf("Failed to get working diff: %v", err)
 	}
@@ -507,8 +327,8 @@ if __name__ == "__main__":
 // 複数ファイル横断機能が正常に動作することを保証するために重要です。プロジェクト全体の変更を
 // 論理的な単位で分割する能力を検証します。
 func TestMultipleFilesMultipleHunks(t *testing.T) {
-	dir, cleanup := setupTestRepo(t)
-	defer cleanup()
+	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-e2e-*")
+	defer testRepo.Cleanup()
 
 	// 初期ファイル1を作成（ユーザー管理システム）
 	userManagerCode := `#!/usr/bin/env python3
@@ -530,7 +350,7 @@ class UserManager:
             return True
         return False
 `
-	createFile(t, dir, "user_manager.py", userManagerCode)
+	testRepo.CreateFile( "user_manager.py", userManagerCode)
 
 	// 初期ファイル2を作成（データバリデーター）
 	validatorCode := `#!/usr/bin/env python3
@@ -547,9 +367,9 @@ class DataValidator:
     def validate_username(username):
         return len(username) >= 3 and username.isalnum()
 `
-	createFile(t, dir, "validator.py", validatorCode)
+	testRepo.CreateFile( "validator.py", validatorCode)
 
-	commitChanges(t, dir, "Initial commit")
+	testRepo.CommitChanges( "Initial commit")
 
 	// ファイル1を修正（複数のハンクが生成される変更）
 	modifiedUserManagerCode := `#!/usr/bin/env python3
@@ -581,7 +401,7 @@ class UserManager:
             return True
         return False
 `
-	modifyFile(t, dir, "user_manager.py", modifiedUserManagerCode)
+	testRepo.ModifyFile( "user_manager.py", modifiedUserManagerCode)
 
 	// ファイル2を修正（複数のハンクが生成される変更）
 	modifiedValidatorCode := `#!/usr/bin/env python3
@@ -611,11 +431,11 @@ class DataValidator:
             return False
         return len(password) >= 8 and any(c.isupper() for c in password) and any(c.islower() for c in password)
 `
-	modifyFile(t, dir, "validator.py", modifiedValidatorCode)
+	testRepo.ModifyFile( "validator.py", modifiedValidatorCode)
 
 	// パッチファイルを生成
-	patchPath := filepath.Join(dir, "changes.patch")
-	output, err := runCommand(t, dir, "sh", "-c", "git diff > changes.patch")
+	patchPath := filepath.Join(testRepo.Path, "changes.patch")
+	output, err := testRepo.RunCommand( "sh", "-c", "git diff > changes.patch")
 	if err != nil {
 		t.Fatalf("Failed to create patch file: %v\nOutput: %s", err, output)
 	}
@@ -634,7 +454,7 @@ class DataValidator:
 	}
 
 	// 一時的にディレクトリを変更してrunGitSequentialStageを実行
-	t.Chdir(dir)
+	defer testRepo.Chdir()()
 
 	err = runGitSequentialStage([]string{"user_manager.py:2", "validator.py:1"}, absPatchPath)
 	if err != nil {
@@ -642,7 +462,7 @@ class DataValidator:
 	}
 
 	// 検証1: ステージングエリアに両方のファイルがあるか
-	stagedFiles := getStagedFiles(t, dir)
+	stagedFiles := testRepo.GetStagedFiles()
 	if len(stagedFiles) != 2 {
 		t.Errorf("Expected 2 files to be staged, got: %d files %v", len(stagedFiles), stagedFiles)
 	}
@@ -662,7 +482,7 @@ class DataValidator:
 	}
 
 	// 検証2: ステージングエリアに特定のハンクのみが含まれているか
-	stagedDiff, err := runCommand(t, dir, "git", "diff", "--cached")
+	stagedDiff, err := testRepo.RunCommand( "git", "diff", "--cached")
 	if err != nil {
 		t.Fatalf("Failed to get staged diff: %v", err)
 	}
@@ -719,7 +539,7 @@ class DataValidator:
 	}
 
 	// 検証3: ワーキングディレクトリに残りの変更があるか
-	workingDiff, err := runCommand(t, dir, "git", "diff")
+	workingDiff, err := testRepo.RunCommand( "git", "diff")
 	if err != nil {
 		t.Fatalf("Failed to get working diff: %v", err)
 	}
@@ -808,8 +628,8 @@ index 20b402c..be9ace8 100644
 // 適切に分離してコミットできることを保証するために重要です。セマンティックなコミット分割という
 // git-sequential-stageの核心価値を検証します。
 func TestMixedSemanticChanges(t *testing.T) {
-	dir, cleanup := setupTestRepo(t)
-	defer cleanup()
+	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-e2e-*")
+	defer testRepo.Cleanup()
 
 	// 初期ファイルを作成（Webサーバーのコード）
 	initialWebServerCode := `#!/usr/bin/env python3
@@ -846,8 +666,8 @@ def health_check():
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
 `
-	createFile(t, dir, "web_server.py", initialWebServerCode)
-	commitChanges(t, dir, "Initial commit")
+	testRepo.CreateFile( "web_server.py", initialWebServerCode)
+	testRepo.CommitChanges( "Initial commit")
 
 	// ファイルを修正（3つの異なる意味の変更を含む）
 	modifiedWebServerCode := `#!/usr/bin/env python3
@@ -897,11 +717,11 @@ if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=True, port=port)
 `
-	modifyFile(t, dir, "web_server.py", modifiedWebServerCode)
+	testRepo.ModifyFile( "web_server.py", modifiedWebServerCode)
 
 	// パッチファイルを生成
-	patchPath := filepath.Join(dir, "changes.patch")
-	output, err := runCommand(t, dir, "sh", "-c", "git diff > changes.patch")
+	patchPath := filepath.Join(testRepo.Path, "changes.patch")
+	output, err := testRepo.RunCommand( "sh", "-c", "git diff > changes.patch")
 	if err != nil {
 		t.Fatalf("Failed to create patch file: %v\nOutput: %s", err, output)
 	}
@@ -917,7 +737,7 @@ if __name__ == '__main__':
 	}
 
 	// 一時的にディレクトリを変更してrunGitSequentialStageを実行
-	t.Chdir(dir)
+	defer testRepo.Chdir()()
 
 	// シナリオ1: ロギング機能の追加のみをコミット（ハンク1のみ）
 	// これは新機能追加のセマンティックなコミット
@@ -927,7 +747,7 @@ if __name__ == '__main__':
 	}
 
 	// 検証1: ロギング関連の変更のみがステージングされているか
-	stagedDiff, err := runCommand(t, dir, "git", "diff", "--cached")
+	stagedDiff, err := testRepo.RunCommand( "git", "diff", "--cached")
 	if err != nil {
 		t.Fatalf("Failed to get staged diff: %v", err)
 	}
@@ -969,7 +789,7 @@ if __name__ == '__main__':
 	}
 
 	// 最初のコミットを作成（ロギング機能追加）
-	_, err = runCommand(t, dir, "git", "commit", "-m", "feat: add logging infrastructure for request tracking")
+	_, err = testRepo.RunCommand( "git", "commit", "-m", "feat: add logging infrastructure for request tracking")
 	if err != nil {
 		t.Fatalf("Failed to commit logging changes: %v", err)
 	}
@@ -982,7 +802,7 @@ if __name__ == '__main__':
 	}
 
 	// 検証2: バリデーション関連の変更のみがステージングされているか
-	stagedDiff, err = runCommand(t, dir, "git", "diff", "--cached")
+	stagedDiff, err = testRepo.RunCommand( "git", "diff", "--cached")
 	if err != nil {
 		t.Fatalf("Failed to get staged diff: %v", err)
 	}
@@ -1019,7 +839,7 @@ if __name__ == '__main__':
 	}
 
 	// 2番目のコミットを作成（バリデーション機能追加）
-	_, err = runCommand(t, dir, "git", "commit", "-m", "feat: add input validation for user creation endpoint")
+	_, err = testRepo.RunCommand( "git", "commit", "-m", "feat: add input validation for user creation endpoint")
 	if err != nil {
 		t.Fatalf("Failed to commit validation changes: %v", err)
 	}
@@ -1032,7 +852,7 @@ if __name__ == '__main__':
 	}
 
 	// 検証3: 設定とAPI改善の変更がステージングされているか
-	stagedDiff, err = runCommand(t, dir, "git", "diff", "--cached")
+	stagedDiff, err = testRepo.RunCommand( "git", "diff", "--cached")
 	if err != nil {
 		t.Fatalf("Failed to get staged diff: %v", err)
 	}
@@ -1056,13 +876,13 @@ if __name__ == '__main__':
 	}
 
 	// 3番目のコミットを作成（設定とAPI改善）
-	_, err = runCommand(t, dir, "git", "commit", "-m", "improve: enhance health check endpoint and add configurable port")
+	_, err = testRepo.RunCommand( "git", "commit", "-m", "improve: enhance health check endpoint and add configurable port")
 	if err != nil {
 		t.Fatalf("Failed to commit config/api improvements: %v", err)
 	}
 
 	// 最終検証: ワーキングディレクトリにもうステージングするものがないか
-	workingDiff, err := runCommand(t, dir, "git", "diff")
+	workingDiff, err := testRepo.RunCommand( "git", "diff")
 	if err != nil {
 		t.Fatalf("Failed to get working diff: %v", err)
 	}
@@ -1072,7 +892,7 @@ if __name__ == '__main__':
 	}
 
 	// 最終検証: 3つのコミットが作成されたか確認
-	finalCommitCount := getCommitCount(t, dir)
+	finalCommitCount := testRepo.GetCommitCount()
 	expectedCommits := 4 // 初期コミット + 3つの機能コミット
 	if finalCommitCount != expectedCommits {
 		t.Errorf("Expected %d commits, but got %d", expectedCommits, finalCommitCount)
@@ -1082,19 +902,19 @@ if __name__ == '__main__':
 // TestErrorCases_NonExistentFile は存在しないファイルを指定した場合のエラーハンドリングをテストします
 // このテストは、不正な引数に対する適切なエラーハンドリングが機能していることを保証するために重要です
 func TestErrorCases_NonExistentFile(t *testing.T) {
-	dir, cleanup := setupTestRepo(t)
-	defer cleanup()
+	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-e2e-*")
+	defer testRepo.Cleanup()
 
 	// 初期ファイルを作成
-	createFile(t, dir, "existing.py", "print('Hello, World!')")
-	commitChanges(t, dir, "Initial commit")
+	testRepo.CreateFile( "existing.py", "print('Hello, World!')")
+	testRepo.CommitChanges( "Initial commit")
 
 	// ファイルを修正
-	modifyFile(t, dir, "existing.py", "print('Hello, Updated World!')")
+	testRepo.ModifyFile( "existing.py", "print('Hello, Updated World!')")
 
 	// パッチファイルを生成
-	patchPath := filepath.Join(dir, "changes.patch")
-	output, err := runCommand(t, dir, "sh", "-c", "git diff > changes.patch")
+	patchPath := filepath.Join(testRepo.Path, "changes.patch")
+	output, err := testRepo.RunCommand( "sh", "-c", "git diff > changes.patch")
 	if err != nil {
 		t.Fatalf("Failed to create patch file: %v\nOutput: %s", err, output)
 	}
@@ -1107,7 +927,7 @@ func TestErrorCases_NonExistentFile(t *testing.T) {
 
 	// 一時的にディレクトリを変更
 	originalDir, _ := os.Getwd()
-	err = os.Chdir(dir)
+	defer testRepo.Chdir()()
 	if err != nil {
 		t.Fatalf("Failed to change directory: %v", err)
 	}
@@ -1136,7 +956,7 @@ func TestErrorCases_NonExistentFile(t *testing.T) {
 	}
 
 	// ステージングエリアが空であることを確認
-	stagedFiles := getStagedFiles(t, dir)
+	stagedFiles := testRepo.GetStagedFiles()
 	if len(stagedFiles) != 0 {
 		t.Errorf("Expected no files to be staged after error, but got: %v", stagedFiles)
 	}
@@ -1145,19 +965,19 @@ func TestErrorCases_NonExistentFile(t *testing.T) {
 // TestErrorCases_InvalidHunkNumber は存在しないハンク番号を指定した場合のエラーハンドリングをテストします
 // このテストは、パッチ内の無効な参照に対する適切なエラーハンドリングが機能していることを保証するために重要です
 func TestErrorCases_InvalidHunkNumber(t *testing.T) {
-	dir, cleanup := setupTestRepo(t)
-	defer cleanup()
+	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-e2e-*")
+	defer testRepo.Cleanup()
 
 	// 初期ファイルを作成
-	createFile(t, dir, "simple.py", "print('First line')")
-	commitChanges(t, dir, "Initial commit")
+	testRepo.CreateFile( "simple.py", "print('First line')")
+	testRepo.CommitChanges( "Initial commit")
 
 	// ファイルを修正（1つのハンクのみ生成される変更）
-	modifyFile(t, dir, "simple.py", "print('Modified line')")
+	testRepo.ModifyFile( "simple.py", "print('Modified line')")
 
 	// パッチファイルを生成
-	patchPath := filepath.Join(dir, "changes.patch")
-	output, err := runCommand(t, dir, "sh", "-c", "git diff > changes.patch")
+	patchPath := filepath.Join(testRepo.Path, "changes.patch")
+	output, err := testRepo.RunCommand( "sh", "-c", "git diff > changes.patch")
 	if err != nil {
 		t.Fatalf("Failed to create patch file: %v\nOutput: %s", err, output)
 	}
@@ -1170,7 +990,7 @@ func TestErrorCases_InvalidHunkNumber(t *testing.T) {
 
 	// 一時的にディレクトリを変更
 	originalDir, _ := os.Getwd()
-	err = os.Chdir(dir)
+	defer testRepo.Chdir()()
 	if err != nil {
 		t.Fatalf("Failed to change directory: %v", err)
 	}
@@ -1200,7 +1020,7 @@ func TestErrorCases_InvalidHunkNumber(t *testing.T) {
 	}
 
 	// ステージングエリアが空であることを確認
-	stagedFiles := getStagedFiles(t, dir)
+	stagedFiles := testRepo.GetStagedFiles()
 	if len(stagedFiles) != 0 {
 		t.Errorf("Expected no files to be staged after error, but got: %v", stagedFiles)
 	}
@@ -1209,15 +1029,15 @@ func TestErrorCases_InvalidHunkNumber(t *testing.T) {
 // TestErrorCases_EmptyPatchFile は空のパッチファイルを指定した場合のエラーハンドリングをテストします
 // このテストは、不正なパッチファイルに対する適切なエラーハンドリングが機能していることを保証するために重要です
 func TestErrorCases_EmptyPatchFile(t *testing.T) {
-	dir, cleanup := setupTestRepo(t)
-	defer cleanup()
+	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-e2e-*")
+	defer testRepo.Cleanup()
 
 	// 初期ファイルを作成
-	createFile(t, dir, "test.py", "print('Hello, World!')")
-	commitChanges(t, dir, "Initial commit")
+	testRepo.CreateFile( "test.py", "print('Hello, World!')")
+	testRepo.CommitChanges( "Initial commit")
 
 	// 空のパッチファイルを作成
-	emptyPatchPath := filepath.Join(dir, "empty.patch")
+	emptyPatchPath := filepath.Join(testRepo.Path, "empty.patch")
 	err := os.WriteFile(emptyPatchPath, []byte(""), 0644)
 	if err != nil {
 		t.Fatalf("Failed to create empty patch file: %v", err)
@@ -1231,7 +1051,7 @@ func TestErrorCases_EmptyPatchFile(t *testing.T) {
 
 	// 一時的にディレクトリを変更
 	originalDir, _ := os.Getwd()
-	err = os.Chdir(dir)
+	defer testRepo.Chdir()()
 	if err != nil {
 		t.Fatalf("Failed to change directory: %v", err)
 	}
@@ -1260,7 +1080,7 @@ func TestErrorCases_EmptyPatchFile(t *testing.T) {
 	}
 
 	// ステージングエリアが空であることを確認
-	stagedFiles := getStagedFiles(t, dir)
+	stagedFiles := testRepo.GetStagedFiles()
 	if len(stagedFiles) != 0 {
 		t.Errorf("Expected no files to be staged after error, but got: %v", stagedFiles)
 	}
@@ -1273,8 +1093,9 @@ func TestBinaryFileHandling(t *testing.T) {
 	}
 
 	// Setup test repository
-	tempDir, cleanup := setupTestRepo(t)
-	defer cleanup()
+	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-e2e-*")
+	defer testRepo.Cleanup()
+	tempDir := testRepo.Path
 
 	// Change to temp directory
 	t.Chdir(tempDir)
@@ -1288,7 +1109,7 @@ func TestBinaryFileHandling(t *testing.T) {
 
 	// Create binary file (small PNG image)
 	binaryFile := "image.png"
-	if err := os.WriteFile(binaryFile, minimalPNGTransparent, 0644); err != nil {
+	if err := os.WriteFile(binaryFile, testutils.TestData.MinimalPNGTransparent, 0644); err != nil {
 		t.Fatalf("Failed to write binary file: %v", err)
 	}
 
@@ -1310,7 +1131,7 @@ func TestBinaryFileHandling(t *testing.T) {
 	}
 
 	// Replace binary file with a different one
-	if err := os.WriteFile(binaryFile, minimalPNGRed, 0644); err != nil {
+	if err := os.WriteFile(binaryFile, testutils.TestData.MinimalPNGRed, 0644); err != nil {
 		t.Fatalf("Failed to update binary file: %v", err)
 	}
 
@@ -1409,8 +1230,9 @@ func TestFileModificationAndMove(t *testing.T) {
 	}
 
 	// Setup test repository
-	tempDir, cleanup := setupTestRepo(t)
-	defer cleanup()
+	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-e2e-*")
+	defer testRepo.Cleanup()
+	tempDir := testRepo.Path
 
 	// Change to temp directory
 	t.Chdir(tempDir)
@@ -1600,8 +1422,9 @@ func TestLargeFileWithManyHunks(t *testing.T) {
 	}
 
 	// Setup test repository
-	tempDir, cleanup := setupTestRepo(t)
-	defer cleanup()
+	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-e2e-*")
+	defer testRepo.Cleanup()
+	tempDir := testRepo.Path
 
 	// Change to temp directory
 	t.Chdir(tempDir)
