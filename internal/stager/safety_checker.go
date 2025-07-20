@@ -458,27 +458,6 @@ func (s *SafetyChecker) CheckActualStagingArea() (*StagingAreaEvaluation, error)
 	return evaluation, nil
 }
 
-// isIntentToAdd checks if a file is intent-to-add using git ls-files
-func (s *SafetyChecker) isIntentToAdd(filename string) bool {
-	if s.executor == nil {
-		return false
-	}
-
-	// Check if file is in intent-to-add state
-	output, err := s.executor.Execute("git", "ls-files", "--cached", "--", filename)
-	if err != nil || len(output) == 0 {
-		return false
-	}
-
-	// For intent-to-add files, git diff --cached shows no content
-	diffOutput, err := s.executor.Execute("git", "diff", "--cached", "--", filename)
-	if err != nil {
-		return false
-	}
-
-	// Intent-to-add files have empty diff in staged area
-	return strings.TrimSpace(string(diffOutput)) == ""
-}
 
 // EvaluateWithFallback performs hybrid evaluation: patch-first with git command fallback
 // This is the recommended API for safety checking

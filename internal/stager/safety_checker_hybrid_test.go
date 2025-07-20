@@ -72,21 +72,10 @@ A  file2.txt
 func TestCheckActualStagingArea_IntentToAdd(t *testing.T) {
 	mockExec := executor.NewMockCommandExecutor()
 	// Mock staging area with intent-to-add file
-	statusOutput := `A  intent_to_add.txt`
+	// Note: ' A' (space + A) indicates intent-to-add
+	statusOutput := " A intent_to_add.txt"
 	mockExec.Commands["git [status --porcelain]"] = executor.MockResponse{
 		Output: []byte(statusOutput),
-		Error:  nil,
-	}
-	
-	// Mock ls-files check
-	mockExec.Commands["git [ls-files --cached -- intent_to_add.txt]"] = executor.MockResponse{
-		Output: []byte("intent_to_add.txt\n"),
-		Error:  nil,
-	}
-	
-	// Mock diff check (empty for intent-to-add)
-	mockExec.Commands["git [diff --cached -- intent_to_add.txt]"] = executor.MockResponse{
-		Output: []byte(""),
 		Error:  nil,
 	}
 	
@@ -156,6 +145,47 @@ func TestCheckActualStagingArea_NoExecutor(t *testing.T) {
 	
 	if safetyErr.Type != GitOperationFailed {
 		t.Errorf("Expected GitOperationFailed, got %v", safetyErr.Type)
+	}
+}
+
+func TestCheckActualStagingArea_MixedAddedFiles(t *testing.T) {
+	mockExec := executor.NewMockCommandExecutor()
+	// Mock staging area with mix of regular and intent-to-add files
+	// 'A ' = regular added, ' A' = intent-to-add
+	statusOutput := `A  regular1.txt
+ A intent1.txt
+A  regular2.txt
+ A intent2.txt`
+	mockExec.Commands["git [status --porcelain]"] = executor.MockResponse{
+		Output: []byte(statusOutput),
+		Error:  nil,
+	}
+	
+	checker := NewSafetyChecker(mockExec)
+	evaluation, err := checker.CheckActualStagingArea()
+	
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+	
+	// Should identify 2 intent-to-add files
+	if len(evaluation.IntentToAddFiles) != 2 {
+		t.Errorf("Expected 2 intent-to-add files, got: %v", evaluation.IntentToAddFiles)
+	}
+	
+	// Check specific files
+	intentMap := make(map[string]bool)
+	for _, f := range evaluation.IntentToAddFiles {
+		intentMap[f] = true
+	}
+	
+	if !intentMap["intent1.txt"] || !intentMap["intent2.txt"] {
+		t.Errorf("Expected intent1.txt and intent2.txt to be intent-to-add, got: %v", evaluation.IntentToAddFiles)
+	}
+	
+	// Total staged files should be 4
+	if len(evaluation.StagedFiles) != 4 {
+		t.Errorf("Expected 4 staged files, got: %v", evaluation.StagedFiles)
 	}
 }
 
