@@ -209,33 +209,20 @@ def goodbye():
 def farewell():
     print("Farewell!")
 `
-	if err := os.WriteFile(newFileName, []byte(newFileContent), 0644); err != nil {
-		t.Fatalf("Failed to create new file: %v", err)
-	}
+	repo.createFileWithContent(newFileName, newFileContent)
 
 	// Step 1: Intent-to-add the new file
-	if _, err := execCmd.Execute("git", "add", "-N", newFileName); err != nil {
-		t.Fatalf("Failed to intent-to-add file: %v", err)
-	}
+	repo.gitAddIntentToAdd(newFileName)
 
 	// Verify the file is intent-to-add
-	output, err := execCmd.Execute("git", "status", "--porcelain")
-	if err != nil {
-		t.Fatalf("Failed to get git status: %v", err)
-	}
-	if !strings.Contains(string(output), " A "+newFileName) {
-		t.Fatalf("File should be in intent-to-add state, got status: %s", output)
+	status := repo.getGitStatus()
+	if !strings.Contains(status, " A "+newFileName) {
+		t.Fatalf("File should be in intent-to-add state, got status: %s", status)
 	}
 
 	// Step 2: Generate patch file
 	patchFile := "changes.patch"
-	patchOutput, err := execCmd.Execute("git", "diff", "HEAD")
-	if err != nil {
-		t.Fatalf("Failed to generate patch: %v", err)
-	}
-	if err := os.WriteFile(patchFile, []byte(patchOutput), 0644); err != nil {
-		t.Fatalf("Failed to write patch file: %v", err)
-	}
+	patchOutput := repo.generatePatchFile(patchFile)
 
 	// Verify patch file contains the new file
 	if !strings.Contains(string(patchOutput), "+++ b/"+newFileName) {
@@ -243,13 +230,15 @@ def farewell():
 	}
 
 	// Step 3: Use git-sequential-stage to stage the first hunk
-	stager := NewStager(execCmd)
+	stager := NewStager(repo.execCmd)
 	hunkSpecs := []string{newFileName + ":1"}
-	err = stager.StageHunks(hunkSpecs, patchFile)
+	err := stager.StageHunks(hunkSpecs, patchFile)
 	
 	// With intent-to-add files, the safety check may detect them as new files
 	if err != nil {
-		if strings.Contains(err.Error(), "Safety Error") && strings.Contains(err.Error(), "staging_area_not_clean") {
+		// Check if it's a SafetyError with StagingAreaNotClean type
+		var safetyErr *SafetyError
+		if errors.As(err, &safetyErr) && safetyErr.Type == StagingAreaNotClean {
 			t.Logf("Safety check detected intent-to-add file as staged: %v", err)
 			t.Logf("This is expected behavior - in real workflow, user would resolve this")
 			return // Test passes - safety check is working correctly
@@ -258,7 +247,7 @@ def farewell():
 	}
 
 	// Verify the hunk was staged
-	stagedOutput, err := execCmd.Execute("git", "diff", "--cached")
+	stagedOutput, err := repo.execCmd.Execute("git", "diff", "--cached")
 	if err != nil {
 		t.Fatalf("Failed to get staged diff: %v", err)
 	}
@@ -267,12 +256,10 @@ def farewell():
 	}
 
 	// Step 4: Commit the staged changes
-	if _, err := execCmd.Execute("git", "commit", "-m", "feat: add hello function"); err != nil {
-		t.Fatalf("Failed to commit: %v", err)
-	}
+	repo.gitCommit("feat: add hello function")
 
 	// Verify commit was created
-	logOutput, err := execCmd.Execute("git", "log", "--oneline")
+	logOutput, err := repo.execCmd.Execute("git", "log", "--oneline")
 	if err != nil {
 		t.Fatalf("Failed to get git log: %v", err)
 	}
@@ -281,7 +268,7 @@ def farewell():
 	}
 
 	// Verify remaining content is still in working directory
-	workingDiff, err := execCmd.Execute("git", "diff", "HEAD")
+	workingDiff, err := repo.execCmd.Execute("git", "diff", "HEAD")
 	if err != nil {
 		t.Fatalf("Failed to get working diff: %v", err)
 	}
@@ -301,102 +288,40 @@ def farewell():
 // TestSemanticCommitWorkflow_MixedStagingScenario tests the mixed staging scenario
 // Intent-to-add files should continue, normal staging should error
 func TestSemanticCommitWorkflow_MixedStagingScenario(t *testing.T) {
-	// Enable safety check for this test
-	oldEnv := os.Getenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK")
-	os.Setenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK", "true")
-	defer os.Setenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK", oldEnv)
-	// Skip if dependencies are not available
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git not found in PATH")
-	}
-
-	// Create a temporary directory for the test
-	tmpDir, err := os.MkdirTemp("", "semantic_commit_mixed_test_*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	// Change to temp directory
-	originalDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Failed to get current dir: %v", err)
-	}
-	if err := os.Chdir(tmpDir); err != nil {
-		t.Fatalf("Failed to change to temp dir: %v", err)
-	}
-	defer os.Chdir(originalDir)
-
-	// Initialize git repository
-	execCmd := executor.NewRealCommandExecutor()
-	if _, err := execCmd.Execute("git", "init"); err != nil {
-		t.Fatalf("Failed to initialize git repo: %v", err)
-	}
-	if _, err := execCmd.Execute("git", "config", "user.name", "Test User"); err != nil {
-		t.Fatalf("Failed to set git user name: %v", err)
-	}
-	if _, err := execCmd.Execute("git", "config", "user.email", "test@example.com"); err != nil {
-		t.Fatalf("Failed to set git user email: %v", err)
-	}
+	// Setup test repository
+	repo := setupTestRepo(t, "semantic_commit_mixed_test")
 
 	// Create and commit an existing file first
 	existingFileName := "existing_file.py"
 	existingFileContent := `print("existing content")`
-	if err := os.WriteFile(existingFileName, []byte(existingFileContent), 0644); err != nil {
-		t.Fatalf("Failed to create existing file: %v", err)
-	}
-	if _, err := execCmd.Execute("git", "add", existingFileName); err != nil {
-		t.Fatalf("Failed to add existing file: %v", err)
-	}
-	if _, err := execCmd.Execute("git", "commit", "-m", "Initial commit"); err != nil {
-		t.Fatalf("Failed to commit existing file: %v", err)
-	}
+	repo.createFileWithContent(existingFileName, existingFileContent)
+	repo.gitAdd(existingFileName)
+	repo.gitCommit("Initial commit")
 
 	// Create a new file and use intent-to-add
 	newFileName := "new_file.py"
 	newFileContent := `def new_function():
     print("new content")`
-	if err := os.WriteFile(newFileName, []byte(newFileContent), 0644); err != nil {
-		t.Fatalf("Failed to create new file: %v", err)
-	}
-	if _, err := execCmd.Execute("git", "add", "-N", newFileName); err != nil {
-		t.Fatalf("Failed to intent-to-add new file: %v", err)
-	}
+	repo.createFileWithContent(newFileName, newFileContent)
+	repo.gitAddIntentToAdd(newFileName)
 
 	// Modify the existing file and stage it normally
 	modifiedContent := existingFileContent + `
 print("modified content")`
-	if err := os.WriteFile(existingFileName, []byte(modifiedContent), 0644); err != nil {
-		t.Fatalf("Failed to modify existing file: %v", err)
-	}
-	if _, err := execCmd.Execute("git", "add", existingFileName); err != nil {
-		t.Fatalf("Failed to stage existing file: %v", err)
-	}
+	repo.createFileWithContent(existingFileName, modifiedContent)
+	repo.gitAdd(existingFileName)
 
 	// Generate patch file
 	patchFile := "changes.patch"
-	patchOutput, err := execCmd.Execute("git", "diff", "HEAD")
-	if err != nil {
-		t.Fatalf("Failed to generate patch: %v", err)
-	}
-	if err := os.WriteFile(patchFile, []byte(patchOutput), 0644); err != nil {
-		t.Fatalf("Failed to write patch file: %v", err)
-	}
+	repo.generatePatchFile(patchFile)
 
 	// Try to use git-sequential-stage - should error due to normal staging
-	stager := NewStager(execCmd)
+	stager := NewStager(repo.execCmd)
 	hunkSpecs := []string{newFileName + ":1"}
-	err = stager.StageHunks(hunkSpecs, patchFile)
+	err := stager.StageHunks(hunkSpecs, patchFile)
 	
 	// Should get a safety error about staging area not being clean
-	if err == nil {
-		t.Fatalf("Expected error due to staging area not being clean, but got nil")
-	}
-	
-	// Verify the error is about staging area safety
-	if !strings.Contains(err.Error(), "Safety Error") {
-		t.Fatalf("Expected safety error, got: %v", err)
-	}
+	assertSafetyError(t, err, StagingAreaNotClean)
 	
 	// Error should mention the staged file
 	if !strings.Contains(err.Error(), existingFileName) {
@@ -406,97 +331,42 @@ print("modified content")`
 
 // TestSemanticCommitWorkflow_MultipleIntentToAddFiles tests multiple intent-to-add files
 func TestSemanticCommitWorkflow_MultipleIntentToAddFiles(t *testing.T) {
-	// Enable safety check for this test
-	oldEnv := os.Getenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK")
-	os.Setenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK", "true")
-	defer os.Setenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK", oldEnv)
-	// Skip if dependencies are not available
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git not found in PATH")
-	}
-
-	// Create a temporary directory for the test
-	tmpDir, err := os.MkdirTemp("", "semantic_commit_multiple_test_*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	// Change to temp directory
-	originalDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Failed to get current dir: %v", err)
-	}
-	if err := os.Chdir(tmpDir); err != nil {
-		t.Fatalf("Failed to change to temp dir: %v", err)
-	}
-	defer os.Chdir(originalDir)
-
-	// Initialize git repository
-	execCmd := executor.NewRealCommandExecutor()
-	if _, err := execCmd.Execute("git", "init"); err != nil {
-		t.Fatalf("Failed to initialize git repo: %v", err)
-	}
-	if _, err := execCmd.Execute("git", "config", "user.name", "Test User"); err != nil {
-		t.Fatalf("Failed to set git user name: %v", err)
-	}
-	if _, err := execCmd.Execute("git", "config", "user.email", "test@example.com"); err != nil {
-		t.Fatalf("Failed to set git user email: %v", err)
-	}
-
-	// Create initial commit to have HEAD
-	initialFile := "initial.txt"
-	if err := os.WriteFile(initialFile, []byte("initial content"), 0644); err != nil {
-		t.Fatalf("Failed to create initial file: %v", err)
-	}
-	if _, err := execCmd.Execute("git", "add", initialFile); err != nil {
-		t.Fatalf("Failed to add initial file: %v", err)
-	}
-	if _, err := execCmd.Execute("git", "commit", "-m", "Initial commit"); err != nil {
-		t.Fatalf("Failed to create initial commit: %v", err)
-	}
+	// Setup test repository
+	repo := setupTestRepo(t, "semantic_commit_multiple_test")
+	repo.createInitialCommit()
 
 	// Create multiple new files
 	file1Name := "file1.py"
 	file1Content := `def function1():
     print("function 1")`
-	if err := os.WriteFile(file1Name, []byte(file1Content), 0644); err != nil {
-		t.Fatalf("Failed to create file1: %v", err)
-	}
+	repo.createFileWithContent(file1Name, file1Content)
 
 	file2Name := "file2.py"
 	file2Content := `def function2():
     print("function 2")`
-	if err := os.WriteFile(file2Name, []byte(file2Content), 0644); err != nil {
-		t.Fatalf("Failed to create file2: %v", err)
-	}
+	repo.createFileWithContent(file2Name, file2Content)
 
 	// Intent-to-add both files
-	if _, err := execCmd.Execute("git", "add", "-N", file1Name, file2Name); err != nil {
+	if _, err := repo.execCmd.Execute("git", "add", "-N", file1Name, file2Name); err != nil {
 		t.Fatalf("Failed to intent-to-add files: %v", err)
 	}
 
 	// Generate patch file
 	patchFile := "changes.patch"
-	patchOutput, err := execCmd.Execute("git", "diff", "HEAD")
-	if err != nil {
-		t.Fatalf("Failed to generate patch: %v", err)
-	}
-	if err := os.WriteFile(patchFile, []byte(patchOutput), 0644); err != nil {
-		t.Fatalf("Failed to write patch file: %v", err)
-	}
+	repo.generatePatchFile(patchFile)
 
 	// Stage hunks from both files
-	stager := NewStager(execCmd)
+	stager := NewStager(repo.execCmd)
 	hunkSpecs := []string{file1Name + ":1", file2Name + ":1"}
-	err = stager.StageHunks(hunkSpecs, patchFile)
+	err := stager.StageHunks(hunkSpecs, patchFile)
 	
 	// With intent-to-add files, the safety check may detect them as new files
 	// This behavior is acceptable as the check is being conservative
 	// In a real semantic_commit workflow, the user would handle this appropriately
 	if err != nil {
-		// Check if it's a safety error related to staging area
-		if strings.Contains(err.Error(), "Safety Error") && strings.Contains(err.Error(), "staging_area_not_clean") {
+		// Check if it's a SafetyError with StagingAreaNotClean type
+		var safetyErr *SafetyError
+		if errors.As(err, &safetyErr) && safetyErr.Type == StagingAreaNotClean {
 			t.Logf("Safety check detected intent-to-add files as staged: %v", err)
 			t.Logf("This is expected behavior - in real workflow, user would resolve this")
 			return // Test passes - safety check is working correctly
@@ -505,7 +375,7 @@ func TestSemanticCommitWorkflow_MultipleIntentToAddFiles(t *testing.T) {
 	}
 
 	// Verify both hunks were staged
-	stagedOutput, err := execCmd.Execute("git", "diff", "--cached")
+	stagedOutput, err := repo.execCmd.Execute("git", "diff", "--cached")
 	if err != nil {
 		t.Fatalf("Failed to get staged diff: %v", err)
 	}
@@ -517,12 +387,10 @@ func TestSemanticCommitWorkflow_MultipleIntentToAddFiles(t *testing.T) {
 	}
 
 	// Commit the staged changes
-	if _, err := execCmd.Execute("git", "commit", "-m", "feat: add multiple functions"); err != nil {
-		t.Fatalf("Failed to commit: %v", err)
-	}
+	repo.gitCommit("feat: add multiple functions")
 
 	// Verify commit was created
-	logOutput, err := execCmd.Execute("git", "log", "--oneline")
+	logOutput, err := repo.execCmd.Execute("git", "log", "--oneline")
 	if err != nil {
 		t.Fatalf("Failed to get git log: %v", err)
 	}
@@ -533,55 +401,9 @@ func TestSemanticCommitWorkflow_MultipleIntentToAddFiles(t *testing.T) {
 
 // TestSemanticCommitWorkflow_PartialStagingLargeFile tests partial staging of a large intent-to-add file
 func TestSemanticCommitWorkflow_PartialStagingLargeFile(t *testing.T) {
-	// Enable safety check for this test
-	oldEnv := os.Getenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK")
-	os.Setenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK", "true")
-	defer os.Setenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK", oldEnv)
-	// Skip if dependencies are not available
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git not found in PATH")
-	}
-
-	// Create a temporary directory for the test
-	tmpDir, err := os.MkdirTemp("", "semantic_commit_partial_test_*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	// Change to temp directory
-	originalDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Failed to get current dir: %v", err)
-	}
-	if err := os.Chdir(tmpDir); err != nil {
-		t.Fatalf("Failed to change to temp dir: %v", err)
-	}
-	defer os.Chdir(originalDir)
-
-	// Initialize git repository
-	execCmd := executor.NewRealCommandExecutor()
-	if _, err := execCmd.Execute("git", "init"); err != nil {
-		t.Fatalf("Failed to initialize git repo: %v", err)
-	}
-	if _, err := execCmd.Execute("git", "config", "user.name", "Test User"); err != nil {
-		t.Fatalf("Failed to set git user name: %v", err)
-	}
-	if _, err := execCmd.Execute("git", "config", "user.email", "test@example.com"); err != nil {
-		t.Fatalf("Failed to set git user email: %v", err)
-	}
-
-	// Create initial commit to have HEAD
-	initialFile := "initial.txt"
-	if err := os.WriteFile(initialFile, []byte("initial content"), 0644); err != nil {
-		t.Fatalf("Failed to create initial file: %v", err)
-	}
-	if _, err := execCmd.Execute("git", "add", initialFile); err != nil {
-		t.Fatalf("Failed to add initial file: %v", err)
-	}
-	if _, err := execCmd.Execute("git", "commit", "-m", "Initial commit"); err != nil {
-		t.Fatalf("Failed to create initial commit: %v", err)
-	}
+	// Setup test repository
+	repo := setupTestRepo(t, "semantic_commit_partial_test")
+	repo.createInitialCommit()
 
 	// Create a large file with multiple functions
 	largeFileName := "large_file.py"
@@ -594,33 +416,25 @@ def function2():
 def function3():
     print("function 3")
 `
-	if err := os.WriteFile(largeFileName, []byte(largeFileContent), 0644); err != nil {
-		t.Fatalf("Failed to create large file: %v", err)
-	}
+	repo.createFileWithContent(largeFileName, largeFileContent)
 
 	// Intent-to-add the large file
-	if _, err := execCmd.Execute("git", "add", "-N", largeFileName); err != nil {
-		t.Fatalf("Failed to intent-to-add large file: %v", err)
-	}
+	repo.gitAddIntentToAdd(largeFileName)
 
 	// Generate patch file
 	patchFile := "changes.patch"
-	patchOutput, err := execCmd.Execute("git", "diff", "HEAD")
-	if err != nil {
-		t.Fatalf("Failed to generate patch: %v", err)
-	}
-	if err := os.WriteFile(patchFile, []byte(patchOutput), 0644); err != nil {
-		t.Fatalf("Failed to write patch file: %v", err)
-	}
+	repo.generatePatchFile(patchFile)
 
 	// Stage only selected hunks (1 and 3, skipping 2)
-	stager := NewStager(execCmd)
+	stager := NewStager(repo.execCmd)
 	hunkSpecs := []string{largeFileName + ":1,3"}
-	err = stager.StageHunks(hunkSpecs, patchFile)
+	err := stager.StageHunks(hunkSpecs, patchFile)
 	
 	// With intent-to-add files, the safety check may detect them as new files
 	if err != nil {
-		if strings.Contains(err.Error(), "Safety Error") && strings.Contains(err.Error(), "staging_area_not_clean") {
+		// Check if it's a SafetyError with StagingAreaNotClean type
+		var safetyErr *SafetyError
+		if errors.As(err, &safetyErr) && safetyErr.Type == StagingAreaNotClean {
 			t.Logf("Safety check detected intent-to-add file as staged: %v", err)
 			t.Logf("This is expected behavior - in real workflow, user would resolve this")
 			return // Test passes - safety check is working correctly
@@ -629,7 +443,7 @@ def function3():
 	}
 
 	// Verify selected hunks were staged
-	stagedOutput, err := execCmd.Execute("git", "diff", "--cached")
+	stagedOutput, err := repo.execCmd.Execute("git", "diff", "--cached")
 	if err != nil {
 		t.Fatalf("Failed to get staged diff: %v", err)
 	}
@@ -641,12 +455,10 @@ def function3():
 	}
 
 	// Commit the staged changes
-	if _, err := execCmd.Execute("git", "commit", "-m", "feat: add selected functions"); err != nil {
-		t.Fatalf("Failed to commit: %v", err)
-	}
+	repo.gitCommit("feat: add selected functions")
 
 	// Verify remaining content is still in working directory
-	workingDiff, err := execCmd.Execute("git", "diff", "HEAD")
+	workingDiff, err := repo.execCmd.Execute("git", "diff", "HEAD")
 	if err != nil {
 		t.Fatalf("Failed to get working diff: %v", err)
 	}
@@ -665,83 +477,27 @@ def function3():
 
 // TestSemanticCommitWorkflow_ErrorHandling tests error cases for intent-to-add workflow
 func TestSemanticCommitWorkflow_ErrorHandling(t *testing.T) {
-	// Enable safety check for this test
-	oldEnv := os.Getenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK")
-	os.Setenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK", "true")
-	defer os.Setenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK", oldEnv)
-	// Skip if dependencies are not available
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git not found in PATH")
-	}
-
-	// Create a temporary directory for the test
-	tmpDir, err := os.MkdirTemp("", "semantic_commit_error_test_*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	// Change to temp directory
-	originalDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Failed to get current dir: %v", err)
-	}
-	if err := os.Chdir(tmpDir); err != nil {
-		t.Fatalf("Failed to change to temp dir: %v", err)
-	}
-	defer os.Chdir(originalDir)
-
-	// Initialize git repository
-	execCmd := executor.NewRealCommandExecutor()
-	if _, err := execCmd.Execute("git", "init"); err != nil {
-		t.Fatalf("Failed to initialize git repo: %v", err)
-	}
-	if _, err := execCmd.Execute("git", "config", "user.name", "Test User"); err != nil {
-		t.Fatalf("Failed to set git user name: %v", err)
-	}
-	if _, err := execCmd.Execute("git", "config", "user.email", "test@example.com"); err != nil {
-		t.Fatalf("Failed to set git user email: %v", err)
-	}
-
-	// Create initial commit to have HEAD
-	initialFile := "initial.txt"
-	if err := os.WriteFile(initialFile, []byte("initial content"), 0644); err != nil {
-		t.Fatalf("Failed to create initial file: %v", err)
-	}
-	if _, err := execCmd.Execute("git", "add", initialFile); err != nil {
-		t.Fatalf("Failed to add initial file: %v", err)
-	}
-	if _, err := execCmd.Execute("git", "commit", "-m", "Initial commit"); err != nil {
-		t.Fatalf("Failed to create initial commit: %v", err)
-	}
+	// Setup test repository
+	repo := setupTestRepo(t, "semantic_commit_error_test")
+	repo.createInitialCommit()
 
 	// Test case: Non-existent hunk specification
 	newFileName := "new_file.py"
 	newFileContent := `def hello():
     print("Hello")`
-	if err := os.WriteFile(newFileName, []byte(newFileContent), 0644); err != nil {
-		t.Fatalf("Failed to create new file: %v", err)
-	}
+	repo.createFileWithContent(newFileName, newFileContent)
 
 	// Intent-to-add the file
-	if _, err := execCmd.Execute("git", "add", "-N", newFileName); err != nil {
-		t.Fatalf("Failed to intent-to-add file: %v", err)
-	}
+	repo.gitAddIntentToAdd(newFileName)
 
 	// Generate patch file
 	patchFile := "changes.patch"
-	patchOutput, err := execCmd.Execute("git", "diff", "HEAD")
-	if err != nil {
-		t.Fatalf("Failed to generate patch: %v", err)
-	}
-	if err := os.WriteFile(patchFile, []byte(patchOutput), 0644); err != nil {
-		t.Fatalf("Failed to write patch file: %v", err)
-	}
+	repo.generatePatchFile(patchFile)
 
 	// Try to stage a non-existent hunk
-	stager := NewStager(execCmd)
+	stager := NewStager(repo.execCmd)
 	hunkSpecs := []string{newFileName + ":99"} // Non-existent hunk number
-	err = stager.StageHunks(hunkSpecs, patchFile)
+	err := stager.StageHunks(hunkSpecs, patchFile)
 	
 	// Should get an error
 	if err == nil {
@@ -750,12 +506,15 @@ func TestSemanticCommitWorkflow_ErrorHandling(t *testing.T) {
 	
 	// The error could be either safety error (intent-to-add detected as new file) 
 	// or hunk not found error - both are valid depending on implementation
-	if strings.Contains(err.Error(), "Safety Error") && strings.Contains(err.Error(), "staging_area_not_clean") {
+	var safetyErr *SafetyError
+	var stagerErr *StagerError
+	
+	if errors.As(err, &safetyErr) && safetyErr.Type == StagingAreaNotClean {
 		t.Logf("Safety check detected intent-to-add file as staged: %v", err)
 		t.Logf("This prevents processing and is correct safety behavior")
-	} else if strings.Contains(err.Error(), "hunk") && strings.Contains(err.Error(), "not found") {
+	} else if errors.As(err, &stagerErr) && stagerErr.Type == ErrorTypeHunkNotFound {
 		t.Logf("Got expected hunk not found error: %v", err)
 	} else {
-		t.Fatalf("Expected either safety error or hunk not found error, got: %v", err)
+		t.Fatalf("Expected either SafetyError(StagingAreaNotClean) or StagerError(HunkNotFound), got: %T - %v", err, err)
 	}
 }
