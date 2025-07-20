@@ -33,33 +33,28 @@ func TestE2E_FinalIntegration(t *testing.T) {
 
 // S1: Test staging area state detection
 func testStagingAreaDetection(t *testing.T) {
-	dir, err := ioutil.TempDir("", "test-s1-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir, repo, cleanup := testutils.CreateTestRepo(t, "test-s1-*")
+	defer cleanup()
 
-	repo, _ := git.PlainInit(dir, false)
-	originalDir, _ := os.Getwd()
-	os.Chdir(dir)
-	defer os.Chdir(originalDir)
+	resetDir := testutils.SetupTestDir(t, dir)
+	defer resetDir()
 
 	// Create and commit initial file
-	createAndCommitFile(t, dir, repo, "test.txt", "initial content", "Initial commit")
+	testutils.CreateAndCommitFile(t, dir, repo, "test.txt", "initial content", "Initial commit")
 
 	// Modify file
-	ioutil.WriteFile("test.txt", []byte("modified content"), 0644)
+	os.WriteFile("test.txt", []byte("modified content"), 0644)
 
 	// Stage the file
-	runCommand(t, dir, "git", "add", "test.txt")
+	testutils.RunCommand(t, dir, "git", "add", "test.txt")
 
 	// Generate patch
 	patchFile := filepath.Join(dir, "changes.patch")
-	output, _ := runCommand(t, dir, "git", "diff", "HEAD")
-	ioutil.WriteFile(patchFile, []byte(output), 0644)
+	output, _ := testutils.RunCommand(t, dir, "git", "diff", "HEAD")
+	os.WriteFile(patchFile, []byte(output), 0644)
 
 	// Try to run git-sequential-stage - should fail with staging area not clean
-	err = runGitSequentialStage([]string{"test.txt:1"}, patchFile)
+	err := runGitSequentialStage([]string{"test.txt:1"}, patchFile)
 	
 	if err == nil {
 		t.Error("Expected error for staged files, but got none")

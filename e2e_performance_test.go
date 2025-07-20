@@ -41,7 +41,7 @@ func TestE2E_PerformanceWithSafetyChecks(t *testing.T) {
 
 		for i := 0; i < iterations; i++ {
 			// Reset staging area
-			runCommand(t, tmpDir, "git", "reset", "HEAD")
+			testutils.RunCommand(t, tmpDir, "git", "reset", "HEAD")
 			
 			start := time.Now()
 			err := runGitSequentialStage([]string{"large_module.py:1,3,5"}, patchFile)
