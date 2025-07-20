@@ -363,8 +363,8 @@ func (s *SafetyChecker) CheckActualStagingArea() (*StagingAreaEvaluation, error)
 	}
 
 	// Parse git status output
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	if len(lines) == 1 && lines[0] == "" {
+	outputStr := string(output)
+	if strings.TrimSpace(outputStr) == "" {
 		// Empty output means clean staging area
 		return &StagingAreaEvaluation{
 			IsClean:          true,
@@ -375,17 +375,29 @@ func (s *SafetyChecker) CheckActualStagingArea() (*StagingAreaEvaluation, error)
 		}, nil
 	}
 
+
 	// Process each line of git status output
+	lines := strings.Split(outputStr, "\n")
 	for _, line := range lines {
+		// Skip empty lines
+		if line == "" {
+			continue
+		}
 		if len(line) < 3 {
 			continue
 		}
 
 		statusCode := line[0:2]
-		filename := strings.TrimSpace(line[3:])
+		filename := strings.TrimSpace(line[2:])
 
 		// Only process staged changes (first character is not space)
-		if statusCode[0] == ' ' {
+		if statusCode[0] == GitStatusCodeSpace {
+			// Special case: ' A' indicates intent-to-add file
+			if statusCode[1] == GitStatusCodeAdded {
+				allStagedFiles = append(allStagedFiles, filename)
+				filesByStatus[FileStatusAdded] = append(filesByStatus[FileStatusAdded], filename)
+				intentToAddFiles = append(intentToAddFiles, filename)
+			}
 			continue
 		}
 
