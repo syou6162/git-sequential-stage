@@ -187,19 +187,14 @@ func testGitOperationErrorHandling(t *testing.T) {
 
 // S5: Test semantic commit workflow integration
 func testSemanticCommitWorkflow(t *testing.T) {
-	dir, err := ioutil.TempDir("", "test-s5-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir, repo, cleanup := testutils.CreateTestRepo(t, "test-s5-*")
+	defer cleanup()
 
-	repo, _ := git.PlainInit(dir, false)
-	originalDir, _ := os.Getwd()
-	os.Chdir(dir)
-	defer os.Chdir(originalDir)
+	resetDir := testutils.SetupTestDir(t, dir)
+	defer resetDir()
 
 	// Create initial commit
-	createAndCommitFile(t, dir, repo, "existing.txt", "existing", "Initial commit")
+	testutils.CreateAndCommitFile(t, dir, repo, "existing.txt", "existing", "Initial commit")
 
 	// Semantic commit workflow steps
 	// Step 1: Add new file with intent-to-add
