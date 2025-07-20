@@ -161,14 +161,15 @@ func buildTargetIDs(hunkSpecs []string, allHunks []HunkInfo) ([]string, error) {
 	return targetIDs, nil
 }
 
-// performSafetyChecks checks the safety of the staging area based on patch content
+// performSafetyChecks checks the safety of the staging area using hybrid approach
 func (s *Stager) performSafetyChecks(patchContent string) error {
-	checker := NewSafetyChecker()
-	evaluation, err := checker.EvaluatePatchContent(patchContent)
+	// Use hybrid approach: patch-first with git command fallback
+	checker := NewSafetyChecker(s.executor)
+	evaluation, err := checker.EvaluateWithFallback(patchContent)
 	if err != nil {
 		return NewSafetyError(GitOperationFailed,
-			"Failed to evaluate patch content safety",
-			"Check if the patch content is valid", err)
+			"Failed to evaluate staging area safety",
+			"Check if the patch content is valid and git commands are available", err)
 	}
 
 	// Intent-to-add files are allowed to continue
