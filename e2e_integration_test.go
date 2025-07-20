@@ -117,38 +117,33 @@ func testIntentToAddIntegration(t *testing.T) {
 
 // S3: Test file type specific error messages
 func testFileTypeErrorMessages(t *testing.T) {
-	dir, err := ioutil.TempDir("", "test-s3-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir, repo, cleanup := testutils.CreateTestRepo(t, "test-s3-*")
+	defer cleanup()
 
-	repo, _ := git.PlainInit(dir, false)
-	originalDir, _ := os.Getwd()
-	os.Chdir(dir)
-	defer os.Chdir(originalDir)
+	resetDir := testutils.SetupTestDir(t, dir)
+	defer resetDir()
 
 	// Create initial files
-	createAndCommitFile(t, dir, repo, "modify.txt", "original", "Initial commit")
-	createAndCommitFile(t, dir, repo, "delete.txt", "to be deleted", "Add delete.txt")
-	createAndCommitFile(t, dir, repo, "rename_from.txt", "rename me", "Add rename_from.txt")
+	testutils.CreateAndCommitFile(t, dir, repo, "modify.txt", "original", "Initial commit")
+	testutils.CreateAndCommitFile(t, dir, repo, "delete.txt", "to be deleted", "Add delete.txt")
+	testutils.CreateAndCommitFile(t, dir, repo, "rename_from.txt", "rename me", "Add rename_from.txt")
 
 	// Make various changes
-	ioutil.WriteFile("modify.txt", []byte("modified"), 0644)
-	ioutil.WriteFile("new.txt", []byte("new file"), 0644)
+	os.WriteFile("modify.txt", []byte("modified"), 0644)
+	os.WriteFile("new.txt", []byte("new file"), 0644)
 	os.Remove("delete.txt")
-	runCommand(t, dir, "git", "mv", "rename_from.txt", "rename_to.txt")
+	testutils.RunCommand(t, dir, "git", "mv", "rename_from.txt", "rename_to.txt")
 
 	// Stage all changes
-	runCommand(t, dir, "git", "add", "-A")
+	testutils.RunCommand(t, dir, "git", "add", "-A")
 
 	// Generate patch
 	patchFile := filepath.Join(dir, "changes.patch")
-	output, _ := runCommand(t, dir, "git", "diff", "HEAD")
-	ioutil.WriteFile(patchFile, []byte(output), 0644)
+	output, _ := testutils.RunCommand(t, dir, "git", "diff", "HEAD")
+	os.WriteFile(patchFile, []byte(output), 0644)
 
 	// Try to run git-sequential-stage
-	err = runGitSequentialStage([]string{"modify.txt:1"}, patchFile)
+	err := runGitSequentialStage([]string{"modify.txt:1"}, patchFile)
 	
 	if err == nil {
 		t.Error("Expected error for mixed staged files, but got none")
