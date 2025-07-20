@@ -50,9 +50,36 @@ graph TD
    - 必要な場合のみ実行することで、全体的なパフォーマンスを向上
 
 ```go
+// GitStatusReader is responsible for reading and parsing git status information
+type GitStatusReader interface {
+    // ReadStatus reads the current git status and returns parsed file information
+    ReadStatus() (*GitStatusInfo, error)
+}
+
+// GitStatusInfo contains parsed git status information
+type GitStatusInfo struct {
+    FilesByStatus    map[FileStatus][]string
+    StagedFiles      []string
+    IntentToAddFiles []string
+}
+
+// PatchAnalyzer is responsible for analyzing patch content and extracting file information
+type PatchAnalyzer interface {
+    // AnalyzePatch analyzes patch content and returns file status information
+    AnalyzePatch(patchContent string) (*PatchAnalysisResult, error)
+}
+
+// PatchAnalysisResult contains the result of patch analysis
+type PatchAnalysisResult struct {
+    FilesByStatus    map[FileStatus][]string
+    AllFiles         []string
+    IntentToAddFiles []string
+}
+
 // SafetyChecker - ハイブリッド安全性チェッカー
 type SafetyChecker struct {
-    executor executor.CommandExecutor  // 必要に応じてgitコマンドを実行
+    statusReader   GitStatusReader
+    patchAnalyzer  PatchAnalyzer
 }
 
 type StagingAreaEvaluation struct {
@@ -62,7 +89,7 @@ type StagingAreaEvaluation struct {
     ErrorMessage      string
     AllowContinue     bool      // intent-to-addのみの場合はtrue
     RecommendedActions []RecommendedAction  // LLM Agent用の推奨アクション
-    FilesByStatus     map[string][]string  // ステータス別ファイルリスト
+    FilesByStatus     map[FileStatus][]string  // ステータス別ファイルリスト
 }
 
 type RecommendedAction struct {
@@ -167,6 +194,23 @@ func (h *IntentToAddHandler) ProcessIntentToAddHunk(hunk *HunkInfo, content []by
   - パッチに変更が含まれる場合、実際のステージングエリアの確認が必要
   - パッチが空の場合、パッチベースのチェックで十分
 - 各ユースケース（S1.1-S1.8）に対応した専用メッセージを提供
+
+#### コンポーネントの実装
+
+##### GitStatusReader
+- `DefaultGitStatusReader`: executor.CommandExecutorを使用してgit statusコマンドを実行
+- git status --porcelainの出力を解析し、構造化されたデータに変換
+- ステータスコードの解析とintent-to-addファイルの検出を担当
+
+##### PatchAnalyzer
+- `DefaultPatchAnalyzer`: go-gitdiffライブラリを使用してパッチを解析
+- パッチファイルからファイルの変更状態を抽出
+- intent-to-addファイル（新規空ファイル）の検出を担当
+
+##### SafetyChecker
+- 上記2つのコンポーネントを組み合わせて安全性チェックを実行
+- ハイブリッドアプローチの調整を担当
+- エラーメッセージの生成と推奨アクションの構築を担当
 
 #### 実装詳細
 
