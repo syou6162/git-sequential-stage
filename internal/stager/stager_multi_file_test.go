@@ -12,7 +12,7 @@ func TestStageHunks_MultiFilePatches_Documentation(t *testing.T) {
 	// Currently, there is an issue where patch IDs differ between:
 	// 1. Extracting a hunk from a multi-file patch
 	// 2. Extracting the same hunk from a single-file diff
-	
+
 	t.Log("Multi-file patch issue:")
 	t.Log("1. User provides a multi-file patch (e.g., git diff HEAD > all.patch)")
 	t.Log("2. StageHunks extracts hunk N from the multi-file patch using filterdiff")
@@ -22,4 +22,3 @@ func TestStageHunks_MultiFilePatches_Documentation(t *testing.T) {
 	t.Log("Current workaround: Use single-file patches")
 	t.Log("Potential fix: Ensure consistent patch ID calculation")
 }
-

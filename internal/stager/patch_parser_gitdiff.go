@@ -6,7 +6,6 @@ import (
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
 )
 
-
 // parsePatchFileWithGitDiff parses a patch file using go-gitdiff library
 func parsePatchFileWithGitDiff(patchContent string) ([]HunkInfo, error) {
 	var hunks []HunkInfo
@@ -17,7 +16,7 @@ func parsePatchFileWithGitDiff(patchContent string) ([]HunkInfo, error) {
 	if err != nil {
 		return nil, NewParsingError("patch with go-gitdiff", err)
 	}
-	
+
 	// Check if the patch contains binary file markers
 	// go-gitdiff doesn't automatically detect "Binary files ... differ" as binary
 	binaryFiles := make(map[string]bool)
@@ -32,7 +31,7 @@ func parsePatchFileWithGitDiff(patchContent string) ([]HunkInfo, error) {
 				currentFile = strings.TrimPrefix(parts[3], "b/")
 			}
 		}
-		
+
 		// Check for binary file marker
 		if strings.HasPrefix(line, "Binary files") && strings.HasSuffix(line, "differ") && currentFile != "" {
 			binaryFiles[currentFile] = true
@@ -61,7 +60,6 @@ func parsePatchFileWithGitDiff(patchContent string) ([]HunkInfo, error) {
 			filePath = file.NewName
 			oldFilePath = file.OldName
 		}
-
 
 		// Handle binary files
 		// Check both go-gitdiff detection and our manual detection
@@ -96,5 +94,3 @@ func parsePatchFileWithGitDiff(patchContent string) ([]HunkInfo, error) {
 
 	return hunks, nil
 }
-
-

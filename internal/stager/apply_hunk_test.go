@@ -106,23 +106,22 @@ index abc123..def456 100644
 			if tt.mockSetup != nil {
 				tt.mockSetup(mock)
 			}
-			
+
 			stager := NewStager(mock)
-			
+
 			// Test without debug environment variable
 			err := stager.applyHunk([]byte(tt.hunkContent), tt.targetID)
-			
+
 			if tt.expectErr && err == nil {
 				t.Error("Expected error but got none")
 			}
 			if !tt.expectErr && err != nil {
 				t.Errorf("Unexpected error: %v", err)
 			}
-			
+
 			if tt.checkError != nil && err != nil {
 				tt.checkError(t, err)
 			}
 		})
 	}
 }
-

@@ -18,7 +18,7 @@ func TestFileStatus_String(t *testing.T) {
 
 	for _, test := range tests {
 		if test.status.String() != test.expected {
-			t.Errorf("FileStatus(%d).String() = %s, expected %s", 
+			t.Errorf("FileStatus(%d).String() = %s, expected %s",
 				test.status, test.status.String(), test.expected)
 		}
 	}
@@ -38,7 +38,7 @@ func TestActionCategory_String(t *testing.T) {
 
 	for _, test := range tests {
 		if test.category.String() != test.expected {
-			t.Errorf("ActionCategory(%d).String() = %s, expected %s", 
+			t.Errorf("ActionCategory(%d).String() = %s, expected %s",
 				test.category, test.category.String(), test.expected)
 		}
 	}
@@ -49,16 +49,16 @@ func TestEnumTypeSafety(t *testing.T) {
 	filesByStatus := make(map[FileStatus][]string)
 	filesByStatus[FileStatusModified] = []string{"test.go"}
 	filesByStatus[FileStatusAdded] = []string{"new.go"}
-	
+
 	// Test accessing enum map
 	if len(filesByStatus[FileStatusModified]) != 1 {
 		t.Error("Expected 1 modified file")
 	}
-	
+
 	if filesByStatus[FileStatusModified][0] != "test.go" {
 		t.Error("Expected test.go in modified files")
 	}
-	
+
 	// Test RecommendedAction with enum category
 	action := RecommendedAction{
 		Description: "Test action",
@@ -66,11 +66,11 @@ func TestEnumTypeSafety(t *testing.T) {
 		Priority:    1,
 		Category:    ActionCategoryCommit,
 	}
-	
+
 	if action.Category != ActionCategoryCommit {
 		t.Error("Expected ActionCategoryCommit")
 	}
-	
+
 	if action.Category.String() != "commit" {
 		t.Errorf("Expected 'commit', got %s", action.Category.String())
 	}

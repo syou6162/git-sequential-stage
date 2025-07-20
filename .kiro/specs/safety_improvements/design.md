@@ -27,12 +27,59 @@ graph TD
 
 #### 1. SafetyChecker コンポーネント
 
-**責務:** パッチファイルからの安全性チェックを実行（**完全gitコマンド不要**）
+**責務:** 安全性チェックを実行（ハイブリッドアプローチ）
+
+**設計方針:**
+- 基本的にはパッチファイルの内容から判断する（効率性と保守性を重視）
+- パッチファイルの内容から原理的に判断が困難な場合のみ、gitコマンドを実行する
+- 具体的には、`git diff HEAD`の出力からはステージング済みかどうか判断できないため、実際のステージングエリアの確認が必要な場合はgitコマンドを使用
+
+**パッチファイルベースのアプローチを優先する理由:**
+1. **既存ライブラリの活用**: go-gitdiffライブラリによる堅牢なパッチ解析が利用可能
+   - 実績のあるライブラリで、Gitのdiff形式を正確に解析
+   - バグが少なく、メンテナンスも活発
+2. **パース処理の信頼性**: gitコマンドの出力を自前でパースする場合のリスク回避
+   - 自前のパーサーはバグの温床になりやすい
+   - Gitのバージョンによる出力形式の違いへの対応が必要
+   - エッジケースの処理が複雑
+3. **メンテナンス性**: 保守すべきコードの最小化
+   - go-gitdiffに処理を委譲することで、自前のパース処理を最小限に
+   - 将来的な変更への対応もライブラリ側で吸収される
+4. **パフォーマンス**: 多くの場合、パッチファイルの解析だけで十分
+   - gitコマンドの実行はプロセス起動のオーバーヘッドがある
+   - 必要な場合のみ実行することで、全体的なパフォーマンスを向上
 
 ```go
-// SafetyChecker - 完全にステートレスなパッチベース安全性チェッカー
+// GitStatusReader is responsible for reading and parsing git status information
+type GitStatusReader interface {
+    // ReadStatus reads the current git status and returns parsed file information
+    ReadStatus() (*GitStatusInfo, error)
+}
+
+// GitStatusInfo contains parsed git status information
+type GitStatusInfo struct {
+    FilesByStatus    map[FileStatus][]string
+    StagedFiles      []string
+    IntentToAddFiles []string
+}
+
+// PatchAnalyzer is responsible for analyzing patch content and extracting file information
+type PatchAnalyzer interface {
+    // AnalyzePatch analyzes patch content and returns file status information
+    AnalyzePatch(patchContent string) (*PatchAnalysisResult, error)
+}
+
+// PatchAnalysisResult contains the result of patch analysis
+type PatchAnalysisResult struct {
+    FilesByStatus    map[FileStatus][]string
+    AllFiles         []string
+    IntentToAddFiles []string
+}
+
+// SafetyChecker - ハイブリッド安全性チェッカー
 type SafetyChecker struct {
-    // フィールドなし - 完全にステートレス
+    statusReader   GitStatusReader
+    patchAnalyzer  PatchAnalyzer
 }
 
 type StagingAreaEvaluation struct {
@@ -42,7 +89,7 @@ type StagingAreaEvaluation struct {
     ErrorMessage      string
     AllowContinue     bool      // intent-to-addのみの場合はtrue
     RecommendedActions []RecommendedAction  // LLM Agent用の推奨アクション
-    FilesByStatus     map[string][]string  // ステータス別ファイルリスト
+    FilesByStatus     map[FileStatus][]string  // ステータス別ファイルリスト
 }
 
 type RecommendedAction struct {
@@ -54,8 +101,9 @@ type RecommendedAction struct {
 ```
 
 **主要メソッド:**
-- `EvaluatePatchContent(patchContent string) (*StagingAreaEvaluation, error)`: パッチ内容からの安全性評価（**主要API**）
-- ~~`EvaluateStagingArea() (*StagingAreaEvaluation, error)`~~: **廃止済み** (Phase 2で廃止、Phase 3で削除予定)
+- `EvaluatePatchContent(patchContent string) (*StagingAreaEvaluation, error)`: パッチ内容からの安全性評価（効率的だが限定的）
+- `CheckActualStagingArea() (*StagingAreaEvaluation, error)`: 実際のステージングエリアの状態を確認（正確だがコストが高い）
+- `EvaluateWithFallback(patchContent string) (*StagingAreaEvaluation, error)`: ハイブリッドアプローチ（**推奨API**）
 
 #### 2. Enhanced File Processing
 
@@ -133,13 +181,36 @@ func (h *IntentToAddHandler) ProcessIntentToAddHunk(hunk *HunkInfo, content []by
 
 ### 1. ステージングエリア保護機能
 
-#### 実装方針
-- `StageHunks`メソッドの開始時に`SafetyChecker.EvaluatePatchContent()`を呼び出し
-- **パッチファイル内容からの完全解析**: go-gitdiffライブラリによる詳細状態取得
-- ファイルタイプ別（M/A/D/R/C/BINARY）に分類して詳細なエラーメッセージと対処法を表示
-- **Intent-to-add検出**: `IsNew && len(TextFragments) == 0` による自動検出
-- **完全gitコマンド不要**: パッチファイルのみで全ての安全性チェックを実行
+#### 実装方針（ハイブリッドアプローチ）
+- `StageHunks`メソッドの開始時に安全性チェックを実行
+- **第1段階**: パッチファイル内容から可能な限り判断（`EvaluatePatchContent`）
+  - go-gitdiffライブラリによる詳細解析
+  - Intent-to-add検出: `IsNew && len(TextFragments) == 0`
+  - ファイルタイプ別（M/A/D/R/C/BINARY）の分類
+- **第2段階**: 必要に応じて実際のステージングエリアを確認（`CheckActualStagingArea`）
+  - パッチファイルから判断できない場合のみ実行
+  - `git status --porcelain`でステージング済みファイルを確認
+- **判断基準**:
+  - パッチに変更が含まれる場合、実際のステージングエリアの確認が必要
+  - パッチが空の場合、パッチベースのチェックで十分
 - 各ユースケース（S1.1-S1.8）に対応した専用メッセージを提供
+
+#### コンポーネントの実装
+
+##### GitStatusReader
+- `DefaultGitStatusReader`: executor.CommandExecutorを使用してgit statusコマンドを実行
+- git status --porcelainの出力を解析し、構造化されたデータに変換
+- ステータスコードの解析とintent-to-addファイルの検出を担当
+
+##### PatchAnalyzer
+- `DefaultPatchAnalyzer`: go-gitdiffライブラリを使用してパッチを解析
+- パッチファイルからファイルの変更状態を抽出
+- intent-to-addファイル（新規空ファイル）の検出を担当
+
+##### SafetyChecker
+- 上記2つのコンポーネントを組み合わせて安全性チェックを実行
+- ハイブリッドアプローチの調整を担当
+- エラーメッセージの生成と推奨アクションの構築を担当
 
 #### 実装詳細
 
@@ -154,7 +225,9 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
 }
 
 func (s *Stager) performSafetyChecks(patchContent string) error {
-    checker := NewSafetyChecker()  // 引数不要
+    checker := NewSafetyChecker(s.executor)
+    
+    // ハイブリッドアプローチ: まずパッチ内容から判断を試みる
     evaluation, err := checker.EvaluatePatchContent(patchContent)
     if err != nil {
         return NewSafetyError(GitOperationFailed, 
@@ -162,13 +235,23 @@ func (s *Stager) performSafetyChecks(patchContent string) error {
             "Check if the patch content is valid", err)
     }
     
-    if !evaluation.IsClean {
-        // Intent-to-addファイルのみの場合は警告のみで継続
-        if evaluation.AllowContinue {
-            s.logger.Info("Intent-to-add files detected (semantic_commit workflow). Continuing...")
-            return nil
+    // パッチに変更が含まれる場合、実際のステージングエリアの確認が必要
+    if len(evaluation.StagedFiles) > 0 {
+        // 実際のステージングエリアを確認
+        actualEval, err := checker.CheckActualStagingArea()
+        if err != nil {
+            return err
         }
-        return s.generateDetailedStagingError(evaluation)
+        
+        // 実際にステージング済みのファイルがある場合
+        if !actualEval.IsClean {
+            // Intent-to-addファイルのみの場合は警告のみで継続
+            if actualEval.AllowContinue {
+                s.logger.Info("Intent-to-add files detected (semantic_commit workflow). Continuing...")
+                return nil
+            }
+            return s.generateDetailedStagingError(actualEval)
+        }
     }
     
     return nil
@@ -478,7 +561,7 @@ func (e *SafetyError) Error() string {
 
 ## データフロー
 
-### 1. 安全性チェックフロー
+### 1. 安全性チェックフロー（ハイブリッドアプローチ）
 
 ```mermaid
 sequenceDiagram
@@ -486,17 +569,30 @@ sequenceDiagram
     participant S as Stager
     participant SC as SafetyChecker
     participant P as PatchFile
+    participant G as Git
     
     M->>S: StageHunks()
     S->>P: Read patch content
     P-->>S: patch content string
     S->>SC: EvaluatePatchContent(patchContent)
-    SC->>SC: Parse with go-gitdiff + Intent-to-add detection
-    SC-->>S: StagingAreaEvaluation
-    alt Staging area not clean
-        S-->>M: SafetyError with advice
-    else Clean or Intent-to-add only
-        S->>S: Continue with normal processing
+    SC->>SC: Parse with go-gitdiff
+    SC-->>S: Initial evaluation
+    
+    alt Patch contains changes
+        S->>SC: CheckActualStagingArea()
+        SC->>G: git status --porcelain
+        G-->>SC: Actual staging status
+        SC->>G: git ls-files (if needed)
+        G-->>SC: Intent-to-add info
+        SC-->>S: Actual staging evaluation
+        
+        alt Staging area has conflicts
+            S-->>M: SafetyError with advice
+        else Clean or Intent-to-add only
+            S->>S: Continue with normal processing
+        end
+    else Empty patch
+        S->>S: Continue (already clean)
     end
 ```
 
@@ -568,6 +664,10 @@ sequenceDiagram
 - **安全性最優先**: 互換性よりも安全性を重視
 - **ユーザーフレンドリー**: 分かりやすいエラーメッセージと対処法
 - **シンプルな実装**: 複雑な互換性維持コードを避ける
+- **ハイブリッドアプローチ**: 効率性と正確性のバランス
+  - 基本的にはパッチファイルベースで判断（高速）
+  - 必要な場合のみgitコマンドを実行（正確）
+  - パフォーマンスと正確性の最適なトレードオフ
 
 ### 将来の拡張性
 - 設定ファイルによる安全性チェックのカスタマイズ

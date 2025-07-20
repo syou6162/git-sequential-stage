@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-
-	"github.com/bluekeyes/go-gitdiff/gitdiff"
 )
 
 // FileStatus represents the modification status of a file
@@ -18,6 +16,20 @@ const (
 	FileStatusRenamed
 	FileStatusCopied
 	FileStatusBinary
+)
+
+// Git status codes from git status --porcelain
+// These are the character codes used in git status output
+const (
+	GitStatusCodeModified  = 'M'
+	GitStatusCodeAdded     = 'A'
+	GitStatusCodeDeleted   = 'D'
+	GitStatusCodeRenamed   = 'R'
+	GitStatusCodeCopied    = 'C'
+	GitStatusCodeUnmerged  = 'U'
+	GitStatusCodeUntracked = '?'
+	GitStatusCodeIgnored   = '!'
+	GitStatusCodeSpace     = ' '
 )
 
 // String returns the string representation of FileStatus
@@ -67,19 +79,21 @@ func (ac ActionCategory) String() string {
 }
 
 // SafetyChecker provides functionality to check the safety of staging operations
-// This is now a stateless utility that operates purely on patch content
+// Uses a hybrid approach: patch-based analysis with git command fallback when necessary
 type SafetyChecker struct {
+	statusReader  GitStatusReader
+	patchAnalyzer PatchAnalyzer
 }
 
 // StagingAreaEvaluation contains the result of evaluating the staging area
 type StagingAreaEvaluation struct {
-	IsClean              bool
-	StagedFiles          []string
-	IntentToAddFiles     []string
-	ErrorMessage         string
-	AllowContinue        bool
-	RecommendedActions   []RecommendedAction
-	FilesByStatus        map[FileStatus][]string
+	IsClean            bool
+	StagedFiles        []string
+	IntentToAddFiles   []string
+	ErrorMessage       string
+	AllowContinue      bool
+	RecommendedActions []RecommendedAction
+	FilesByStatus      map[FileStatus][]string
 }
 
 // RecommendedAction represents an action that can be taken to resolve a staging issue
@@ -91,104 +105,58 @@ type RecommendedAction struct {
 }
 
 // NewSafetyChecker creates a new SafetyChecker instance
-// No longer requires an executor since all operations are patch-based
-func NewSafetyChecker() *SafetyChecker {
-	return &SafetyChecker{}
-}
-
-// EvaluateStagingArea evaluates the current staging area for safety
-// DEPRECATED: This method requires git commands. Use EvaluatePatchContent instead for git-command-free operation.
-func (s *SafetyChecker) EvaluateStagingArea() (*StagingAreaEvaluation, error) {
-	return nil, NewSafetyError(DeprecatedMethod,
-		"EvaluateStagingArea is deprecated",
-		"Use EvaluatePatchContent with patch file content instead", nil)
+// Accepts an optional repoPath for hybrid approach ("" = patch-only mode)
+func NewSafetyChecker(repoPath string) *SafetyChecker {
+	var statusReader GitStatusReader
+	if repoPath != "" {
+		statusReader = NewGitStatusReader(repoPath)
+	}
+	return &SafetyChecker{
+		statusReader:  statusReader,
+		patchAnalyzer: NewPatchAnalyzer(),
+	}
 }
 
 // EvaluatePatchContent evaluates safety from patch content (git-command-free analysis)
 func (s *SafetyChecker) EvaluatePatchContent(patchContent string) (*StagingAreaEvaluation, error) {
-	filesByStatus := make(map[FileStatus][]string)
-	var allStagedFiles []string
-	var intentToAddFiles []string
+	// Use patch analyzer to analyze the patch
+	analysisResult, err := s.patchAnalyzer.AnalyzePatch(patchContent)
+	if err != nil {
+		return nil, err
+	}
 
-	// If no patch content, staging area is clean
-	if strings.TrimSpace(patchContent) == "" {
+	// If no files in the analysis, staging area is clean
+	if len(analysisResult.AllFiles) == 0 {
 		return &StagingAreaEvaluation{
-			IsClean:           true,
-			StagedFiles:       []string{},
-			IntentToAddFiles:  []string{},
-			AllowContinue:     true,
-			FilesByStatus:     filesByStatus,
+			IsClean:          true,
+			StagedFiles:      []string{},
+			IntentToAddFiles: []string{},
+			AllowContinue:    true,
+			FilesByStatus:    analysisResult.FilesByStatus,
 		}, nil
 	}
 
-	// Parse the patch using go-gitdiff for comprehensive analysis
-	files, _, err := gitdiff.Parse(strings.NewReader(patchContent))
-	if err != nil {
-		return nil, NewSafetyError(GitOperationFailed,
-			"Failed to parse patch content",
-			"Check if the patch content is valid", err)
-	}
-
-	// Extract file information from go-gitdiff analysis
-	for _, file := range files {
-		filename := file.NewName
-		if file.IsDelete {
-			filename = file.OldName
-		}
-
-		// Add to all staged files list
-		allStagedFiles = append(allStagedFiles, filename)
-
-		// Detect intent-to-add files (empty blobs in new files)
-		if file.IsNew && len(file.TextFragments) == 0 {
-			intentToAddFiles = append(intentToAddFiles, filename)
-		}
-
-		// Categorize files based on go-gitdiff detection
-		switch {
-		case file.IsBinary:
-			// Handle binary files first (they can also be new/modified/etc)
-			filesByStatus[FileStatusBinary] = append(filesByStatus[FileStatusBinary], filename)
-		case file.IsNew:
-			filesByStatus[FileStatusAdded] = append(filesByStatus[FileStatusAdded], filename)
-		case file.IsDelete:
-			filesByStatus[FileStatusDeleted] = append(filesByStatus[FileStatusDeleted], filename)
-		case file.IsRename:
-			// Store rename with proper notation
-			renameNotation := file.OldName + " -> " + file.NewName
-			filesByStatus[FileStatusRenamed] = append(filesByStatus[FileStatusRenamed], renameNotation)
-		case file.IsCopy:
-			// Store copy with proper notation
-			copyNotation := file.OldName + " -> " + file.NewName
-			filesByStatus[FileStatusCopied] = append(filesByStatus[FileStatusCopied], copyNotation)
-		default:
-			// Regular modifications
-			filesByStatus[FileStatusModified] = append(filesByStatus[FileStatusModified], filename)
-		}
-	}
-
 	// Determine if staging area is clean (only intent-to-add files allowed)
-	nonIntentToAddStaged := s.filterNonIntentToAdd(allStagedFiles, intentToAddFiles)
-	isClean := len(allStagedFiles) == 0
+	nonIntentToAddStaged := s.filterNonIntentToAdd(analysisResult.AllFiles, analysisResult.IntentToAddFiles)
+	isClean := len(analysisResult.AllFiles) == 0
 	allowContinue := len(nonIntentToAddStaged) == 0
 
 	evaluation := &StagingAreaEvaluation{
-		IsClean:           isClean,
-		StagedFiles:       allStagedFiles,
-		IntentToAddFiles:  intentToAddFiles,
-		AllowContinue:     allowContinue,
-		FilesByStatus:     filesByStatus,
+		IsClean:          isClean,
+		StagedFiles:      analysisResult.AllFiles,
+		IntentToAddFiles: analysisResult.IntentToAddFiles,
+		AllowContinue:    allowContinue,
+		FilesByStatus:    analysisResult.FilesByStatus,
 	}
 
 	// Generate error message and recommended actions if not clean
 	if !isClean {
-		evaluation.ErrorMessage = s.buildStagingErrorMessage(filesByStatus, intentToAddFiles)
-		evaluation.RecommendedActions = s.buildRecommendedActions(filesByStatus, intentToAddFiles)
+		evaluation.ErrorMessage = s.buildStagingErrorMessage(analysisResult.FilesByStatus, analysisResult.IntentToAddFiles)
+		evaluation.RecommendedActions = s.buildRecommendedActions(analysisResult.FilesByStatus, analysisResult.IntentToAddFiles)
 	}
 
 	return evaluation, nil
 }
-
 
 // filterNonIntentToAdd removes intent-to-add files from the staged files list
 func (s *SafetyChecker) filterNonIntentToAdd(stagedFiles, intentToAddFiles []string) []string {
@@ -207,39 +175,72 @@ func (s *SafetyChecker) filterNonIntentToAdd(stagedFiles, intentToAddFiles []str
 	return nonIntentToAdd
 }
 
+// fileStatusOrder defines the order in which file statuses should be processed
+var fileStatusOrder = []FileStatus{
+	FileStatusModified,
+	FileStatusAdded,
+	FileStatusDeleted,
+	FileStatusRenamed,
+	FileStatusCopied,
+	FileStatusBinary,
+}
+
+// getFilesForStatus returns files for a given status, with special handling for intent-to-add
+func (s *SafetyChecker) getFilesForStatus(status FileStatus, filesByStatus map[FileStatus][]string, intentToAddFiles []string) []string {
+	files, exists := filesByStatus[status]
+	if !exists || len(files) == 0 {
+		return nil
+	}
+
+	// Special handling for added files - filter out intent-to-add
+	if status == FileStatusAdded {
+		return s.filterNonIntentToAdd(files, intentToAddFiles)
+	}
+
+	return files
+}
+
 // buildStagingErrorMessage builds a detailed error message about staging area state
 func (s *SafetyChecker) buildStagingErrorMessage(filesByStatus map[FileStatus][]string, intentToAddFiles []string) string {
 	var message strings.Builder
 	message.WriteString("SAFETY_CHECK_FAILED: staging_area_not_clean\n\n")
 	message.WriteString("STAGED_FILES:\n")
 
-	if files, exists := filesByStatus[FileStatusModified]; exists && len(files) > 0 {
-		message.WriteString(fmt.Sprintf("  MODIFIED: %s\n", strings.Join(files, ",")))
-	}
-	if files, exists := filesByStatus[FileStatusAdded]; exists && len(files) > 0 {
-		// Filter out intent-to-add files from newly added files
-		nonIntentToAdd := s.filterNonIntentToAdd(files, intentToAddFiles)
-		if len(nonIntentToAdd) > 0 {
-			message.WriteString(fmt.Sprintf("  NEW: %s\n", strings.Join(nonIntentToAdd, ",")))
+	// Process file statuses in defined order
+	for _, status := range fileStatusOrder {
+		files := s.getFilesForStatus(status, filesByStatus, intentToAddFiles)
+		if len(files) > 0 {
+			label := s.getStatusLabel(status)
+			message.WriteString(fmt.Sprintf("  %s: %s\n", label, strings.Join(files, ",")))
 		}
 	}
+
+	// Handle intent-to-add files separately
 	if len(intentToAddFiles) > 0 {
 		message.WriteString(fmt.Sprintf("  INTENT_TO_ADD: %s\n", strings.Join(intentToAddFiles, ",")))
 	}
-	if files, exists := filesByStatus[FileStatusDeleted]; exists && len(files) > 0 {
-		message.WriteString(fmt.Sprintf("  DELETED: %s\n", strings.Join(files, ",")))
-	}
-	if files, exists := filesByStatus[FileStatusRenamed]; exists && len(files) > 0 {
-		message.WriteString(fmt.Sprintf("  RENAMED: %s\n", strings.Join(files, ",")))
-	}
-	if files, exists := filesByStatus[FileStatusCopied]; exists && len(files) > 0 {
-		message.WriteString(fmt.Sprintf("  COPIED: %s\n", strings.Join(files, ",")))
-	}
-	if files, exists := filesByStatus[FileStatusBinary]; exists && len(files) > 0 {
-		message.WriteString(fmt.Sprintf("  BINARY: %s\n", strings.Join(files, ",")))
-	}
 
 	return message.String()
+}
+
+// getStatusLabel returns the display label for a file status
+func (s *SafetyChecker) getStatusLabel(status FileStatus) string {
+	switch status {
+	case FileStatusModified:
+		return "MODIFIED"
+	case FileStatusAdded:
+		return "NEW"
+	case FileStatusDeleted:
+		return "DELETED"
+	case FileStatusRenamed:
+		return "RENAMED"
+	case FileStatusCopied:
+		return "COPIED"
+	case FileStatusBinary:
+		return "BINARY"
+	default:
+		return "UNKNOWN"
+	}
 }
 
 // buildRecommendedActions builds recommended actions for resolving staging issues
@@ -256,51 +257,23 @@ func (s *SafetyChecker) buildRecommendedActions(filesByStatus map[FileStatus][]s
 		})
 	}
 
-	// Handle deletions first (highest priority)
-	if files, exists := filesByStatus[FileStatusDeleted]; exists && len(files) > 0 {
+	// Handle specific file statuses with individual commit recommendations
+	specificStatuses := []FileStatus{FileStatusDeleted, FileStatusRenamed, FileStatusCopied}
+	for _, status := range specificStatuses {
+		files := s.getFilesForStatus(status, filesByStatus, intentToAddFiles)
 		for _, file := range files {
-			actions = append(actions, RecommendedAction{
-				Description: fmt.Sprintf("Commit deletion of %s", file),
-				Commands:    []string{fmt.Sprintf("git commit -m \"Remove %s\"", file)},
-				Priority:    1,
-				Category:    ActionCategoryCommit,
-			})
+			action := s.createCommitAction(status, file)
+			if action != nil {
+				actions = append(actions, *action)
+			}
 		}
 	}
 
-	// Handle renames and copies
-	if files, exists := filesByStatus[FileStatusRenamed]; exists && len(files) > 0 {
-		for _, file := range files {
-			actions = append(actions, RecommendedAction{
-				Description: fmt.Sprintf("Commit rename of %s", file),
-				Commands:    []string{fmt.Sprintf("git commit -m \"Rename %s\"", file)},
-				Priority:    1,
-				Category:    ActionCategoryCommit,
-			})
-		}
-	}
-
-	if files, exists := filesByStatus[FileStatusCopied]; exists && len(files) > 0 {
-		for _, file := range files {
-			actions = append(actions, RecommendedAction{
-				Description: fmt.Sprintf("Commit copy of %s", file),
-				Commands:    []string{fmt.Sprintf("git commit -m \"Copy %s\"", file)},
-				Priority:    1,
-				Category:    ActionCategoryCommit,
-			})
-		}
-	}
-
-	// Handle modifications and non-intent-to-add new files
+	// Collect all problematic files (modifications, non-intent-to-add new files, and binary files)
 	var problematicFiles []string
-	if files, exists := filesByStatus[FileStatusModified]; exists {
-		problematicFiles = append(problematicFiles, files...)
-	}
-	if files, exists := filesByStatus[FileStatusAdded]; exists {
-		nonIntentToAdd := s.filterNonIntentToAdd(files, intentToAddFiles)
-		problematicFiles = append(problematicFiles, nonIntentToAdd...)
-	}
-	if files, exists := filesByStatus[FileStatusBinary]; exists {
+	problematicStatuses := []FileStatus{FileStatusModified, FileStatusAdded, FileStatusBinary}
+	for _, status := range problematicStatuses {
+		files := s.getFilesForStatus(status, filesByStatus, intentToAddFiles)
 		problematicFiles = append(problematicFiles, files...)
 	}
 
@@ -338,4 +311,93 @@ func (s *SafetyChecker) buildRecommendedActions(filesByStatus map[FileStatus][]s
 	})
 
 	return actions
+}
+
+// createCommitAction creates a commit action for a specific file status
+func (s *SafetyChecker) createCommitAction(status FileStatus, file string) *RecommendedAction {
+	var description, commitMsg string
+
+	switch status {
+	case FileStatusDeleted:
+		description = fmt.Sprintf("Commit deletion of %s", file)
+		commitMsg = fmt.Sprintf("Remove %s", file)
+	case FileStatusRenamed:
+		description = fmt.Sprintf("Commit rename of %s", file)
+		commitMsg = fmt.Sprintf("Rename %s", file)
+	case FileStatusCopied:
+		description = fmt.Sprintf("Commit copy of %s", file)
+		commitMsg = fmt.Sprintf("Copy %s", file)
+	default:
+		return nil
+	}
+
+	return &RecommendedAction{
+		Description: description,
+		Commands:    []string{fmt.Sprintf("git commit -m \"%s\"", commitMsg)},
+		Priority:    1,
+		Category:    ActionCategoryCommit,
+	}
+}
+
+// CheckActualStagingArea checks the actual staging area using git commands
+// This method is more accurate but requires git command execution
+func (s *SafetyChecker) CheckActualStagingArea() (*StagingAreaEvaluation, error) {
+	if s.statusReader == nil {
+		return nil, NewSafetyError(GitOperationFailed,
+			"GitStatusReader not available for git command execution",
+			"Initialize SafetyChecker with an executor for git commands", nil)
+	}
+
+	// Use status reader to get git status information
+	statusInfo, err := s.statusReader.ReadStatus()
+	if err != nil {
+		return nil, err
+	}
+
+	// Determine if staging area is clean
+	nonIntentToAddStaged := s.filterNonIntentToAdd(statusInfo.StagedFiles, statusInfo.IntentToAddFiles)
+	isClean := len(statusInfo.StagedFiles) == 0
+	allowContinue := len(nonIntentToAddStaged) == 0
+
+	evaluation := &StagingAreaEvaluation{
+		IsClean:          isClean,
+		StagedFiles:      statusInfo.StagedFiles,
+		IntentToAddFiles: statusInfo.IntentToAddFiles,
+		AllowContinue:    allowContinue,
+		FilesByStatus:    statusInfo.FilesByStatus,
+	}
+
+	// Generate error message and recommended actions if not clean
+	if !isClean {
+		evaluation.ErrorMessage = s.buildStagingErrorMessage(statusInfo.FilesByStatus, statusInfo.IntentToAddFiles)
+		evaluation.RecommendedActions = s.buildRecommendedActions(statusInfo.FilesByStatus, statusInfo.IntentToAddFiles)
+	}
+
+	return evaluation, nil
+}
+
+// EvaluateWithFallback performs hybrid evaluation: patch-first with git command fallback
+// This is the recommended API for safety checking
+func (s *SafetyChecker) EvaluateWithFallback(patchContent string) (*StagingAreaEvaluation, error) {
+	// First, try patch-based evaluation
+	patchEval, err := s.EvaluatePatchContent(patchContent)
+	if err != nil {
+		return nil, err
+	}
+
+	// If patch shows changes and we have a status reader, verify with actual staging area
+	if len(patchEval.StagedFiles) > 0 && s.statusReader != nil {
+		// Get actual staging area state
+		actualEval, err := s.CheckActualStagingArea()
+		if err != nil {
+			// If we can't check actual state, fall back to patch evaluation
+			return patchEval, nil
+		}
+
+		// Use actual evaluation as it's more accurate
+		return actualEval, nil
+	}
+
+	// For empty patches or no executor, patch evaluation is sufficient
+	return patchEval, nil
 }

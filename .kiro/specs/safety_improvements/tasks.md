@@ -29,33 +29,33 @@
 
 ### Phase 2: SafetyCheckerコンポーネント
 
-- [ ] 2.1 SafetyChecker基本構造の実装
+- [x] 2.1 SafetyChecker基本構造の実装
   - internal/stager/safety_checker.goファイルを作成
   - SafetyChecker構造体とStagingAreaEvaluation構造体を定義
   - NewSafetyChecker関数を実装
   - _要件: S1 (ステージングエリア状態検出)_
 
-- [ ] 2.2 ステージングエリアチェック機能の実装
+- [x] 2.2 ステージングエリアチェック機能の実装
   - EvaluateStagingArea()メソッドを実装
   - git status --porcelainコマンドの実行と結果解析
   - ファイルタイプ別（M/A/D/R/C）の分類と解析
   - StagingAreaEvaluationの生成
   - _要件: S1 (ステージングエリア状態検出), S3 (ファイルタイプ別エラーメッセージ)_
 
-- [ ] 2.3 Intent-to-addファイル検出機能の実装
+- [x] 2.3 Intent-to-addファイル検出機能の実装
   - DetectIntentToAddFiles()メソッドを実装
   - git ls-files --cached --others --exclude-standardを使用
   - Intent-to-addファイルの識別ロジック
   - _要件: S2 (Intent-to-addファイル統合), S5 (Semantic Commitワークフロー統合)_
 
-- [ ] 2.4 詳細エラーメッセージ生成機能の実装
+- [x] 2.4 詳細エラーメッセージ生成機能の実装
   - generateDetailedStagingError()メソッドを実装
   - buildStagingErrorMessage()メソッドでファイルタイプ別メッセージ生成
   - buildRecommendedActions()メソッドで推奨アクション生成
   - LLM Agent対応の構造化メッセージ形式
   - _要件: S3 (ファイルタイプ別エラーメッセージ), S2 (Intent-to-addファイル統合)_
 
-- [ ] 2.5 SafetyCheckerのユニットテスト
+- [x] 2.5 SafetyCheckerのユニットテスト
   - internal/stager/safety_checker_test.goファイルを作成
   - モックエグゼキューターを使用したテストを実装
   - 各ユースケース別のテストケース:
@@ -72,27 +72,27 @@
 
 ### Phase 3: Stager統合
 
-- [ ] 3.0 deprecatedなEvaluateStagingAreaメソッドの完全削除
+- [x] 3.0 deprecatedなEvaluateStagingAreaメソッドの完全削除
   - EvaluateStagingAreaメソッドを完全に削除
   - EvaluatePatchContentのみのAPIに統一
   - 関連するテストの更新
   - 後方互換性の完全な破棄（Phase 2で廃止警告済み）
   - _技術的負債解消_
 
-- [ ] 3.1 performSafetyChecks()メソッドの実装
+- [x] 3.1 performSafetyChecks()メソッドの実装
   - Stager構造体にperformSafetyChecks()メソッドを追加
   - SafetyCheckerを使用したステージングエリアチェック
   - 適切なSafetyErrorの生成と返却
   - Intent-to-addファイルの特別処理
   - _要件: S1 (ステージングエリア状態検出), S2 (Intent-to-addファイル統合)_
 
-- [ ] 3.2 StageHunksメソッドの修正
+- [x] 3.2 StageHunksメソッドの修正
   - Phase 0として安全性チェックを追加
   - performSafetyChecks()の呼び出しとエラーハンドリング
   - 既存のPhase 1, 2処理との統合
   - _要件: S6 (ワークフロー非破壊保証), S7 (正常ケースの動作保証)_
 
-- [ ] 3.3 安全性チェック統合のユニットテスト
+- [x] 3.3 安全性チェック統合のユニットテスト
   - StageHunksメソッドの安全性チェック部分のテスト
   - モックを使用したクリーン/ダーティ状態のテスト
   - Intent-to-addファイル処理の検証
