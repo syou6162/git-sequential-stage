@@ -1536,6 +1536,147 @@ func main() {
 	}
 }
 
+// TestHunkCountExceededError tests error handling when requesting more hunks than available
+func TestHunkCountExceededError(t *testing.T) {
+	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-e2e-*")
+	defer testRepo.Cleanup()
+
+	// 初期コミットを作成
+	testRepo.CreateFile("README.md", "# Test Project\n")
+	testRepo.CommitChanges("Initial commit")
+
+	// 既存ファイルを修正して複数ハンクを作成
+	originalContent := `package main
+
+func original() {
+	println("Original")
+}
+`
+	testRepo.CreateFile("main.go", originalContent)
+	testRepo.CommitChanges("Add main.go")
+
+	// 修正して2つのハンクを作成
+	modifiedContent := `package main
+
+func original() {
+	println("Modified original")  // Modified line
+}
+
+func newFunction() {
+	println("New function")  // New function
+}
+`
+	testRepo.CreateFile("main.go", modifiedContent)
+
+	// パッチファイルを生成
+	diffOutput, err := testRepo.RunCommand("git", "diff", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to get diff: %v", err)
+	}
+
+	patchPath := filepath.Join(testRepo.Path, "changes.patch")
+	if err := os.WriteFile(patchPath, []byte(diffOutput), 0644); err != nil {
+		t.Fatalf("Failed to write patch file: %v", err)
+	}
+
+	absPatchPath, err := filepath.Abs(patchPath)
+	if err != nil {
+		t.Fatalf("Failed to get absolute path: %v", err)
+	}
+
+	// ディレクトリを変更
+	defer testRepo.Chdir()()
+
+	// 存在しないハンク番号（2,3番）を指定してエラーを発生させる  
+	err = runGitSequentialStage([]string{"main.go:1,2,3"}, absPatchPath)
+	if err == nil {
+		t.Fatal("Expected error when requesting non-existent hunk, but got none")
+	}
+
+	// エラーメッセージの内容を確認
+	errorMsg := err.Error()
+	
+	// ファイル名が含まれている
+	if !strings.Contains(errorMsg, "main.go") {
+		t.Errorf("Expected error message to contain file name 'main.go', got: %s", errorMsg)
+	}
+	
+	// 実際のハンク数が含まれている
+	if !strings.Contains(errorMsg, "has 1 hunks") {
+		t.Errorf("Expected error message to mention '1 hunks', got: %s", errorMsg)
+	}
+	
+	// 要求された無効なハンク番号が含まれている
+	if !strings.Contains(errorMsg, "[2, 3]") || !strings.Contains(errorMsg, "requested") {
+		t.Errorf("Expected error message to mention requested hunks '[2, 3]', got: %s", errorMsg)
+	}
+
+	// キーワード「hunk count exceeded」が含まれている
+	if !strings.Contains(errorMsg, "hunk count exceeded") {
+		t.Errorf("Expected error message to contain 'hunk count exceeded', got: %s", errorMsg)
+	}
+}
+
+// TestMultipleInvalidHunks tests error handling when requesting multiple invalid hunks
+func TestMultipleInvalidHunks(t *testing.T) {
+	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-e2e-*")
+	defer testRepo.Cleanup()
+
+	// 初期コミットを作成
+	testRepo.CreateFile("README.md", "# Test Project\n")
+	testRepo.CommitChanges("Initial commit")
+
+	// 既存ファイルに1つのハンクを作成
+	originalContent := `func original() {
+	println("Original")
+}`
+	testRepo.CreateFile("single.go", originalContent)
+	testRepo.CommitChanges("Add single.go")
+
+	// 修正して1つのハンクを作成
+	modifiedContent := `func original() {
+	println("Modified original")  // Only one hunk
+}`
+	testRepo.CreateFile("single.go", modifiedContent)
+
+	// パッチファイルを生成
+	diffOutput, err := testRepo.RunCommand("git", "diff", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to get diff: %v", err)
+	}
+
+	patchPath := filepath.Join(testRepo.Path, "changes.patch")
+	if err := os.WriteFile(patchPath, []byte(diffOutput), 0644); err != nil {
+		t.Fatalf("Failed to write patch file: %v", err)
+	}
+
+	absPatchPath, err := filepath.Abs(patchPath)
+	if err != nil {
+		t.Fatalf("Failed to get absolute path: %v", err)
+	}
+
+	// ディレクトリを変更
+	defer testRepo.Chdir()()
+
+	// 複数の存在しないハンク番号を指定
+	err = runGitSequentialStage([]string{"single.go:2,3,4"}, absPatchPath)
+	if err == nil {
+		t.Fatal("Expected error when requesting multiple non-existent hunks, but got none")
+	}
+
+	errorMsg := err.Error()
+	
+	// 複数の無効なハンク番号が含まれている
+	if !strings.Contains(errorMsg, "[2, 3, 4]") {
+		t.Errorf("Expected error message to mention multiple invalid hunks '[2, 3, 4]', got: %s", errorMsg)
+	}
+	
+	// 実際のハンク数が含まれている
+	if !strings.Contains(errorMsg, "has 1 hunks") {
+		t.Errorf("Expected error message to mention '1 hunks', got: %s", errorMsg)
+	}
+}
+
 // TestLargeFileWithManyHunks tests handling of large files with many hunks
 func TestLargeFileWithManyHunks(t *testing.T) {
 	if testing.Short() {
