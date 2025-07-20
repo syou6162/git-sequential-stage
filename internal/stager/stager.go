@@ -164,7 +164,7 @@ func buildTargetIDs(hunkSpecs []string, allHunks []HunkInfo) ([]string, error) {
 // performSafetyChecks checks the safety of the staging area using hybrid approach
 func (s *Stager) performSafetyChecks(patchContent string) error {
 	// Use hybrid approach: patch-first with git command fallback
-	checker := NewSafetyChecker(s.executor)
+	checker := NewSafetyChecker(".")
 	evaluation, err := checker.EvaluateWithFallback(patchContent)
 	if err != nil {
 		return NewSafetyError(GitOperationFailed,

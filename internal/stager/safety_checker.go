@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-
-	"github.com/syou6162/git-sequential-stage/internal/executor"
 )
 
 // FileStatus represents the modification status of a file
@@ -107,11 +105,11 @@ type RecommendedAction struct {
 }
 
 // NewSafetyChecker creates a new SafetyChecker instance
-// Accepts an optional executor for hybrid approach (nil = patch-only mode)
-func NewSafetyChecker(executor executor.CommandExecutor) *SafetyChecker {
+// Accepts an optional repoPath for hybrid approach ("" = patch-only mode)
+func NewSafetyChecker(repoPath string) *SafetyChecker {
 	var statusReader GitStatusReader
-	if executor != nil {
-		statusReader = NewGitStatusReader(executor)
+	if repoPath != "" {
+		statusReader = NewGitStatusReader(repoPath)
 	}
 	return &SafetyChecker{
 		statusReader:  statusReader,
