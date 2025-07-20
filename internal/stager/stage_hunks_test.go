@@ -108,6 +108,18 @@ index abc1234..def5678 100644
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Disable safety check for these specific error case tests
+			// so we can test the underlying git command failures
+			originalSafetyCheck := os.Getenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK")
+			os.Setenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK", "false")
+			defer func() {
+				if originalSafetyCheck != "" {
+					os.Setenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK", originalSafetyCheck)
+				} else {
+					os.Unsetenv("GIT_SEQUENTIAL_STAGE_SAFETY_CHECK")
+				}
+			}()
+
 			mock := executor.NewMockCommandExecutor()
 			patchFile, setupErr := tt.mockSetup(t, mock)
 			if setupErr != nil {
