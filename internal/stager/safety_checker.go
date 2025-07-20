@@ -404,7 +404,7 @@ func (s *SafetyChecker) EvaluateWithFallbackAndTargets(patchContent string, targ
 		if targetFiles != nil {
 			s.adjustEvaluationForTargetFiles(actualEval, targetFiles)
 		}
-		
+
 		// Use actual evaluation as it's more accurate
 		return actualEval, nil
 	}
@@ -428,7 +428,7 @@ func (s *SafetyChecker) adjustEvaluationForTargetFiles(evaluation *StagingAreaEv
 
 	// Check if non-intent-to-add staged files are actually target files
 	nonIntentToAddStaged := s.filterNonIntentToAdd(evaluation.StagedFiles, evaluation.IntentToAddFiles)
-	
+
 	// Create a map of intent-to-add files for quick lookup
 	intentToAddMap := make(map[string]bool)
 	for _, file := range evaluation.IntentToAddFiles {
@@ -444,7 +444,7 @@ func (s *SafetyChecker) adjustEvaluationForTargetFiles(evaluation *StagingAreaEv
 		if intentToAddMap[stagedFile] {
 			continue
 		}
-		
+
 		// Check if this staged file is in the target files
 		// This handles the case where a new file is being staged selectively
 		if !targetFiles[stagedFile] {
@@ -454,7 +454,23 @@ func (s *SafetyChecker) adjustEvaluationForTargetFiles(evaluation *StagingAreaEv
 		}
 	}
 
-	// Update the evaluation  
+	// Special case: If we couldn't detect intent-to-add files properly,
+	// but all staged files are in the target list, allow continuation
+	if !allowContinue && len(evaluation.IntentToAddFiles) == 0 {
+		// Re-check if all staged files are in target files
+		allInTargets := true
+		for _, stagedFile := range evaluation.StagedFiles {
+			if !targetFiles[stagedFile] {
+				allInTargets = false
+				break
+			}
+		}
+		if allInTargets {
+			allowContinue = true
+		}
+	}
+
+	// Update the evaluation
 	if allowContinue {
 		evaluation.AllowContinue = true
 		if len(nonIntentToAddStaged) > 0 {
