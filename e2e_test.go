@@ -1407,6 +1407,135 @@ if __name__ == "__main__":
 	t.Log("Note: Applying patches to moved files requires careful handling of file paths")
 }
 
+// TestIntentToAddWithStagedHunks はintent-to-addファイルのハンクをステージングする場合のテストです
+// 既存ファイルへの変更と新規ファイル（intent-to-add）が混在する場合の安全性チェックを確認します
+func TestIntentToAddWithStagedHunks(t *testing.T) {
+	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-e2e-*")
+	defer testRepo.Cleanup()
+
+	// 初期コミットを作成（既存ファイル含む）
+	testRepo.CreateFile("README.md", "# Test Project\n")
+	testRepo.CreateFile("existing.go", `package main
+
+func existing() {
+	// Original function
+}
+`)
+	testRepo.CommitChanges("Initial commit")
+
+	// 既存ファイルを修正
+	testRepo.CreateFile("existing.go", `package main
+
+func existing() {
+	// Modified function
+	println("Updated")
+}
+
+func newFunc() {
+	// New function in existing file
+	println("New")
+}
+`)
+
+	// 新規ファイルを作成してintent-to-addで追加
+	newFile := `package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("Hello, World!")
+}
+`
+	testRepo.CreateFile("main.go", newFile)
+	
+	// testRepoのディレクトリに移動
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get current directory: %v", err)
+	}
+	if err := os.Chdir(testRepo.Path); err != nil {
+		t.Fatalf("Failed to change to test repo directory: %v", err)
+	}
+	defer os.Chdir(origDir)
+
+	// git add -N を実行
+	cmd := exec.Command("git", "add", "-N", "main.go")
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Failed to add file with intent-to-add: %v", err)
+	}
+	
+	// デバッグ: git statusの状態を確認
+	statusOutput, _ := exec.Command("git", "status", "--porcelain").Output()
+	t.Logf("Git status after add -N:\n%s", string(statusOutput))
+
+	// git diff でパッチを生成
+	diffOutput, err := exec.Command("git", "diff", "HEAD").Output()
+	if err != nil {
+		t.Fatalf("Failed to get diff: %v", err)
+	}
+
+	// パッチファイルを作成
+	patchPath := filepath.Join(testRepo.Path, "changes.patch")
+	if err := os.WriteFile(patchPath, diffOutput, 0644); err != nil {
+		t.Fatalf("Failed to write patch file: %v", err)
+	}
+	
+	// デバッグ用: パッチファイルの内容を表示
+	t.Logf("Patch content:\n%s", string(diffOutput))
+
+	// パッチファイルの絶対パスを取得
+	absPatchPath, err := filepath.Abs(patchPath)
+	if err != nil {
+		t.Fatalf("Failed to get absolute path: %v", err)
+	}
+
+	// すでにtestRepoのディレクトリにいるので、Chdirは不要
+
+	// 既存ファイルの最初のハンクだけをステージング
+	err = runGitSequentialStage([]string{"existing.go:1"}, absPatchPath)
+	if err != nil {
+		t.Fatalf("Failed to stage hunk from existing file: %v", err)
+	}
+
+	// ステージングエリアを確認
+	stagedDiff, err := exec.Command("git", "diff", "--cached").Output()
+	if err != nil {
+		t.Fatalf("Failed to get staged diff: %v", err)
+	}
+
+	stagedContent := string(stagedDiff)
+	
+	// existing関数の変更がステージングされていることを確認
+	if !strings.Contains(stagedContent, "Modified function") {
+		t.Errorf("Expected existing function changes to be staged")
+	}
+	
+	// newFunc関数はステージングされていないことを確認
+	if strings.Contains(stagedContent, "func newFunc()") {
+		t.Errorf("Expected newFunc NOT to be staged yet")
+	}
+
+	// intent-to-add新規ファイルもステージング可能なことを確認
+	err = runGitSequentialStage([]string{"main.go:1"}, absPatchPath)
+	if err != nil {
+		t.Fatalf("Failed to stage intent-to-add file: %v", err)
+	}
+
+	// 両方のファイルがステージングされたことを確認
+	stagedDiff2, err := exec.Command("git", "diff", "--cached").Output()
+	if err != nil {
+		t.Fatalf("Failed to get staged diff: %v", err)
+	}
+
+	stagedContent2 := string(stagedDiff2)
+	if !strings.Contains(stagedContent2, "func main()") {
+		t.Errorf("Expected main.go to be staged")
+	}
+	if !strings.Contains(stagedContent2, "Modified function") {
+		t.Errorf("Expected existing.go changes to remain staged")
+	}
+}
+
 // TestLargeFileWithManyHunks tests handling of large files with many hunks
 func TestLargeFileWithManyHunks(t *testing.T) {
 	if testing.Short() {
