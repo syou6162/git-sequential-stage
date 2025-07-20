@@ -55,7 +55,7 @@ func testStagingAreaDetection(t *testing.T) {
 
 	// Try to run git-sequential-stage - should fail with staging area not clean
 	err := runGitSequentialStage([]string{"test.txt:1"}, patchFile)
-	
+
 	if err == nil {
 		t.Error("Expected error for staged files, but got none")
 		return
@@ -103,13 +103,13 @@ func testIntentToAddIntegration(t *testing.T) {
 
 	// Run git-sequential-stage - should succeed with intent-to-add
 	err := runGitSequentialStage([]string{"new_file.py:1"}, patchFile)
-	
+
 	// Note: Current implementation treats intent-to-add as staged, so it will fail
 	// This is the expected behavior based on the semantic_commit_test.go
 	if err != nil {
 		t.Logf("Got expected error for intent-to-add file: %v", err)
 		if strings.Contains(err.Error(), "SAFETY_CHECK_FAILED") &&
-		   strings.Contains(err.Error(), "NEW: new_file.py") {
+			strings.Contains(err.Error(), "NEW: new_file.py") {
 			t.Log("Intent-to-add file correctly detected as staged NEW file")
 		}
 	}
@@ -144,7 +144,7 @@ func testFileTypeErrorMessages(t *testing.T) {
 
 	// Try to run git-sequential-stage
 	err := runGitSequentialStage([]string{"modify.txt:1"}, patchFile)
-	
+
 	if err == nil {
 		t.Error("Expected error for mixed staged files, but got none")
 		return
@@ -159,7 +159,7 @@ func testFileTypeErrorMessages(t *testing.T) {
 		"NEW:",
 		"DELETED:",
 	}
-	
+
 	// Note: RENAMED files may be detected as DELETED + NEW instead of RENAMED
 	// This is expected behavior for the current implementation
 
@@ -177,7 +177,7 @@ func testGitOperationErrorHandling(t *testing.T) {
 
 	// Test with non-existent patch file
 	err := runGitSequentialStage([]string{"test.txt:1"}, "/non/existent/patch.file")
-	
+
 	if err == nil {
 		t.Error("Expected error for non-existent patch file")
 	} else {
@@ -203,7 +203,7 @@ func testSemanticCommitWorkflow(t *testing.T) {
 
 def goodbye():
     print("Goodbye!")`
-	
+
 	os.WriteFile("greetings.py", []byte(code), 0644)
 	testutils.RunCommand(t, dir, "git", "add", "-N", "greetings.py")
 
@@ -214,7 +214,7 @@ def goodbye():
 
 	// Step 3: Try to stage specific hunks
 	err := runGitSequentialStage([]string{"greetings.py:1"}, patchFile)
-	
+
 	// Note: Current implementation detects intent-to-add as staged NEW file
 	if err != nil {
 		t.Logf("Semantic commit workflow test result: %v", err)
@@ -246,14 +246,14 @@ func testWorkflowPreservation(t *testing.T) {
 
 	// Run git-sequential-stage (should succeed with clean staging area)
 	err := runGitSequentialStage([]string{"test.py:1"}, patchFile)
-	
+
 	if err != nil {
 		t.Fatalf("Failed to stage hunks in clean repo: %v", err)
 	}
 
 	// Verify partial staging worked
 	statusAfter, _ := testutils.RunCommand(t, dir, "git", "status", "--porcelain")
-	
+
 	if statusBefore == statusAfter {
 		t.Error("No changes were staged")
 	}
@@ -299,24 +299,24 @@ def function3():
 	patchFile := filepath.Join(dir, "changes.patch")
 	output, _ := testutils.RunCommand(t, dir, "git", "diff", "HEAD")
 	os.WriteFile(patchFile, []byte(output), 0644)
-	
+
 	// Debug: Check what patch was generated
 	t.Logf("Generated patch:\n%s", output)
 
 	// Stage only hunk 1 (to be safe)
 	err := runGitSequentialStage([]string{"multi.py:1"}, patchFile)
-	
+
 	if err != nil {
 		t.Fatalf("Failed to stage selected hunks: %v", err)
 	}
 
 	// Verify that some changes were staged
 	stagedDiff, _ := testutils.RunCommand(t, dir, "git", "diff", "--cached")
-	
+
 	if !strings.Contains(stagedDiff, "modified") {
 		t.Error("No modifications were staged")
 	}
-	
+
 	t.Logf("Staged diff:\n%s", stagedDiff)
 }
 
@@ -328,7 +328,7 @@ func testErrorCases(t *testing.T) {
 	// Test empty patch
 	emptyPatch := filepath.Join(dir, "empty.patch")
 	os.WriteFile(emptyPatch, []byte(""), 0644)
-	
+
 	err := runGitSequentialStage([]string{"test.txt:1"}, emptyPatch)
 	if err == nil {
 		t.Error("Expected error for empty patch file")
@@ -336,16 +336,16 @@ func testErrorCases(t *testing.T) {
 		t.Logf("Empty patch error: %v", err)
 	}
 
-	// Test invalid hunk specification  
+	// Test invalid hunk specification
 	newDir, repo, newCleanup := testutils.CreateTestRepo(t, "test-s8-error-*")
 	defer newCleanup()
-	
+
 	resetDir2 := testutils.SetupTestDir(t, newDir)
 	defer resetDir2()
 
 	testutils.CreateAndCommitFile(t, newDir, repo, "test.txt", "content", "Initial")
 	os.WriteFile("test.txt", []byte("modified"), 0644)
-	
+
 	patchFile := filepath.Join(newDir, "valid.patch")
 	output, _ := testutils.RunCommand(t, newDir, "git", "diff", "HEAD")
 	os.WriteFile(patchFile, []byte(output), 0644)
@@ -377,7 +377,7 @@ func testBasicConsistency(t *testing.T) {
 
 	// Should work normally with clean staging area
 	err := runGitSequentialStage([]string{"test.py:1"}, patchFile)
-	
+
 	if err != nil {
 		t.Fatalf("Basic operation failed: %v", err)
 	}

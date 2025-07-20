@@ -50,7 +50,7 @@ index 789..012 100644
  line3`,
 		},
 		{
-			name: "large_patch_100_files",
+			name:  "large_patch_100_files",
 			patch: generateLargePatch(100),
 		},
 	}
@@ -58,7 +58,7 @@ index 789..012 100644
 	for _, tc := range testCases {
 		b.Run(tc.name, func(b *testing.B) {
 			checker := NewSafetyChecker("")
-			
+
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				_, err := checker.EvaluatePatchContent(tc.patch)
@@ -105,15 +105,15 @@ index 123..456 100644
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			checker := NewSafetyChecker("")
-			
+
 			start := time.Now()
 			_, err := checker.EvaluatePatchContent(tc.patch)
 			duration := time.Since(start)
-			
+
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
-			
+
 			if duration > tc.maxDuration {
 				t.Errorf("Performance requirement not met: took %v, expected under %v", duration, tc.maxDuration)
 			} else {
@@ -126,14 +126,14 @@ index 123..456 100644
 // generateLargePatch generates a patch with the specified number of files
 func generateLargePatch(numFiles int) string {
 	var builder strings.Builder
-	
+
 	for i := 0; i < numFiles; i++ {
 		builder.WriteString(generateFilePatch(i))
 		if i < numFiles-1 {
 			builder.WriteString("\n")
 		}
 	}
-	
+
 	return builder.String()
 }
 

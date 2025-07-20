@@ -10,7 +10,7 @@ import (
 )
 
 // RealCommandExecutor is the real implementation of CommandExecutor
-type RealCommandExecutor struct{
+type RealCommandExecutor struct {
 	logger *logger.Logger
 }
 
@@ -26,21 +26,21 @@ func (r *RealCommandExecutor) Execute(name string, args ...string) ([]byte, erro
 	cmd := exec.Command(name, args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
-	
+
 	output, err := cmd.Output()
 	if err != nil {
 		r.logger.Error("Command failed: %s %s", name, strings.Join(args, " "))
 		if stderr.Len() > 0 {
 			r.logger.Error("stderr: %s", stderr.String())
 		}
-		
+
 		// Return stderr content along with the error
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			exitErr.Stderr = stderr.Bytes()
 		}
 		return nil, err
 	}
-	
+
 	return output, nil
 }
 
@@ -50,20 +50,20 @@ func (r *RealCommandExecutor) ExecuteWithStdin(name string, stdin io.Reader, arg
 	cmd.Stdin = stdin
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
-	
+
 	output, err := cmd.Output()
 	if err != nil {
 		r.logger.Error("Command failed: %s %s (with stdin)", name, strings.Join(args, " "))
 		if stderr.Len() > 0 {
 			r.logger.Error("stderr: %s", stderr.String())
 		}
-		
+
 		// Return stderr content along with the error
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			exitErr.Stderr = stderr.Bytes()
 		}
 		return nil, err
 	}
-	
+
 	return output, nil
 }

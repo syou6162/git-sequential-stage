@@ -66,7 +66,7 @@ func TestRunGitSequentialStage_Usage(t *testing.T) {
 					return
 				}
 			}
-			
+
 			// Capture output by redirecting stderr/stdout would be complex
 			// For now, just test the error behavior
 			err := runGitSequentialStage(hunks, patchFile)

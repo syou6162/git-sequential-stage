@@ -11,7 +11,7 @@ import (
 )
 
 // Helper function to validate mock command execution results
-func validateMockExecution(t *testing.T, mock *MockCommandExecutor, output []byte, err error, 
+func validateMockExecution(t *testing.T, mock *MockCommandExecutor, output []byte, err error,
 	command string, args []string, wantOutput []byte, wantError bool, wantErrMsg string) {
 	// Check error expectation
 	if (err != nil) != wantError {
@@ -53,13 +53,13 @@ func validateMockExecution(t *testing.T, mock *MockCommandExecutor, output []byt
 
 func TestMockCommandExecutorExecute(t *testing.T) {
 	tests := []struct {
-		name        string
-		setup       func(*MockCommandExecutor)
-		command     string
-		args        []string
-		wantOutput  []byte
-		wantError   bool
-		wantErrMsg  string
+		name       string
+		setup      func(*MockCommandExecutor)
+		command    string
+		args       []string
+		wantOutput []byte
+		wantError  bool
+		wantErrMsg string
 	}{
 		{
 			name: "mock successful command execution",
@@ -120,7 +120,7 @@ func TestMockCommandExecutorExecute(t *testing.T) {
 			tt.setup(mock)
 
 			output, err := mock.Execute(tt.command, tt.args...)
-			validateMockExecution(t, mock, output, err, tt.command, tt.args, 
+			validateMockExecution(t, mock, output, err, tt.command, tt.args,
 				tt.wantOutput, tt.wantError, tt.wantErrMsg)
 		})
 	}
@@ -159,14 +159,14 @@ func validateMockExecutionWithStdin(t *testing.T, mock *MockCommandExecutor, out
 
 func TestMockCommandExecutorExecuteWithStdin(t *testing.T) {
 	tests := []struct {
-		name        string
-		setup       func(*MockCommandExecutor)
-		command     string
-		stdin       io.Reader
-		args        []string
-		wantOutput  []byte
-		wantError   bool
-		wantStdin   []byte
+		name       string
+		setup      func(*MockCommandExecutor)
+		command    string
+		stdin      io.Reader
+		args       []string
+		wantOutput []byte
+		wantError  bool
+		wantStdin  []byte
 	}{
 		{
 			name: "mock successful command with stdin",
@@ -241,7 +241,7 @@ func TestMockCommandExecutorExecuteWithStdin(t *testing.T) {
 
 func TestMockCommandExecutorExecutedCommandsTracking(t *testing.T) {
 	mock := NewMockCommandExecutor()
-	
+
 	// Setup multiple commands
 	mock.Commands["git [--version]"] = MockResponse{Output: []byte("git version"), Error: nil}
 	mock.Commands["git [status]"] = MockResponse{Output: []byte("git status"), Error: nil}
@@ -254,7 +254,7 @@ func TestMockCommandExecutorExecutedCommandsTracking(t *testing.T) {
 	if output1 == nil {
 		t.Error("Expected non-nil output from Execute")
 	}
-	
+
 	output2, err2 := mock.ExecuteWithStdin("git", strings.NewReader("input"), "status")
 	if err2 != nil {
 		t.Fatalf("Unexpected error from ExecuteWithStdin: %v", err2)

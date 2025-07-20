@@ -30,7 +30,7 @@ func (v *Validator) CheckDependencies() error {
 	if _, err := v.executor.Execute("git", "--version"); err != nil {
 		return errors.New("git command not found")
 	}
-	
+
 	return nil
 }
 
@@ -39,11 +39,11 @@ func (v *Validator) ValidateArgs(hunks, patchFile string) error {
 	if hunks == "" {
 		return errors.New("hunks cannot be empty")
 	}
-	
+
 	if patchFile == "" {
 		return errors.New("patch file cannot be empty")
 	}
-	
+
 	// Validate hunk numbers
 	hunkList := strings.Split(hunks, ",")
 	for _, h := range hunkList {
@@ -56,7 +56,7 @@ func (v *Validator) ValidateArgs(hunks, patchFile string) error {
 			return fmt.Errorf("hunk number must be positive: %d", num)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -67,11 +67,11 @@ func (v *Validator) ValidateArgsNew(hunkSpecs []string, patchFile string) error 
 	if len(hunkSpecs) == 0 {
 		return errors.New("at least one hunk specification is required")
 	}
-	
+
 	if patchFile == "" {
 		return errors.New("patch file cannot be empty")
 	}
-	
+
 	// Validate each hunk specification using parseHunkSpec
 	for _, spec := range hunkSpecs {
 		_, _, err := stager.ParseHunkSpec(spec)
@@ -79,6 +79,6 @@ func (v *Validator) ValidateArgsNew(hunkSpecs []string, patchFile string) error 
 			return err
 		}
 	}
-	
+
 	return nil
 }
