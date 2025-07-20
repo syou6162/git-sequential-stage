@@ -267,16 +267,11 @@ func testWorkflowPreservation(t *testing.T) {
 
 // S7: Test normal case operation guarantee
 func testNormalOperation(t *testing.T) {
-	dir, err := ioutil.TempDir("", "test-s7-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir, repo, cleanup := testutils.CreateTestRepo(t, "test-s7-*")
+	defer cleanup()
 
-	repo, _ := git.PlainInit(dir, false)
-	originalDir, _ := os.Getwd()
-	os.Chdir(dir)
-	defer os.Chdir(originalDir)
+	resetDir := testutils.SetupTestDir(t, dir)
+	defer resetDir()
 
 	// Create file with multiple hunks
 	initial := `def function1():
