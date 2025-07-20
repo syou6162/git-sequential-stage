@@ -6,7 +6,7 @@ import "io"
 type CommandExecutor interface {
 	// Execute runs a command and returns its output
 	Execute(name string, args ...string) ([]byte, error)
-	
+
 	// ExecuteWithStdin runs a command with stdin input and returns its output
 	ExecuteWithStdin(name string, stdin io.Reader, args ...string) ([]byte, error)
 }

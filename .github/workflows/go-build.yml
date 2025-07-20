@@ -1,10 +1,6 @@
 name: Go Build
 
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+on: [push, pull_request]
 
 jobs:
   build:
@@ -17,13 +13,10 @@ jobs:
       with:
         go-version: '1.24'
 
-    - name: Build
-      run: go build -v ./...
-
     - name: Build binary
       run: go build -o git-sequential-stage
 
-    - name: Check binary exists
+    - name: Test binary functionality
       run: |
         ls -la git-sequential-stage
         ./git-sequential-stage -h

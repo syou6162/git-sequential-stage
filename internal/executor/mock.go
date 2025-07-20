@@ -41,11 +41,11 @@ func (m *MockCommandExecutor) Execute(name string, args ...string) ([]byte, erro
 		Name: name,
 		Args: args,
 	})
-	
+
 	if response, ok := m.Commands[key]; ok {
 		return response.Output, response.Error
 	}
-	
+
 	return nil, fmt.Errorf("unexpected command: %s", key)
 }
 
@@ -55,17 +55,17 @@ func (m *MockCommandExecutor) ExecuteWithStdin(name string, stdin io.Reader, arg
 	if stdin != nil {
 		stdinData, _ = io.ReadAll(stdin)
 	}
-	
+
 	key := fmt.Sprintf("%s %v", name, args)
 	m.ExecutedCommands = append(m.ExecutedCommands, ExecutedCommand{
 		Name:  name,
 		Args:  args,
 		Stdin: stdinData,
 	})
-	
+
 	if response, ok := m.Commands[key]; ok {
 		return response.Output, response.Error
 	}
-	
+
 	return nil, fmt.Errorf("unexpected command: %s", key)
 }

@@ -293,10 +293,10 @@ if __name__ == "__main__":
 	if err != nil {
 		t.Fatalf("Failed to get absolute path: %v", err)
 	}
-	
+
 	// 一時的にディレクトリを変更してrunGitSequentialStageを実行
 	t.Chdir(dir)
-	
+
 	err = runGitSequentialStage([]string{"calculator.py:1"}, absPatchPath)
 	if err != nil {
 		t.Fatalf("git-sequential-stage failed: %v", err)
@@ -432,10 +432,10 @@ if __name__ == "__main__":
 	if err != nil {
 		t.Fatalf("Failed to get absolute path: %v", err)
 	}
-	
+
 	// 一時的にディレクトリを変更してrunGitSequentialStageを実行
 	t.Chdir(dir)
-	
+
 	err = runGitSequentialStage([]string{"math_operations.py:2"}, absPatchPath)
 	if err != nil {
 		t.Fatalf("git-sequential-stage failed: %v", err)
@@ -632,10 +632,10 @@ class DataValidator:
 	if err != nil {
 		t.Fatalf("Failed to get absolute path: %v", err)
 	}
-	
+
 	// 一時的にディレクトリを変更してrunGitSequentialStageを実行
 	t.Chdir(dir)
-	
+
 	err = runGitSequentialStage([]string{"user_manager.py:2", "validator.py:1"}, absPatchPath)
 	if err != nil {
 		t.Fatalf("git-sequential-stage failed: %v", err)
@@ -646,7 +646,7 @@ class DataValidator:
 	if len(stagedFiles) != 2 {
 		t.Errorf("Expected 2 files to be staged, got: %d files %v", len(stagedFiles), stagedFiles)
 	}
-	
+
 	expectedFiles := []string{"user_manager.py", "validator.py"}
 	for _, expectedFile := range expectedFiles {
 		found := false
@@ -767,7 +767,7 @@ index 7eaf039..acbb7a6 100644
 +        return len(password) >= 8 and any(c.isupper() for c in password) and any(c.islower() for c in password)
 `
 
-	// スナップショットテスト: ワーキングディレクトリの期待される差分  
+	// スナップショットテスト: ワーキングディレクトリの期待される差分
 	expectedWorkingDiff := `diff --git a/user_manager.py b/user_manager.py
 index 20b402c..be9ace8 100644
 --- a/user_manager.py
@@ -915,7 +915,7 @@ if __name__ == '__main__':
 	if err != nil {
 		t.Fatalf("Failed to get absolute path: %v", err)
 	}
-	
+
 	// 一時的にディレクトリを変更してrunGitSequentialStageを実行
 	t.Chdir(dir)
 
@@ -1330,7 +1330,7 @@ func TestBinaryFileHandling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get absolute path: %v", err)
 	}
-	
+
 	if err := runGitSequentialStage([]string{"document.txt:1"}, absPatchPath); err != nil {
 		t.Fatalf("Failed to stage text file changes: %v", err)
 	}
@@ -1354,12 +1354,12 @@ func TestBinaryFileHandling(t *testing.T) {
 		}
 		status := line[:2]
 		filename := line[3:]
-		
+
 		// Skip the patch file
 		if filename == patchFile {
 			continue
 		}
-		
+
 		if expected, ok := expectedStatus[filename]; ok {
 			if status != expected {
 				t.Errorf("File %s: expected status %q, got %q", filename, expected, status)
@@ -1389,7 +1389,7 @@ func TestBinaryFileHandling(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to get git status: %v", err)
 		}
-		
+
 		if strings.Contains(string(statusOutput), "M  image.png") {
 			t.Log("Binary file was successfully staged")
 		}
@@ -1513,7 +1513,7 @@ if __name__ == "__main__":
 	// Log the diffs for debugging
 	t.Logf("Cached diff:\n%s", cachedDiff)
 	t.Logf("Unstaged diff:\n%s", unstagedDiff)
-	
+
 	// The modifications might be in a single hunk, so check if anything remains unstaged
 	if len(unstagedDiff) > 0 && strings.Contains(string(unstagedDiff), "@@") {
 		t.Log("Some changes remain unstaged as expected")
@@ -1529,7 +1529,7 @@ if __name__ == "__main__":
 
 	// Test scenario: modify file content AND move it
 	// This is a more complex test case showing how to handle both modifications and moves
-	
+
 	// First, apply modifications to the file
 	modifiedContentForMove := `#!/usr/bin/env python3
 
@@ -1578,7 +1578,7 @@ if __name__ == "__main__":
 	if err != nil {
 		t.Fatalf("Failed to get git status: %v", err)
 	}
-	
+
 	statusStr := string(statusOutput)
 	if strings.Contains(statusStr, "R  old_module.py -> src/new_module.py") {
 		t.Log("Git correctly detected file rename with modifications")
@@ -1610,7 +1610,7 @@ func TestLargeFileWithManyHunks(t *testing.T) {
 	largeFile := "large_module.py"
 	var content strings.Builder
 	content.WriteString("#!/usr/bin/env python3\n\n")
-	
+
 	// Create 20 functions
 	for i := 1; i <= 20; i++ {
 		content.WriteString(fmt.Sprintf(`def function_%d():
@@ -1618,7 +1618,7 @@ func TestLargeFileWithManyHunks(t *testing.T) {
 
 `, i, i))
 	}
-	
+
 	content.WriteString(`def main():
 `)
 	for i := 1; i <= 20; i++ {
@@ -1647,7 +1647,7 @@ if __name__ == "__main__":
 	// Modify multiple functions throughout the file
 	var modifiedContent strings.Builder
 	modifiedContent.WriteString("#!/usr/bin/env python3\n\n")
-	
+
 	for i := 1; i <= 20; i++ {
 		if i == 1 || i == 5 || i == 10 || i == 15 || i == 20 {
 			// Modify these functions
@@ -1664,7 +1664,7 @@ if __name__ == "__main__":
 `, i, i))
 		}
 	}
-	
+
 	modifiedContent.WriteString(`def main():
 `)
 	for i := 1; i <= 20; i++ {
@@ -1707,21 +1707,21 @@ if __name__ == "__main__":
 	if hunkCount >= 5 {
 		selectedHunks = append(selectedHunks, "5")
 	}
-	
+
 	hunkSpec := fmt.Sprintf("%s:%s", largeFile, strings.Join(selectedHunks, ","))
-	
+
 	// Measure performance
 	startTime := time.Now()
 	err = runGitSequentialStage([]string{hunkSpec}, absPatchPath)
 	elapsed := time.Since(startTime)
-	
+
 	if err != nil {
 		t.Fatalf("Failed to stage selected hunks: %v", err)
 	}
-	
+
 	// Log performance metrics
 	t.Logf("Performance: Staged %d hunks in %v", len(selectedHunks), elapsed)
-	
+
 	// Check if performance meets target
 	targetDuration := time.Duration(performanceTargetSeconds) * time.Second
 	if elapsed > targetDuration {
@@ -1780,7 +1780,7 @@ if __name__ == "__main__":
 			manyHunks = append(manyHunks, fmt.Sprintf("%d", i))
 		}
 	}
-	
+
 	if len(manyHunks) > 0 {
 		hunkSpec := fmt.Sprintf("%s:%s", largeFile, strings.Join(manyHunks, ","))
 		err = runGitSequentialStage([]string{hunkSpec}, absPatchPath)
@@ -1789,7 +1789,7 @@ if __name__ == "__main__":
 		} else {
 			elapsed := time.Since(startTime)
 			t.Logf("Staged %d hunks in %v", len(manyHunks), elapsed)
-			
+
 			// Warn if it takes too long
 			if elapsed > 5*time.Second {
 				t.Logf("Warning: Staging %d hunks took %v, which might be slow", len(manyHunks), elapsed)
