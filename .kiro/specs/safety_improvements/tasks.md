@@ -102,22 +102,22 @@
 
 ### Phase 4: Semantic Commitワークフロー統合テスト
 
-- [ ] 4.1 基本的なIntent-to-addワークフローテスト
+- [x] 4.1 基本的なIntent-to-addワークフローテスト
   - git add -N → パッチ生成 → ハンクステージング → コミットの完全フロー
   - internal/stager/semantic_commit_test.goファイルを作成
   - _要件: S5 (Semantic Commitワークフロー統合)_
 
-- [ ] 4.2 混在シナリオテスト
+- [x] 4.2 混在シナリオテスト
   - Intent-to-addファイルと通常ステージングの混在
   - Intent-to-addは継続、通常ステージングはエラー停止の検証
   - _要件: S2 (Intent-to-addファイル統合), S5 (Semantic Commitワークフロー統合)_
 
-- [ ] 4.3 複数Intent-to-addファイルテスト
+- [x] 4.3 複数Intent-to-addファイルテスト
   - 複数のIntent-to-addファイルの同時処理
   - 部分ステージングの動作確認
   - _要件: S5 (Semantic Commitワークフロー統合)_
 
-- [ ] 4.4 エラーケーステスト
+- [x] 4.4 エラーケーステスト
   - Intent-to-addファイルのハンク適用エラー
   - 適切なエラーメッセージの表示確認
   - _要件: S4 (Git操作エラーハンドリング), S8 (エラーケースの動作保証)_

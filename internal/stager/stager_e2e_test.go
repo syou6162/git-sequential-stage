@@ -15,9 +15,6 @@ func TestStageHunks_E2E_AmbiguousFilename(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found in PATH")
 	}
-	if _, err := exec.LookPath("filterdiff"); err != nil {
-		t.Skip("filterdiff not found in PATH")
-	}
 
 	testCases := []struct {
 		name     string

@@ -406,7 +406,7 @@ index 0000000..999888
 
 // TestStager_ExtractHunkContent_NewFile tests the extractHunkContent method of Stager
 // for both new file creation and existing file modification scenarios.
-// Since we now use go-gitdiff for all parsing, filterdiff is no longer used.
+// Since we now use go-gitdiff for all parsing.
 func TestStager_ExtractHunkContent_NewFile(t *testing.T) {
 	tests := []struct {
 		name         string
