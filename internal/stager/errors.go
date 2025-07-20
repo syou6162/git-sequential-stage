@@ -2,6 +2,7 @@ package stager
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -121,16 +122,20 @@ func NewPatchApplicationError(patchID string, err error) *StagerError {
 
 // NewHunkCountExceededError creates an error when requested hunk numbers exceed available hunks
 func NewHunkCountExceededError(filePath string, maxHunks int, invalidHunks []int) *StagerError {
-	var invalidHunksList strings.Builder
+	// Convert int slice to string slice
+	invalidHunksStr := make([]string, len(invalidHunks))
 	for i, hunk := range invalidHunks {
-		if i > 0 {
-			invalidHunksList.WriteString(", ")
-		}
-		invalidHunksList.WriteString(fmt.Sprintf("%d", hunk))
+		invalidHunksStr[i] = strconv.Itoa(hunk)
 	}
 
-	message := fmt.Sprintf("hunk count exceeded for file %s: file has %d hunks, but requested hunks [%s]",
-		filePath, maxHunks, invalidHunksList.String())
+	// Helper function to format plural correctly
+	pluralS := ""
+	if maxHunks != 1 {
+		pluralS = "s"
+	}
+
+	message := fmt.Sprintf("%s has %d hunk%s but requested [%s]",
+		filePath, maxHunks, pluralS, strings.Join(invalidHunksStr, ", "))
 
 	return NewStagerError(ErrorTypeHunkCountExceeded, message, nil)
 }

@@ -1593,24 +1593,19 @@ func newFunction() {
 		t.Errorf("Expected error message to contain file name 'main.go', got: %s", errorMsg)
 	}
 
-	// 実際のハンク数が含まれている
-	if !strings.Contains(errorMsg, "has 1 hunks") {
-		t.Errorf("Expected error message to mention '1 hunks', got: %s", errorMsg)
+	// 実際のハンク数が含まれている（新しい簡潔な形式）
+	if !strings.Contains(errorMsg, "has 1 hunk") {
+		t.Errorf("Expected error message to mention '1 hunk', got: %s", errorMsg)
 	}
 
 	// 要求された無効なハンク番号が含まれている
 	if !strings.Contains(errorMsg, "[2, 3]") || !strings.Contains(errorMsg, "requested") {
 		t.Errorf("Expected error message to mention requested hunks '[2, 3]', got: %s", errorMsg)
 	}
-
-	// キーワード「hunk count exceeded」が含まれている
-	if !strings.Contains(errorMsg, "hunk count exceeded") {
-		t.Errorf("Expected error message to contain 'hunk count exceeded', got: %s", errorMsg)
-	}
 }
 
-// TestMultipleInvalidHunks tests error handling when requesting multiple invalid hunks
-func TestMultipleInvalidHunks(t *testing.T) {
+// TestErrorCases_MultipleInvalidHunks tests error handling when requesting multiple invalid hunks
+func TestErrorCases_MultipleInvalidHunks(t *testing.T) {
 	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-e2e-*")
 	defer testRepo.Cleanup()
 
