@@ -9,10 +9,10 @@ import (
 
 func TestValidator_CheckDependencies(t *testing.T) {
 	tests := []struct {
-		name     string
-		setup    func(*executor.MockCommandExecutor)
-		wantErr  bool
-		errMsg   string
+		name    string
+		setup   func(*executor.MockCommandExecutor)
+		wantErr bool
+		errMsg  string
 	}{
 		{
 			name: "all dependencies available",
@@ -41,14 +41,14 @@ func TestValidator_CheckDependencies(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mock := executor.NewMockCommandExecutor()
 			tt.setup(mock)
-			
+
 			v := NewValidator(mock)
 			err := v.CheckDependencies()
-			
+
 			if (err != nil) != tt.wantErr {
 				t.Errorf("CheckDependencies() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			
+
 			if err != nil && tt.errMsg != "" && err.Error() != tt.errMsg {
 				t.Errorf("CheckDependencies() error message = %v, want %v", err.Error(), tt.errMsg)
 			}
@@ -131,11 +131,11 @@ func TestValidator_ValidateArgs(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			v := NewValidator(nil) // executor not needed for arg validation
 			err := v.ValidateArgs(tt.hunks, tt.patchFile)
-			
+
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateArgs() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			
+
 			if err != nil && tt.errMsg != "" && err.Error() != tt.errMsg {
 				t.Errorf("ValidateArgs() error message = %v, want %v", err.Error(), tt.errMsg)
 			}

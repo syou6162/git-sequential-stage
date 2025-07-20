@@ -21,23 +21,23 @@ type testRepo struct {
 // and returns a testRepo struct for further operations
 func setupTestRepo(t *testing.T, testName string) *testRepo {
 	t.Helper()
-	
+
 	// Skip if git is not available
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found in PATH")
 	}
-	
+
 	// Create a temporary directory for the test
 	tmpDir, err := os.MkdirTemp("", testName+"_*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	
+
 	// Ensure cleanup
 	t.Cleanup(func() {
 		os.RemoveAll(tmpDir)
 	})
-	
+
 	// Change to temp directory
 	originalDir, err := os.Getwd()
 	if err != nil {
@@ -49,7 +49,7 @@ func setupTestRepo(t *testing.T, testName string) *testRepo {
 	t.Cleanup(func() {
 		os.Chdir(originalDir)
 	})
-	
+
 	// Initialize git repository
 	execCmd := executor.NewRealCommandExecutor()
 	if _, err := execCmd.Execute("git", "init"); err != nil {
@@ -61,7 +61,7 @@ func setupTestRepo(t *testing.T, testName string) *testRepo {
 	if _, err := execCmd.Execute("git", "config", "user.email", "test@example.com"); err != nil {
 		t.Fatalf("Failed to set git user email: %v", err)
 	}
-	
+
 	return &testRepo{
 		t:       t,
 		tmpDir:  tmpDir,
@@ -72,7 +72,7 @@ func setupTestRepo(t *testing.T, testName string) *testRepo {
 // createInitialCommit creates an initial commit with a dummy file
 func (r *testRepo) createInitialCommit() {
 	r.t.Helper()
-	
+
 	initialFile := "initial.txt"
 	if err := os.WriteFile(initialFile, []byte("initial content"), 0644); err != nil {
 		r.t.Fatalf("Failed to create initial file: %v", err)
@@ -88,7 +88,7 @@ func (r *testRepo) createInitialCommit() {
 // createFileWithContent creates a file with the given content
 func (r *testRepo) createFileWithContent(filename, content string) {
 	r.t.Helper()
-	
+
 	if err := os.WriteFile(filename, []byte(content), 0644); err != nil {
 		r.t.Fatalf("Failed to create file %s: %v", filename, err)
 	}
@@ -97,7 +97,7 @@ func (r *testRepo) createFileWithContent(filename, content string) {
 // gitAddIntentToAdd runs git add -N on the specified file
 func (r *testRepo) gitAddIntentToAdd(filename string) {
 	r.t.Helper()
-	
+
 	if _, err := r.execCmd.Execute("git", "add", "-N", filename); err != nil {
 		r.t.Fatalf("Failed to intent-to-add file %s: %v", filename, err)
 	}
@@ -106,7 +106,7 @@ func (r *testRepo) gitAddIntentToAdd(filename string) {
 // gitAdd runs git add on the specified file
 func (r *testRepo) gitAdd(filename string) {
 	r.t.Helper()
-	
+
 	if _, err := r.execCmd.Execute("git", "add", filename); err != nil {
 		r.t.Fatalf("Failed to add file %s: %v", filename, err)
 	}
@@ -115,7 +115,7 @@ func (r *testRepo) gitAdd(filename string) {
 // gitCommit creates a commit with the given message
 func (r *testRepo) gitCommit(message string) {
 	r.t.Helper()
-	
+
 	if _, err := r.execCmd.Execute("git", "commit", "-m", message); err != nil {
 		r.t.Fatalf("Failed to commit: %v", err)
 	}
@@ -124,7 +124,7 @@ func (r *testRepo) gitCommit(message string) {
 // generatePatchFile generates a patch file from git diff HEAD
 func (r *testRepo) generatePatchFile(filename string) string {
 	r.t.Helper()
-	
+
 	patchOutput, err := r.execCmd.Execute("git", "diff", "HEAD")
 	if err != nil {
 		r.t.Fatalf("Failed to generate patch: %v", err)
@@ -138,7 +138,7 @@ func (r *testRepo) generatePatchFile(filename string) string {
 // getGitStatus returns the output of git status --porcelain
 func (r *testRepo) getGitStatus() string {
 	r.t.Helper()
-	
+
 	output, err := r.execCmd.Execute("git", "status", "--porcelain")
 	if err != nil {
 		r.t.Fatalf("Failed to get git status: %v", err)
@@ -149,16 +149,16 @@ func (r *testRepo) getGitStatus() string {
 // assertSafetyError checks if the error is a SafetyError with the expected type
 func assertSafetyError(t *testing.T, err error, expectedType SafetyErrorType) {
 	t.Helper()
-	
+
 	if err == nil {
 		t.Fatal("Expected error but got nil")
 	}
-	
+
 	var safetyErr *SafetyError
 	if !errors.As(err, &safetyErr) {
 		t.Fatalf("Expected SafetyError type, got: %T - %v", err, err)
 	}
-	
+
 	if safetyErr.Type != expectedType {
 		t.Fatalf("Expected SafetyError type %v, got: %v", expectedType, safetyErr.Type)
 	}
@@ -167,16 +167,16 @@ func assertSafetyError(t *testing.T, err error, expectedType SafetyErrorType) {
 // assertStagerError checks if the error is a StagerError with the expected type
 func assertStagerError(t *testing.T, err error, expectedType ErrorType) {
 	t.Helper()
-	
+
 	if err == nil {
 		t.Fatal("Expected error but got nil")
 	}
-	
+
 	var stagerErr *StagerError
 	if !errors.As(err, &stagerErr) {
 		t.Fatalf("Expected StagerError type, got: %T - %v", err, err)
 	}
-	
+
 	if stagerErr.Type != expectedType {
 		t.Fatalf("Expected StagerError type %v, got: %v", expectedType, stagerErr.Type)
 	}
@@ -226,7 +226,7 @@ def farewell():
 	stager := NewStager(repo.execCmd)
 	hunkSpecs := []string{newFileName + ":1"}
 	err := stager.StageHunks(hunkSpecs, patchFile)
-	
+
 	// With intent-to-add files, the safety check may detect them as new files
 	if err != nil {
 		// Check if it's a SafetyError with StagingAreaNotClean type
@@ -267,7 +267,7 @@ def farewell():
 	}
 	// For debugging: Print the working diff to see what's actually there
 	t.Logf("Working diff after commit: %s", string(workingDiff))
-	
+
 	// For new files, git-sequential-stage may stage the entire file content
 	// This is acceptable behavior for intent-to-add workflow
 	if strings.TrimSpace(string(workingDiff)) == "" {
@@ -312,10 +312,10 @@ print("modified content")`
 	stager := NewStager(repo.execCmd)
 	hunkSpecs := []string{newFileName + ":1"}
 	err := stager.StageHunks(hunkSpecs, patchFile)
-	
+
 	// Should get a safety error about staging area not being clean
 	assertSafetyError(t, err, StagingAreaNotClean)
-	
+
 	// Error should mention the staged file
 	if !strings.Contains(err.Error(), existingFileName) {
 		t.Fatalf("Error should mention staged file %s, got: %v", existingFileName, err)
@@ -352,7 +352,7 @@ func TestSemanticCommitWorkflow_MultipleIntentToAddFiles(t *testing.T) {
 	stager := NewStager(repo.execCmd)
 	hunkSpecs := []string{file1Name + ":1", file2Name + ":1"}
 	err := stager.StageHunks(hunkSpecs, patchFile)
-	
+
 	// With intent-to-add files, the safety check may detect them as new files
 	// This behavior is acceptable as the check is being conservative
 	// In a real semantic_commit workflow, the user would handle this appropriately
@@ -422,7 +422,7 @@ def function3():
 	stager := NewStager(repo.execCmd)
 	hunkSpecs := []string{largeFileName + ":1,3"}
 	err := stager.StageHunks(hunkSpecs, patchFile)
-	
+
 	// With intent-to-add files, the safety check may detect them as new files
 	if err != nil {
 		// Check if it's a SafetyError with StagingAreaNotClean type
@@ -491,17 +491,17 @@ func TestSemanticCommitWorkflow_ErrorHandling(t *testing.T) {
 	stager := NewStager(repo.execCmd)
 	hunkSpecs := []string{newFileName + ":99"} // Non-existent hunk number
 	err := stager.StageHunks(hunkSpecs, patchFile)
-	
+
 	// Should get an error
 	if err == nil {
 		t.Fatalf("Expected error for non-existent hunk, but got nil")
 	}
-	
-	// The error could be either safety error (intent-to-add detected as new file) 
+
+	// The error could be either safety error (intent-to-add detected as new file)
 	// or hunk not found error - both are valid depending on implementation
 	var safetyErr *SafetyError
 	var stagerErr *StagerError
-	
+
 	if errors.As(err, &safetyErr) && safetyErr.Type == StagingAreaNotClean {
 		t.Logf("Safety check detected intent-to-add file as staged: %v", err)
 		t.Logf("This prevents processing and is correct safety behavior")

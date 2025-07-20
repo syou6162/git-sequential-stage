@@ -42,15 +42,15 @@ func TestE2E_PerformanceWithSafetyChecks(t *testing.T) {
 		for i := 0; i < iterations; i++ {
 			// Reset staging area
 			testutils.RunCommand(t, tmpDir, "git", "reset", "HEAD")
-			
+
 			start := time.Now()
 			err := runGitSequentialStage([]string{"large_module.py:1,3,5"}, patchFile)
 			duration := time.Since(start)
-			
+
 			if err != nil {
 				t.Fatalf("Iteration %d failed: %v", i+1, err)
 			}
-			
+
 			totalDuration += duration
 			t.Logf("Iteration %d: %v", i+1, duration)
 		}
@@ -72,21 +72,21 @@ func TestE2E_PerformanceWithSafetyChecks(t *testing.T) {
 	t.Run("staged_files_early_exit", func(t *testing.T) {
 		// Stage a file
 		testutils.RunCommand(t, tmpDir, "git", "add", "large_module.py")
-		
+
 		start := time.Now()
 		err := runGitSequentialStage([]string{"large_module.py:1"}, patchFile)
 		duration := time.Since(start)
-		
+
 		if err == nil {
 			t.Fatal("Expected safety check error, but got none")
 		}
-		
+
 		t.Logf("Safety check early exit time: %v", duration)
 		t.Logf("Error message: %v", err)
-		
+
 		// Check if error is from safety check (not from git apply)
-		if strings.Contains(err.Error(), "SAFETY_CHECK_FAILED") || 
-		   strings.Contains(err.Error(), "staging area is not clean") {
+		if strings.Contains(err.Error(), "SAFETY_CHECK_FAILED") ||
+			strings.Contains(err.Error(), "staging area is not clean") {
 			// Safety check should fail fast (under 50ms)
 			if duration > 50*time.Millisecond {
 				t.Errorf("Safety check took too long: %v > 50ms", duration)
@@ -98,5 +98,3 @@ func TestE2E_PerformanceWithSafetyChecks(t *testing.T) {
 		}
 	})
 }
-
-

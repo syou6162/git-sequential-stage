@@ -29,7 +29,7 @@ func CreateAndCommitFile(t *testing.T, dir string, repo *git.Repository, filenam
 
 	w, _ := repo.Worktree()
 	w.Add(filename)
-	
+
 	_, err := w.Commit(message, &git.CommitOptions{
 		Author: &object.Signature{
 			Name:  "Test User",
@@ -37,7 +37,7 @@ func CreateAndCommitFile(t *testing.T, dir string, repo *git.Repository, filenam
 			When:  time.Now(),
 		},
 	})
-	
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,33 +46,33 @@ func CreateAndCommitFile(t *testing.T, dir string, repo *git.Repository, filenam
 // CreateTestRepo creates a temporary directory with an initialized git repository
 func CreateTestRepo(t *testing.T, prefix string) (string, *git.Repository, func()) {
 	t.Helper()
-	
+
 	tmpDir, err := os.MkdirTemp("", prefix)
 	if err != nil {
 		t.Fatal(err)
 	}
-	
+
 	repo, err := git.PlainInit(tmpDir, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	
+
 	cleanup := func() {
 		os.RemoveAll(tmpDir)
 	}
-	
+
 	return tmpDir, repo, cleanup
 }
 
 // SetupTestDir changes to the test directory and returns a cleanup function
 func SetupTestDir(t *testing.T, dir string) func() {
 	t.Helper()
-	
+
 	originalDir, _ := os.Getwd()
 	if err := os.Chdir(dir); err != nil {
 		t.Fatal(err)
 	}
-	
+
 	return func() {
 		os.Chdir(originalDir)
 	}
@@ -81,11 +81,11 @@ func SetupTestDir(t *testing.T, dir string) func() {
 // CreateLargeFileWithManyHunks creates a file with many functions for performance testing
 func CreateLargeFileWithManyHunks(t *testing.T, tmpDir string, repo *git.Repository) {
 	t.Helper()
-	
+
 	// Create initial version
 	var initialContent strings.Builder
 	initialContent.WriteString("#!/usr/bin/env python3\n\n")
-	
+
 	for i := 0; i < 20; i++ {
 		initialContent.WriteString(GenerateFunction(i, "initial"))
 	}
@@ -98,7 +98,7 @@ func CreateLargeFileWithManyHunks(t *testing.T, tmpDir string, repo *git.Reposit
 	// Commit initial version
 	w, _ := repo.Worktree()
 	w.Add(filename)
-	
+
 	commitOptions := &git.CommitOptions{
 		Author: &object.Signature{
 			Name:  "Test User",
@@ -106,7 +106,7 @@ func CreateLargeFileWithManyHunks(t *testing.T, tmpDir string, repo *git.Reposit
 			When:  time.Now(),
 		},
 	}
-	
+
 	if _, err := w.Commit("Initial large file", commitOptions); err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func CreateLargeFileWithManyHunks(t *testing.T, tmpDir string, repo *git.Reposit
 	// Create modified version with changes in multiple hunks
 	var modifiedContent strings.Builder
 	modifiedContent.WriteString("#!/usr/bin/env python3\n\n")
-	
+
 	for i := 0; i < 20; i++ {
 		if i%2 == 0 {
 			// Modify even-numbered functions
