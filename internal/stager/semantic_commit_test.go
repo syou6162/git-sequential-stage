@@ -510,3 +510,176 @@ func TestSemanticCommitWorkflow_ErrorHandling(t *testing.T) {
 		t.Fatalf("Expected either SafetyError(StagingAreaNotClean), StagerError(HunkNotFound), or StagerError(HunkCountExceeded), got: %T - %v", err, err)
 	}
 }
+
+// TestSemanticCommitWorkflow_UntrackedFile tests behavior with completely untracked files
+func TestSemanticCommitWorkflow_UntrackedFile(t *testing.T) {
+	// Setup test repository
+	repo := setupTestRepo(t, "semantic_commit_untracked_test")
+	repo.createInitialCommit()
+
+	// Create a completely untracked file (status: ??)
+	untrackedFileName := "untracked_module.py"
+	untrackedFileContent := `def untracked_function():
+    print("This is from an untracked file")
+    return True
+
+def another_function():
+    print("Another function in untracked file")
+    return False
+`
+	repo.createFileWithContent(untrackedFileName, untrackedFileContent)
+
+	// Verify the file is untracked
+	status := repo.getGitStatus()
+	if !strings.Contains(status, "?? "+untrackedFileName) {
+		t.Fatalf("File should be untracked (??), got status: %s", status)
+	}
+
+	// Try to generate patch file - should not contain untracked files
+	patchFile := "changes.patch"
+	patchContent := repo.generatePatchFile(patchFile)
+
+	// Verify patch does not contain untracked file
+	if strings.Contains(patchContent, untrackedFileName) {
+		t.Fatalf("Patch should not contain untracked file, but got: %s", patchContent)
+	}
+
+	// Try to stage hunks from untracked file - should fail
+	stager := NewStager(repo.execCmd)
+	hunkSpecs := []string{untrackedFileName + ":1"}
+	err := stager.StageHunks(hunkSpecs, patchFile)
+
+	// Should get an error
+	if err == nil {
+		t.Fatalf("Expected error when trying to stage untracked file, but got nil")
+	}
+
+	// Check for appropriate error
+	assertStagerError(t, err, ErrorTypeHunkNotFound)
+
+	// Error should mention the file
+	if !strings.Contains(err.Error(), untrackedFileName) {
+		t.Errorf("Error should mention the untracked file %s, got: %v", untrackedFileName, err)
+	}
+
+	// Check if advice about git add -N is included
+	if !strings.Contains(err.Error(), "git ls-files --others --exclude-standard | xargs git add -N") {
+		t.Errorf("Expected advice about using 'git ls-files --others --exclude-standard | xargs git add -N', got: %v", err)
+	}
+
+	// Now test the intent-to-add workflow
+	repo.gitAddIntentToAdd(untrackedFileName)
+
+	// Verify file is now intent-to-add
+	status2 := repo.getGitStatus()
+	if !strings.Contains(status2, " A "+untrackedFileName) {
+		t.Fatalf("File should be in intent-to-add state, got status: %s", status2)
+	}
+
+	// Generate new patch file with intent-to-add content
+	patchFile2 := "changes_with_intent.patch"
+	patchContent2 := repo.generatePatchFile(patchFile2)
+
+	// Verify patch now contains the file
+	if !strings.Contains(patchContent2, untrackedFileName) {
+		t.Fatalf("Patch should contain intent-to-add file, but got: %s", patchContent2)
+	}
+
+	// Try to stage hunks again - may succeed or fail due to safety check
+	err2 := stager.StageHunks(hunkSpecs, patchFile2)
+
+	if err2 != nil {
+		// Check if it's a safety error (expected for intent-to-add)
+		var safetyErr *SafetyError
+		if errors.As(err2, &safetyErr) && safetyErr.Type == StagingAreaNotClean {
+			t.Logf("Safety check detected intent-to-add file: %v", err2)
+			t.Logf("This is expected behavior for intent-to-add files")
+		} else {
+			t.Fatalf("Unexpected error type: %T - %v", err2, err2)
+		}
+	} else {
+		// If staging succeeded, verify the result
+		stagedOutput, err := repo.execCmd.Execute("git", "diff", "--cached")
+		if err != nil {
+			t.Fatalf("Failed to get staged diff: %v", err)
+		}
+		if !strings.Contains(string(stagedOutput), "+def untracked_function():") {
+			t.Errorf("Expected function to be staged, got: %s", stagedOutput)
+		}
+	}
+}
+
+// TestSemanticCommitWorkflow_MixedUntrackedAndTracked tests mixed scenarios
+func TestSemanticCommitWorkflow_MixedUntrackedAndTracked(t *testing.T) {
+	// Setup test repository
+	repo := setupTestRepo(t, "semantic_commit_mixed_untracked_test")
+
+	// Create and commit an existing file
+	existingFileName := "existing.py"
+	existingFileContent := `def existing_function():
+    print("Existing")`
+	repo.createFileWithContent(existingFileName, existingFileContent)
+	repo.gitAdd(existingFileName)
+	repo.gitCommit("Initial commit with existing file")
+
+	// Create an untracked file
+	untrackedFileName := "new_untracked.py"
+	untrackedFileContent := `def new_function():
+    print("New untracked")`
+	repo.createFileWithContent(untrackedFileName, untrackedFileContent)
+
+	// Modify the existing file
+	modifiedContent := existingFileContent + `
+
+def modified_function():
+    print("Modified")`
+	repo.createFileWithContent(existingFileName, modifiedContent)
+
+	// Generate patch - should only contain changes to tracked files
+	patchFile := "mixed_changes.patch"
+	patchContent := repo.generatePatchFile(patchFile)
+
+	// Verify patch only contains existing file changes
+	if !strings.Contains(patchContent, existingFileName) {
+		t.Errorf("Patch should contain existing file changes")
+	}
+	if strings.Contains(patchContent, untrackedFileName) {
+		t.Errorf("Patch should not contain untracked file")
+	}
+
+	// Try to stage both files
+	stager := NewStager(repo.execCmd)
+	hunkSpecs := []string{
+		existingFileName + ":1",
+		untrackedFileName + ":1",
+	}
+	err := stager.StageHunks(hunkSpecs, patchFile)
+
+	// Should fail because untracked file is not in patch
+	if err == nil {
+		t.Fatalf("Expected error when trying to stage untracked file, but got nil")
+	}
+
+	// Verify error mentions the untracked file
+	if !strings.Contains(err.Error(), untrackedFileName) {
+		t.Errorf("Error should mention untracked file %s, got: %v", untrackedFileName, err)
+	}
+
+	// Stage only the existing file changes
+	err2 := stager.StageHunks([]string{existingFileName + ":1"}, patchFile)
+	if err2 != nil {
+		t.Fatalf("Failed to stage existing file changes: %v", err2)
+	}
+
+	// Verify only existing file changes are staged
+	stagedOutput, err := repo.execCmd.Execute("git", "diff", "--cached")
+	if err != nil {
+		t.Fatalf("Failed to get staged diff: %v", err)
+	}
+	if !strings.Contains(string(stagedOutput), "modified_function") {
+		t.Errorf("Expected existing file changes to be staged")
+	}
+	if strings.Contains(string(stagedOutput), untrackedFileName) {
+		t.Errorf("Untracked file should not be staged")
+	}
+}

@@ -164,7 +164,11 @@ func buildTargetIDs(hunkSpecs []string, allHunks []HunkInfo) ([]string, error) {
 		// Check if file exists in patch
 		maxHunks, fileExists := fileHunkCounts[filePath]
 		if !fileExists {
-			return nil, NewHunkNotFoundError(fmt.Sprintf("file %s not found in patch", filePath), nil)
+			// Create error with advice for untracked files
+			message := fmt.Sprintf("file %s not found in patch", filePath)
+			advice := fmt.Sprintf("\nIf %s is an untracked file, you need to add it with intent-to-add first:\n  git ls-files --others --exclude-standard | xargs git add -N", filePath)
+			fullMessage := message + advice
+			return nil, NewHunkNotFoundError(fullMessage, nil)
 		}
 
 		// Check for hunk numbers that exceed available hunks

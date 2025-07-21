@@ -38,7 +38,7 @@ This tool is primarily designed for integration with LLM agents (such as Claude 
 When integrated with LLM agents, the typical workflow becomes:
 
 1. **Analysis**: LLM analyzes the current diff and identifies semantic units
-2. **Planning**: LLM determines optimal commit structure 
+2. **Planning**: LLM determines optimal commit structure
 3. **Staging**: `git-sequential-stage` applies changes incrementally using patch IDs
 4. **Committing**: Each semantic unit becomes a focused, meaningful commit
 5. **Iteration**: Process repeats until all changes are committed
@@ -116,7 +116,7 @@ The tool includes built-in safety checks to prevent accidental data loss and ens
 ### Default Safety Checks
 
 - **Staging Area Protection**: Detects and prevents operations when the staging area is not clean
-- **Intent-to-add Detection**: Identifies and handles `git add -N` files appropriately  
+- **Intent-to-add Detection**: Identifies and handles `git add -N` files appropriately
 - **File Type Awareness**: Provides specific guidance for different file operations (NEW, MODIFIED, DELETED, RENAMED)
 - **LLM Agent Friendly Messages**: Structured error messages with `SAFETY_CHECK_FAILED` tags for automated processing
 
