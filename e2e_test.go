@@ -562,7 +562,7 @@ index bc6c2b7..65ed03f 100644
 +            return False
          pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
          return re.match(pattern, email) is not None
- 
+
      @staticmethod
      def validate_username(username):
 -        return len(username) >= 3 and username.isalnum()
@@ -581,7 +581,7 @@ index bc6c2b7..65ed03f 100644
 
 	// スナップショットテスト: ワーキングディレクトリの期待される差分
 	expectedWorkingDiff := `diff --git a/user_manager.py b/user_manager.py
-index 20b402c..be9ace8 100644
+index 13d44f9..6a210b7 100644
 --- a/user_manager.py
 +++ b/user_manager.py
 @@ -3,9 +3,17 @@
