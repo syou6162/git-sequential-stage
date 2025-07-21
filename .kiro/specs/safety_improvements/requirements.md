@@ -95,10 +95,10 @@ STAGED_FILES:
 RECOMMENDED_ACTIONS:
   # For intent-to-add files - continue processing
   CONTINUE_PROCESSING: intent-to-add files detected (semantic_commit workflow)
-  
+
   # For other files - execute in order
   STEP_1_DELETIONS: git commit -m "Remove old_file.py"
-  STEP_2_RENAMES: git commit -m "Rename old.py to new.py"  
+  STEP_2_RENAMES: git commit -m "Rename old.py to new.py"
   STEP_3_RESET_OTHERS: git reset HEAD file1.py file2.py new_file.py
   STEP_4_INTENT_TO_ADD: git add -N new_file.py
   STEP_5_SEMANTIC_COMMIT: # Use semantic_commit workflow
@@ -182,10 +182,10 @@ STATUS_CHECK: git status --porcelain
      ```bash
      # 1. Intent-to-addで新規ファイルを追加
      git add -N new_file.py
-     
+
      # 2. パッチファイル生成
      git diff HEAD > changes.patch
-     
+
      # 3. git-sequential-stageでハンク選択
      git-sequential-stage -patch="changes.patch" -hunk="new_file.py:1,2"
      ```

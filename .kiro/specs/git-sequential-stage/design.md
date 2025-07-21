@@ -107,7 +107,7 @@ index abc123..def456 100644
 +    # 新しいコード（Hunk 1）
 +    print("追加された行")
      return result
- 
+
 @@ -20,4 +22,6 @@ def function2():
      # 既存のコード
 +    # 新しいコード（Hunk 2）
@@ -161,18 +161,18 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
     if err := s.validateInputs(); err != nil {
         return fmt.Errorf("validation failed: %v", err)
     }
-    
+
     // 2. 準備フェーズ
     if err := s.preparePatches(); err != nil {
         return fmt.Errorf("preparation failed: %v", err)
     }
-    
+
     // 3. 実行フェーズ（リカバリ可能）
     if err := s.executeStaging(); err != nil {
         s.saveDebugInfo(err) // デバッグ情報保存
         return fmt.Errorf("staging failed: %v", err)
     }
-    
+
     return nil
 }
 ```
@@ -209,7 +209,7 @@ index abc123..def456 100644
  def hello():
 +    print("Hello, World!")
      return "hello"`,
-    
+
     "multiple_hunks": `...`, // 複数Hunkのパッチ
     "new_file": `...`,       // 新規ファイルのパッチ
 }
@@ -221,19 +221,19 @@ index abc123..def456 100644
 // CommandExecutorのモック設定例
 func setupMockExecutor() *MockCommandExecutor {
     mock := NewMockCommandExecutor()
-    
+
     // git diffコマンドのモック
     mock.Commands["git [diff HEAD --]"] = MockResponse{
         Output: []byte(testPatches["current_diff"]),
         Error:  nil,
     }
-    
+
     // git patch-idコマンドのモック
     mock.Commands["git [patch-id --stable]"] = MockResponse{
         Output: []byte("a1b2c3d4 commit_hash"),
         Error:  nil,
     }
-    
+
     return mock
 }
 ```

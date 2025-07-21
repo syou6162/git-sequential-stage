@@ -25,7 +25,7 @@ index abc123..def456 100644
 +++ b/file.go
 @@ -1,3 +1,4 @@
  package main
- 
+
 +import "fmt"
  func main() {}`,
 			targetID: "abc12345",
