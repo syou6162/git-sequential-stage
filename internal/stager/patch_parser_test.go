@@ -39,11 +39,11 @@ index abc123..def456 100644
  def hello():
 +    print("Hello, World!")
      return "hello"
- 
+
  def middle():
 @@ -10,5 +11,6 @@ def middle():
      return "middle"
- 
+
  def goodbye():
      print("Goodbye")
 +    print("See you later!")
@@ -198,7 +198,7 @@ index abc123..def456 100644
 @@ -1,3 +1,4 @@
  package main
 +import "fmt"
- 
+
  func main() {`
 
 	files, _, err := gitdiff.Parse(strings.NewReader(testPatch))

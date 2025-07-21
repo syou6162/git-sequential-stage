@@ -438,7 +438,7 @@ index abc1234..def5678 100644
 +++ b/existing.go
 @@ -1,3 +1,4 @@
  package main
- 
+
 +import "fmt"
  func main() {}`,
 			hunkIndex:   0,
