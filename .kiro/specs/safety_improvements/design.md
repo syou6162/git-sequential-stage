@@ -15,7 +15,7 @@ graph TD
     C --> D[Git Operations]
     B --> E[Enhanced File Processing]
     E --> F[NewFileHandler]
-    E --> G[DeletedFileHandler] 
+    E --> G[DeletedFileHandler]
     E --> H[RenamedFileHandler]
     F --> I[Git Apply Operations]
     G --> I
@@ -220,21 +220,21 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
     if err := s.performSafetyChecks(); err != nil {
         return err
     }
-    
+
     // 既存の Phase 1, 2 処理...
 }
 
 func (s *Stager) performSafetyChecks(patchContent string) error {
     checker := NewSafetyChecker(s.executor)
-    
+
     // ハイブリッドアプローチ: まずパッチ内容から判断を試みる
     evaluation, err := checker.EvaluatePatchContent(patchContent)
     if err != nil {
-        return NewSafetyError(GitOperationFailed, 
-            "Failed to evaluate patch content safety", 
+        return NewSafetyError(GitOperationFailed,
+            "Failed to evaluate patch content safety",
             "Check if the patch content is valid", err)
     }
-    
+
     // パッチに変更が含まれる場合、実際のステージングエリアの確認が必要
     if len(evaluation.StagedFiles) > 0 {
         // 実際のステージングエリアを確認
@@ -242,7 +242,7 @@ func (s *Stager) performSafetyChecks(patchContent string) error {
         if err != nil {
             return err
         }
-        
+
         // 実際にステージング済みのファイルがある場合
         if !actualEval.IsClean {
             // Intent-to-addファイルのみの場合は警告のみで継続
@@ -253,28 +253,28 @@ func (s *Stager) performSafetyChecks(patchContent string) error {
             return s.generateDetailedStagingError(actualEval)
         }
     }
-    
+
     return nil
 }
 
 func (s *Stager) generateDetailedStagingError(evaluation *StagingAreaEvaluation) error {
     // ファイルタイプ別に分類
     modified := evaluation.FilesByStatus["M"]
-    added := evaluation.FilesByStatus["A"] 
+    added := evaluation.FilesByStatus["A"]
     deleted := evaluation.FilesByStatus["D"]
     renamed := evaluation.FilesByStatus["R"]
     copied := evaluation.FilesByStatus["C"]
-    
+
     // 統合エラーメッセージを生成
     message := s.buildStagingErrorMessage(modified, added, deleted, renamed, copied)
     advice := s.buildStagingAdvice(modified, added, deleted, renamed, copied)
-    
+
     return NewSafetyError(StagingAreaNotClean, message, advice, nil)
 }
 
 func (s *Stager) buildRecommendedActions(modified, added, deleted, renamed, copied, intentToAdd []string) []RecommendedAction {
     var actions []RecommendedAction
-    
+
     // Intent-to-addファイルの場合は情報提供のみ
     if len(intentToAdd) > 0 {
         actions = append(actions, RecommendedAction{
@@ -284,7 +284,7 @@ func (s *Stager) buildRecommendedActions(modified, added, deleted, renamed, copi
             Category:    "info",
         })
     }
-    
+
     // 削除ファイルがある場合の推奨アクション
     if len(deleted) > 0 {
         for _, file := range deleted {
@@ -302,7 +302,7 @@ func (s *Stager) buildRecommendedActions(modified, added, deleted, renamed, copi
             })
         }
     }
-    
+
     // 修正・追加・リネーム・コピーファイルの推奨アクション
     if len(modified) > 0 || (len(added) > 0 && len(intentToAdd) == 0) || len(renamed) > 0 || len(copied) > 0 {
         // 全体コミット
@@ -312,7 +312,7 @@ func (s *Stager) buildRecommendedActions(modified, added, deleted, renamed, copi
             Priority:    1,
             Category:    "commit",
         })
-        
+
         // 全体アンステージ
         actions = append(actions, RecommendedAction{
             Description: "Unstage all changes",
@@ -320,7 +320,7 @@ func (s *Stager) buildRecommendedActions(modified, added, deleted, renamed, copi
             Priority:    2,
             Category:    "unstage",
         })
-        
+
         // ファイル別アンステージ
         allFiles := append(append(append(modified, added...), renamed...), copied...)
         for _, file := range allFiles {
@@ -334,24 +334,24 @@ func (s *Stager) buildRecommendedActions(modified, added, deleted, renamed, copi
             }
         }
     }
-    
+
     return actions
 }
 
 func (s *Stager) buildStagingAdvice(actions []RecommendedAction) string {
     var advice strings.Builder
-    
+
     // 優先度順にソート
     sort.Slice(actions, func(i, j int) bool {
         return actions[i].Priority < actions[j].Priority
     })
-    
+
     // カテゴリ別にグループ化して表示
     categories := make(map[string][]RecommendedAction)
     for _, action := range actions {
         categories[action.Category] = append(categories[action.Category], action)
     }
-    
+
     // 情報提供
     if infoActions, exists := categories["info"]; exists {
         advice.WriteString("Information:\n")
@@ -360,7 +360,7 @@ func (s *Stager) buildStagingAdvice(actions []RecommendedAction) string {
         }
         advice.WriteString("\n")
     }
-    
+
     // コミット推奨
     if commitActions, exists := categories["commit"]; exists {
         advice.WriteString("Recommended: Commit changes first\n")
@@ -369,7 +369,7 @@ func (s *Stager) buildStagingAdvice(actions []RecommendedAction) string {
         }
         advice.WriteString("\n")
     }
-    
+
     // アンステージ代替案
     if unstageActions, exists := categories["unstage"]; exists {
         advice.WriteString("Alternative: Unstage changes\n")
@@ -378,7 +378,7 @@ func (s *Stager) buildStagingAdvice(actions []RecommendedAction) string {
         }
         advice.WriteString("\n")
     }
-    
+
     // 復元オプション
     if restoreActions, exists := categories["restore"]; exists {
         advice.WriteString("Restore options:\n")
@@ -387,9 +387,9 @@ func (s *Stager) buildStagingAdvice(actions []RecommendedAction) string {
         }
         advice.WriteString("\n")
     }
-    
+
     advice.WriteString("Note: File deletions should ideally be committed separately.")
-    
+
     return advice.String()
 }
 
@@ -399,7 +399,7 @@ func (s *Stager) StageHunksWithSemanticCommitSupport(hunkSpecs []string, patchFi
     if err := s.performSafetyChecksWithSemanticCommit(); err != nil {
         return err
     }
-    
+
     // 既存のStageHunks処理...
     return s.StageHunks(hunkSpecs, patchFile)
 }
@@ -408,22 +408,22 @@ func (s *Stager) performSafetyChecksWithSemanticCommit(patchContent string) erro
     checker := NewSafetyChecker()  // 引数不要
     evaluation, err := checker.EvaluatePatchContent(patchContent)
     if err != nil {
-        return NewSafetyError(GitOperationFailed, 
-            "Failed to evaluate patch content safety", 
+        return NewSafetyError(GitOperationFailed,
+            "Failed to evaluate patch content safety",
             "Check if the patch content is valid", err)
     }
-    
+
     // Intent-to-addファイルのみの場合は警告で継続
     if evaluation.AllowContinue {
         s.logger.Info("Semantic commit workflow detected: Intent-to-add files found")
         s.logger.Info("Files: %v", evaluation.IntentToAddFiles)
         return nil
     }
-    
+
     if !evaluation.IsClean {
         return s.generateDetailedStagingError(evaluation)
     }
-    
+
     return nil
 }
 ```
@@ -442,7 +442,7 @@ func (s *Stager) applyHunk(hunkContent []byte, targetID string, hunk *HunkInfo) 
     if hunk.File != nil && hunk.File.IsNew {
         return s.applyNewFileHunk(hunkContent, targetID, hunk)
     }
-    
+
     // 既存の処理...
 }
 
@@ -514,12 +514,12 @@ func (s *Stager) matchesRenamedFile(hunk *HunkInfo, targetID string) bool {
     if currentID := s.calculatePatchIDForHunk(hunk); currentID == targetID {
         return true
     }
-    
+
     // 旧ファイル名でのパッチID計算も試行
     if oldID := s.calculatePatchIDWithOldName(hunk); oldID == targetID {
         return true
     }
-    
+
     return false
 }
 ```
@@ -546,15 +546,15 @@ func NewSafetyError(errorType SafetyErrorType, message, advice string, underlyin
 func (e *SafetyError) Error() string {
     var result strings.Builder
     result.WriteString(fmt.Sprintf("Safety Error: %s", e.Message))
-    
+
     if e.Advice != "" {
         result.WriteString(fmt.Sprintf("\nAdvice: %s", e.Advice))
     }
-    
+
     if e.Underlying != nil {
         result.WriteString(fmt.Sprintf("\nUnderlying error: %v", e.Underlying))
     }
-    
+
     return result.String()
 }
 ```
@@ -570,14 +570,14 @@ sequenceDiagram
     participant SC as SafetyChecker
     participant P as PatchFile
     participant G as Git
-    
+
     M->>S: StageHunks()
     S->>P: Read patch content
     P-->>S: patch content string
     S->>SC: EvaluatePatchContent(patchContent)
     SC->>SC: Parse with go-gitdiff
     SC-->>S: Initial evaluation
-    
+
     alt Patch contains changes
         S->>SC: CheckActualStagingArea()
         SC->>G: git status --porcelain
@@ -585,7 +585,7 @@ sequenceDiagram
         SC->>G: git ls-files (if needed)
         G-->>SC: Intent-to-add info
         SC-->>S: Actual staging evaluation
-        
+
         alt Staging area has conflicts
             S-->>M: SafetyError with advice
         else Clean or Intent-to-add only
@@ -603,7 +603,7 @@ sequenceDiagram
     participant S as Stager
     participant FP as FileProcessor
     participant G as Git
-    
+
     S->>S: Detect file type (IsNew/IsDelete/IsRename)
     S->>FP: ProcessHunk()
     alt New File

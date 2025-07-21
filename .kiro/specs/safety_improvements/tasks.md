@@ -4,8 +4,8 @@
 
 このタスクリストは、[Issue #13「Git操作の安全性向上とテストカバレッジ拡充」](https://github.com/syou6162/git-sequential-stage/issues/13)のフェーズ1実装タスクです。
 
-**機能名:** Safety Improvements  
-**目的:** ステージングエリア保護機能とGit操作エラーの適切な処理を実装し、ツールの安全性を向上させる  
+**機能名:** Safety Improvements
+**目的:** ステージングエリア保護機能とGit操作エラーの適切な処理を実装し、ツールの安全性を向上させる
 **優先度:** 最高（[Issue #13](https://github.com/syou6162/git-sequential-stage/issues/13) フェーズ1）
 
 **現在の実装状況:** 安全性機能は未実装。既存のStagerErrorシステムは存在するが、SafetyError、SafetyChecker、Intent-to-add処理は全て新規実装が必要。
