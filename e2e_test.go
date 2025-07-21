@@ -1484,11 +1484,11 @@ func main() {
 
 	// すでにtestRepoのディレクトリにいるので、Chdirは不要
 
-	// 既存ファイルの最初のハンクだけをステージング
-	// intent-to-addファイルがあるため、安全性チェックでエラーになることを期待
+	// 既存ファイルの最初のハンクをステージングしようとする
+	// intent-to-addファイルが存在するため、安全性チェックでエラーになることを期待
 	err = runGitSequentialStage([]string{"existing.go:1"}, absPatchPath)
 	if err == nil {
-		t.Fatalf("Expected safety check error due to intent-to-add file, but got no error")
+		t.Fatal("Expected safety check error due to intent-to-add file, but got no error")
 	}
 
 	// エラーメッセージを確認
@@ -1502,45 +1502,6 @@ func main() {
 	}
 
 	t.Log("Safety check correctly detected intent-to-add file and prevented staging")
-	return // 以降のテストはスキップ
-
-	// ステージングエリアを確認
-	stagedDiff, err := exec.Command("git", "diff", "--cached").Output()
-	if err != nil {
-		t.Fatalf("Failed to get staged diff: %v", err)
-	}
-
-	stagedContent := string(stagedDiff)
-
-	// existing関数の変更がステージングされていることを確認
-	if !strings.Contains(stagedContent, "Modified function") {
-		t.Errorf("Expected existing function changes to be staged")
-	}
-
-	// newFunc関数はステージングされていないことを確認
-	if strings.Contains(stagedContent, "func newFunc()") {
-		t.Errorf("Expected newFunc NOT to be staged yet")
-	}
-
-	// intent-to-add新規ファイルもステージング可能なことを確認
-	err = runGitSequentialStage([]string{"main.go:1"}, absPatchPath)
-	if err != nil {
-		t.Fatalf("Failed to stage intent-to-add file: %v", err)
-	}
-
-	// 両方のファイルがステージングされたことを確認
-	stagedDiff2, err := exec.Command("git", "diff", "--cached").Output()
-	if err != nil {
-		t.Fatalf("Failed to get staged diff: %v", err)
-	}
-
-	stagedContent2 := string(stagedDiff2)
-	if !strings.Contains(stagedContent2, "func main()") {
-		t.Errorf("Expected main.go to be staged")
-	}
-	if !strings.Contains(stagedContent2, "Modified function") {
-		t.Errorf("Expected existing.go changes to remain staged")
-	}
 }
 
 // TestErrorCases_HunkCountExceeded tests error handling when requesting more hunks than available
