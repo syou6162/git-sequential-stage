@@ -561,7 +561,7 @@ def another_function():
 	if !strings.Contains(err.Error(), untrackedFileName) {
 		t.Errorf("Error should mention the untracked file %s, got: %v", untrackedFileName, err)
 	}
-	
+
 	// Check if advice about git add -N is included
 	if !strings.Contains(err.Error(), "git ls-files --others --exclude-standard | xargs git add -N") {
 		t.Errorf("Expected advice about using 'git ls-files --others --exclude-standard | xargs git add -N', got: %v", err)

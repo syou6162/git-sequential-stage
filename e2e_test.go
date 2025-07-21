@@ -1956,11 +1956,11 @@ if __name__ == "__main__":
 	// Check error message
 	errorMsg := err.Error()
 	t.Logf("Error message for untracked file: %s", errorMsg)
-	
+
 	if !strings.Contains(errorMsg, untrackedFile) || !strings.Contains(errorMsg, "not found") {
 		t.Errorf("Expected error about file not found in patch, got: %s", errorMsg)
 	}
-	
+
 	// Check if advice about git add -N is included
 	if !strings.Contains(errorMsg, "git ls-files --others --exclude-standard | xargs git add -N") {
 		t.Errorf("Expected advice about using 'git ls-files --others --exclude-standard | xargs git add -N', got: %s", errorMsg)
