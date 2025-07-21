@@ -179,7 +179,7 @@ def main():
     sum_result = add_numbers(x, y)
     mul_result = multiply_numbers(x, y)
     div_result = divide_numbers(x, y)
-    
+
     print(f"Addition: {sum_result}")
     print(f"Multiplication: {mul_result}")
     print(f"Division: {div_result}")
@@ -213,7 +213,7 @@ def main():
     sum_result = add_numbers(x, y)
     mul_result = multiply_numbers(x, y)
     div_result = divide_numbers(x, y)
-    
+
     # Improved output formatting
     print(f"Results for {x} and {y}:")
     print(f"  Addition: {sum_result}")
@@ -328,14 +328,14 @@ func TestMultipleFilesMultipleHunks(t *testing.T) {
 class UserManager:
     def __init__(self):
         self.users = {}
-    
+
     def add_user(self, username, email):
         self.users[username] = {"email": email}
         return True
-    
+
     def get_user(self, username):
         return self.users.get(username)
-    
+
     def delete_user(self, username):
         if username in self.users:
             del self.users[username]
@@ -354,7 +354,7 @@ class DataValidator:
     def validate_email(email):
         pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
         return re.match(pattern, email) is not None
-    
+
     @staticmethod
     def validate_username(username):
         return len(username) >= 3 and username.isalnum()
@@ -371,20 +371,20 @@ class UserManager:
         self.users = {}
         # Add logging capability
         self.log_enabled = True
-    
+
     def add_user(self, username, email):
         # Add input validation
         if not username or not email:
             raise ValueError("Username and email are required")
-        
+
         self.users[username] = {"email": email}
         if self.log_enabled:
             print(f"User {username} added successfully")
         return True
-    
+
     def get_user(self, username):
         return self.users.get(username)
-    
+
     def delete_user(self, username):
         if username in self.users:
             del self.users[username]
@@ -408,14 +408,14 @@ class DataValidator:
             return False
         pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
         return re.match(pattern, email) is not None
-    
+
     @staticmethod
     def validate_username(username):
         # Enhanced username validation
         if not username or not isinstance(username, str):
             return False
         return len(username) >= 3 and len(username) <= 20 and username.isalnum()
-    
+
     @staticmethod
     def validate_password(password):
         # New password validation method
@@ -562,7 +562,7 @@ index 7eaf039..acbb7a6 100644
 +            return False
          pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
          return re.match(pattern, email) is not None
-     
+
      @staticmethod
      def validate_username(username):
 -        return len(username) >= 3 and username.isalnum()
@@ -570,7 +570,7 @@ index 7eaf039..acbb7a6 100644
 +        if not username or not isinstance(username, str):
 +            return False
 +        return len(username) >= 3 and len(username) <= 20 and username.isalnum()
-+    
++
 +    @staticmethod
 +    def validate_password(password):
 +        # New password validation method
@@ -590,17 +590,17 @@ index 20b402c..be9ace8 100644
          self.users = {}
 +        # Add logging capability
 +        self.log_enabled = True
-     
+
      def add_user(self, username, email):
 +        # Add input validation
 +        if not username or not email:
 +            raise ValueError("Username and email are required")
-+        
++
          self.users[username] = {"email": email}
 +        if self.log_enabled:
 +            print(f"User {username} added successfully")
          return True
-     
+
      def get_user(self, username):
 `
 
@@ -687,11 +687,11 @@ def get_users():
 @app.route('/api/users', methods=['POST'])
 def create_user():
     data = request.get_json()
-    
+
     # Add input validation
     if not data or not data.get("name") or not data.get("email"):
         return jsonify({"error": "Name and email are required"}), 400
-    
+
     # TODO: Save user to database
     new_user = {
         "id": 3,
