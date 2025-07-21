@@ -538,7 +538,7 @@ class DataValidator:
 
 	// スナップショットテスト: ステージングエリアの期待される差分
 	expectedStagedDiff := `diff --git a/user_manager.py b/user_manager.py
-index bd33e43..20b402c 100644
+index 64cb661..13d44f9 100644
 --- a/user_manager.py
 +++ b/user_manager.py
 @@ -14,5 +14,7 @@ class UserManager:
@@ -550,7 +550,7 @@ index bd33e43..20b402c 100644
              return True
          return False
 diff --git a/validator.py b/validator.py
-index 7eaf039..acbb7a6 100644
+index bc6c2b7..65ed03f 100644
 --- a/validator.py
 +++ b/validator.py
 @@ -5,9 +5,22 @@ import re
@@ -562,7 +562,7 @@ index 7eaf039..acbb7a6 100644
 +            return False
          pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
          return re.match(pattern, email) is not None
-
+ 
      @staticmethod
      def validate_username(username):
 -        return len(username) >= 3 and username.isalnum()
