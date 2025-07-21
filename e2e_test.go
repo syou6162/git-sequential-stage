@@ -1407,9 +1407,9 @@ if __name__ == "__main__":
 	t.Log("Note: Applying patches to moved files requires careful handling of file paths")
 }
 
-// TestIntentToAddWithStagedHunks はintent-to-addファイルのハンクをステージングする場合のテストです
-// 既存ファイルへの変更と新規ファイル（intent-to-add）が混在する場合の安全性チェックを確認します
-func TestIntentToAddWithStagedHunks(t *testing.T) {
+// TestIntentToAddFileSafetyCheck はintent-to-addファイルがある場合の安全性チェックを確認します
+// 現在の実装では、intent-to-addファイルは"NEW"として扱われ、安全性チェックでエラーになることを検証します
+func TestIntentToAddFileSafetyCheck(t *testing.T) {
 	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-e2e-*")
 	defer testRepo.Cleanup()
 
