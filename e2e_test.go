@@ -1491,17 +1491,17 @@ func main() {
 	if err == nil {
 		t.Fatalf("Expected safety check error due to intent-to-add file, but got no error")
 	}
-	
+
 	// エラーメッセージを確認
 	if !strings.Contains(err.Error(), "SAFETY_CHECK_FAILED") || !strings.Contains(err.Error(), "staging_area_not_clean") {
 		t.Errorf("Expected safety check error, got: %v", err)
 	}
-	
+
 	// エラーメッセージにNEWファイル（main.go）が含まれていることを確認
 	if !strings.Contains(err.Error(), "NEW: main.go") {
 		t.Errorf("Expected error to mention NEW file main.go, got: %v", err)
 	}
-	
+
 	t.Log("Safety check correctly detected intent-to-add file and prevented staging")
 	return // 以降のテストはスキップ
 
