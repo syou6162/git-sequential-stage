@@ -103,10 +103,13 @@ Binary files a/image.png and b/image.png differ`,
 similarity index 100%
 rename from old_name.py
 rename to new_name.py`,
-			wantHunks: 0, // No content changes, only rename
+			wantHunks: 1, // Meta-hunk for rename operation
 			checkFunc: func(t *testing.T, hunks []HunkInfo) {
-				if len(hunks) != 0 {
-					t.Errorf("Expected 0 hunks for rename-only, got %d", len(hunks))
+				if len(hunks) != 1 {
+					t.Errorf("Expected 1 meta-hunk for rename-only, got %d", len(hunks))
+				}
+				if len(hunks) > 0 && hunks[0].Fragment != nil {
+					t.Errorf("Expected nil fragment for meta-hunk, got %v", hunks[0].Fragment)
 				}
 			},
 		},

@@ -6,8 +6,8 @@ import (
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
 )
 
-// parsePatchFileWithGitDiff parses a patch file using go-gitdiff library
-func parsePatchFileWithGitDiff(patchContent string) ([]HunkInfo, error) {
+// ParsePatchFileWithGitDiff parses a patch file using go-gitdiff library
+func ParsePatchFileWithGitDiff(patchContent string) ([]HunkInfo, error) {
 	var hunks []HunkInfo
 	globalIndex := 0
 

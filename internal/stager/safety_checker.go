@@ -214,7 +214,7 @@ func (s *SafetyChecker) detectFileMoveOperationsFromPatch(patchContent string) [
 	var moves []FileMove
 
 	// Use existing patch analysis to detect renames
-	hunks, err := parsePatchFileWithGitDiff(patchContent)
+	hunks, err := ParsePatchFileWithGitDiff(patchContent)
 	if err != nil {
 		// If patch parsing fails, return empty moves (fallback to original behavior)
 		return moves

@@ -40,7 +40,7 @@ index abc1234..def5678 100644
 func parseAndValidateHunk(t *testing.T, patchContent string, hunkIndex int) HunkInfo {
 	t.Helper()
 
-	hunks, err := parsePatchFileWithGitDiff(patchContent)
+	hunks, err := ParsePatchFileWithGitDiff(patchContent)
 	if err != nil {
 		t.Fatalf("Failed to parse patch: %v", err)
 	}
@@ -376,7 +376,7 @@ index 0000000..999888
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hunks, err := parsePatchFileWithGitDiff(tt.patchContent)
+			hunks, err := ParsePatchFileWithGitDiff(tt.patchContent)
 			if err != nil {
 				t.Fatalf("Failed to parse patch: %v", err)
 			}

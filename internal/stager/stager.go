@@ -304,7 +304,7 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
 		}
 
 		// Parse current diff
-		currentHunks, err := parsePatchFileWithGitDiff(string(diffOutput))
+		currentHunks, err := ParsePatchFileWithGitDiff(string(diffOutput))
 		if err != nil {
 			s.logger.Error("Failed to parse current diff: %v", err)
 			return NewParsingError("current diff", err)
