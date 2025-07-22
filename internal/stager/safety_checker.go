@@ -265,7 +265,6 @@ func (s *SafetyChecker) detectFileMoveOperationsFromStatus(filesByStatus map[Fil
 	return moves
 }
 
-
 // buildStagingErrorMessage builds a detailed error message about staging area state
 func (s *SafetyChecker) buildStagingErrorMessage(filesByStatus map[FileStatus][]string, intentToAddFiles []string) string {
 	var message strings.Builder

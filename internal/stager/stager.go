@@ -343,7 +343,7 @@ func (s *Stager) preparePatchData(patchFile string) ([]HunkInfo, error) {
 	}
 	patchContent := string(content)
 
-	allHunks, err := parsePatchFileWithGitDiff(patchContent)
+	allHunks, err := ParsePatchFileWithGitDiff(patchContent)
 	if err != nil {
 		return nil, NewParsingError("patch file", err)
 	}
