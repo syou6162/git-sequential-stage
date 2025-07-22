@@ -141,7 +141,6 @@ func (tr *TestRepo) RunCommandOrFail(command string, args ...string) string {
 	return output
 }
 
-
 // CreateBinaryFile creates a binary file with the given content
 func (tr *TestRepo) CreateBinaryFile(filename string, content []byte) {
 	tr.t.Helper()
