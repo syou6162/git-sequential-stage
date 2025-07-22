@@ -1993,3 +1993,135 @@ if __name__ == "__main__":
 		t.Errorf("Expected file content to be staged, got: %s", stagedDiff)
 	}
 }
+
+// TestGitMvThenModifyFile tests the case where a file is moved with `git mv` and then modified
+// This is a common workflow where users first move/rename a file and then make changes to it.
+// The tool should be able to stage hunks from the modified moved file correctly.
+func TestGitMvThenModifyFile(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping e2e test in short mode")
+	}
+
+	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-e2e-*")
+	defer testRepo.Cleanup()
+	tempDir := testRepo.Path
+
+	// Change to temp directory
+	t.Chdir(tempDir)
+
+	// Create initial file
+	originalFile := "original_module.go"
+	initialContent := `package main
+
+import "fmt"
+
+func oldFunction() {
+	fmt.Println("This is the old function")
+}
+
+func main() {
+	oldFunction()
+}
+`
+	if err := os.WriteFile(originalFile, []byte(initialContent), 0644); err != nil {
+		t.Fatalf("Failed to create initial file: %v", err)
+	}
+
+	// Initial commit
+	if err := exec.Command("git", "add", originalFile).Run(); err != nil {
+		t.Fatalf("Failed to git add: %v", err)
+	}
+	if err := exec.Command("git", "commit", "-m", "Initial commit").Run(); err != nil {
+		t.Fatalf("Failed to git commit: %v", err)
+	}
+
+	// Step 1: Move file using git mv and commit it
+	newFile := "renamed_module.go"
+	if err := exec.Command("git", "mv", originalFile, newFile).Run(); err != nil {
+		t.Fatalf("Failed to git mv: %v", err)
+	}
+
+	// Commit the move operation first
+	if err := exec.Command("git", "commit", "-m", "Move file").Run(); err != nil {
+		t.Fatalf("Failed to commit move: %v", err)
+	}
+
+	// Step 2: Modify the moved file
+	modifiedContent := `package main
+
+import "fmt"
+
+func oldFunction() {
+	fmt.Println("This is the old function")
+	fmt.Println("Adding more functionality to the old function")
+}
+
+func newFunction() {
+	fmt.Println("This is a new function")
+}
+
+func main() {
+	oldFunction()
+	newFunction()
+}
+`
+	if err := os.WriteFile(newFile, []byte(modifiedContent), 0644); err != nil {
+		t.Fatalf("Failed to modify moved file: %v", err)
+	}
+
+	// Generate patch for just the modifications to the moved file
+	patchFile := "moved_file_changes.patch"
+	patchCmd := exec.Command("git", "diff", newFile)
+	patchContent, err := patchCmd.Output()
+	if err != nil {
+		t.Fatalf("Failed to generate patch: %v", err)
+	}
+
+	if err := os.WriteFile(patchFile, patchContent, 0644); err != nil {
+		t.Fatalf("Failed to write patch file: %v", err)
+	}
+
+	// Debug: Check git status before attempting to stage
+	statusOutput, err := exec.Command("git", "status", "--porcelain").Output()
+	if err != nil {
+		t.Fatalf("Failed to get git status: %v", err)
+	}
+	t.Logf("Git status after reset:\n%s", statusOutput)
+
+	// Debug: Check what's in the patch file
+	debugPatchContent, err := os.ReadFile(patchFile)
+	if err != nil {
+		t.Fatalf("Failed to read patch file: %v", err)
+	}
+	t.Logf("Patch content:\n%s", debugPatchContent)
+
+	// Now test staging specific hunks from the patch
+	absPatchPath, err := filepath.Abs(patchFile)
+	if err != nil {
+		t.Fatalf("Failed to get absolute path: %v", err)
+	}
+
+	// Attempt to stage first hunk from the moved file
+	err = runGitSequentialStage([]string{newFile + ":1"}, absPatchPath)
+	if err != nil {
+		t.Fatalf("Failed to stage hunk from moved file: %v", err)
+	}
+
+	// Verify that changes were staged successfully
+	stagedDiff, err := exec.Command("git", "diff", "--cached").Output()
+	if err != nil {
+		t.Fatalf("Failed to get staged diff: %v", err)
+	}
+
+	// Should contain some changes from the moved file
+	if len(stagedDiff) == 0 {
+		t.Errorf("Expected staged diff to contain changes from moved file, but it was empty")
+	} else {
+		t.Logf("Changes successfully staged from moved file:\n%s", stagedDiff)
+	}
+
+	// The key success criteria is that the tool works without errors
+	// and manages to stage some content from the moved file
+
+	t.Log("Successfully staged hunk from moved file")
+}
