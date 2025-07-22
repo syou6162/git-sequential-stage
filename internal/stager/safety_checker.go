@@ -136,10 +136,13 @@ func (s *SafetyChecker) EvaluatePatchContent(patchContent string) (*StagingAreaE
 		}, nil
 	}
 
-	// Determine if staging area is clean (only intent-to-add files allowed)
+	// Check for file move operations (delete + add pairs)
+	moveOperations := s.detectFileMoveOperations(analysisResult.FilesByStatus)
+
+	// Determine if staging area is clean (only intent-to-add files allowed, or file moves)
 	nonIntentToAddStaged := s.filterNonIntentToAdd(analysisResult.AllFiles, analysisResult.IntentToAddFiles)
 	isClean := len(analysisResult.AllFiles) == 0
-	allowContinue := len(nonIntentToAddStaged) == 0
+	allowContinue := len(nonIntentToAddStaged) == 0 || s.isOnlyFileMoves(analysisResult.FilesByStatus, moveOperations)
 
 	evaluation := &StagingAreaEvaluation{
 		IsClean:          isClean,
@@ -198,6 +201,81 @@ func (s *SafetyChecker) getFilesForStatus(status FileStatus, filesByStatus map[F
 	}
 
 	return files
+}
+
+// FileMove represents a detected file move operation
+type FileMove struct {
+	From string
+	To   string
+}
+
+// detectFileMoveOperations detects potential file move operations from file status information
+func (s *SafetyChecker) detectFileMoveOperations(filesByStatus map[FileStatus][]string) []FileMove {
+	var moves []FileMove
+
+	// Look for explicit rename operations first
+	if renamedFiles, exists := filesByStatus[FileStatusRenamed]; exists {
+		for _, renamed := range renamedFiles {
+			// Handle formats like "old.txt -> new.txt"
+			if strings.Contains(renamed, " -> ") {
+				parts := strings.Split(renamed, " -> ")
+				if len(parts) == 2 {
+					moves = append(moves, FileMove{
+						From: strings.TrimSpace(parts[0]),
+						To:   strings.TrimSpace(parts[1]),
+					})
+				}
+			}
+		}
+	}
+
+	return moves
+}
+
+// isOnlyFileMoves checks if the staging area contains only file moves (and no other problematic changes)
+func (s *SafetyChecker) isOnlyFileMoves(filesByStatus map[FileStatus][]string, moveOps []FileMove) bool {
+	// If we have explicit renames, allow them
+	if len(moveOps) > 0 {
+		// Check if all changes are covered by the move operations
+		deletedFiles, hasDeleted := filesByStatus[FileStatusDeleted]
+		addedFiles, hasAdded := filesByStatus[FileStatusAdded]
+		modifiedFiles, hasModified := filesByStatus[FileStatusModified]
+
+		// No problematic modifications
+		if hasModified && len(modifiedFiles) > 0 {
+			return false
+		}
+
+		// Check if deleted and added files are part of move operations
+		moveFromFiles := make(map[string]bool)
+		moveToFiles := make(map[string]bool)
+		for _, move := range moveOps {
+			moveFromFiles[move.From] = true
+			moveToFiles[move.To] = true
+		}
+
+		// All deleted files should be part of moves
+		if hasDeleted {
+			for _, deleted := range deletedFiles {
+				if !moveFromFiles[deleted] {
+					return false // Found a deletion that's not part of a move
+				}
+			}
+		}
+
+		// All added files should be part of moves (excluding intent-to-add)
+		if hasAdded {
+			for _, added := range addedFiles {
+				if !moveToFiles[added] {
+					return false // Found an addition that's not part of a move
+				}
+			}
+		}
+
+		return true
+	}
+
+	return false
 }
 
 // buildStagingErrorMessage builds a detailed error message about staging area state
@@ -354,10 +432,13 @@ func (s *SafetyChecker) CheckActualStagingArea() (*StagingAreaEvaluation, error)
 		return nil, err
 	}
 
+	// Check for file move operations (delete + add pairs)
+	moveOperations := s.detectFileMoveOperations(statusInfo.FilesByStatus)
+
 	// Determine if staging area is clean
 	nonIntentToAddStaged := s.filterNonIntentToAdd(statusInfo.StagedFiles, statusInfo.IntentToAddFiles)
 	isClean := len(statusInfo.StagedFiles) == 0
-	allowContinue := len(nonIntentToAddStaged) == 0
+	allowContinue := len(nonIntentToAddStaged) == 0 || s.isOnlyFileMoves(statusInfo.FilesByStatus, moveOperations)
 
 	evaluation := &StagingAreaEvaluation{
 		IsClean:          isClean,
