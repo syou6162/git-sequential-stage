@@ -2081,19 +2081,6 @@ func main() {
 		t.Fatalf("Failed to write patch file: %v", err)
 	}
 
-	// Debug: Check git status before attempting to stage
-	statusOutput, err := exec.Command("git", "status", "--porcelain").Output()
-	if err != nil {
-		t.Fatalf("Failed to get git status: %v", err)
-	}
-	t.Logf("Git status after reset:\n%s", statusOutput)
-
-	// Debug: Check what's in the patch file
-	debugPatchContent, err := os.ReadFile(patchFile)
-	if err != nil {
-		t.Fatalf("Failed to read patch file: %v", err)
-	}
-	t.Logf("Patch content:\n%s", debugPatchContent)
 
 	// Now test staging specific hunks from the patch
 	absPatchPath, err := filepath.Abs(patchFile)
@@ -2116,8 +2103,6 @@ func main() {
 	// Should contain some changes from the moved file
 	if len(stagedDiff) == 0 {
 		t.Errorf("Expected staged diff to contain changes from moved file, but it was empty")
-	} else {
-		t.Logf("Changes successfully staged from moved file:\n%s", stagedDiff)
 	}
 
 	// The key success criteria is that the tool works without errors

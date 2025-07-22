@@ -141,14 +141,6 @@ func (tr *TestRepo) RunCommandOrFail(command string, args ...string) string {
 	return output
 }
 
-// CreateFile creates a file with the given content
-func (tr *TestRepo) CreateFile(filename, content string) {
-	tr.t.Helper()
-	filepath := filepath.Join(tr.Path, filename)
-	if err := os.WriteFile(filepath, []byte(content), 0644); err != nil {
-		tr.t.Fatalf("Failed to create file %s: %v", filename, err)
-	}
-}
 
 // CreateBinaryFile creates a binary file with the given content
 func (tr *TestRepo) CreateBinaryFile(filename string, content []byte) {
