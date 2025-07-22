@@ -136,13 +136,13 @@ func (s *SafetyChecker) EvaluatePatchContent(patchContent string) (*StagingAreaE
 		}, nil
 	}
 
-	// Check for file move operations (delete + add pairs)
-	moveOperations := s.detectFileMoveOperations(analysisResult.FilesByStatus)
+	// Check for file move operations using patch analysis
+	moveOperations := s.detectFileMoveOperationsFromPatch(patchContent)
 
 	// Determine if staging area is clean (only intent-to-add files allowed, or file moves)
 	nonIntentToAddStaged := s.filterNonIntentToAdd(analysisResult.AllFiles, analysisResult.IntentToAddFiles)
 	isClean := len(analysisResult.AllFiles) == 0
-	allowContinue := len(nonIntentToAddStaged) == 0 || s.isOnlyFileMoves(analysisResult.FilesByStatus, moveOperations)
+	allowContinue := len(nonIntentToAddStaged) == 0 || len(moveOperations) > 0
 
 	evaluation := &StagingAreaEvaluation{
 		IsClean:          isClean,
@@ -209,14 +209,47 @@ type FileMove struct {
 	To   string
 }
 
-// detectFileMoveOperations detects potential file move operations from file status information
-func (s *SafetyChecker) detectFileMoveOperations(filesByStatus map[FileStatus][]string) []FileMove {
+// detectFileMoveOperationsFromPatch detects file move operations using go-gitdiff patch analysis
+func (s *SafetyChecker) detectFileMoveOperationsFromPatch(patchContent string) []FileMove {
 	var moves []FileMove
 
-	// Look for explicit rename operations first
+	// Use existing patch analysis to detect renames
+	hunks, err := parsePatchFileWithGitDiff(patchContent)
+	if err != nil {
+		// If patch parsing fails, return empty moves (fallback to original behavior)
+		return moves
+	}
+
+	// Extract rename operations from parsed hunks
+	renamedFiles := make(map[string]FileMove)
+	for _, hunk := range hunks {
+		if hunk.File != nil && hunk.File.IsRename {
+			move := FileMove{
+				From: hunk.File.OldName,
+				To:   hunk.File.NewName,
+			}
+			// Avoid duplicates (same file might have multiple hunks)
+			renamedFiles[move.From+">"+move.To] = move
+		}
+	}
+
+	// Convert map to slice
+	for _, move := range renamedFiles {
+		moves = append(moves, move)
+	}
+
+	return moves
+}
+
+// detectFileMoveOperationsFromStatus detects file move operations from git status (fallback method)
+// This is a simplified version used when patch analysis is not available
+func (s *SafetyChecker) detectFileMoveOperationsFromStatus(filesByStatus map[FileStatus][]string) []FileMove {
+	var moves []FileMove
+
+	// Look for explicit rename operations in status
 	if renamedFiles, exists := filesByStatus[FileStatusRenamed]; exists {
 		for _, renamed := range renamedFiles {
-			// Handle formats like "old.txt -> new.txt"
+			// Handle formats like "old.txt -> new.txt" from git status
 			if strings.Contains(renamed, " -> ") {
 				parts := strings.Split(renamed, " -> ")
 				if len(parts) == 2 {
@@ -232,51 +265,6 @@ func (s *SafetyChecker) detectFileMoveOperations(filesByStatus map[FileStatus][]
 	return moves
 }
 
-// isOnlyFileMoves checks if the staging area contains only file moves (and no other problematic changes)
-func (s *SafetyChecker) isOnlyFileMoves(filesByStatus map[FileStatus][]string, moveOps []FileMove) bool {
-	// If we have explicit renames, allow them
-	if len(moveOps) > 0 {
-		// Check if all changes are covered by the move operations
-		deletedFiles, hasDeleted := filesByStatus[FileStatusDeleted]
-		addedFiles, hasAdded := filesByStatus[FileStatusAdded]
-		modifiedFiles, hasModified := filesByStatus[FileStatusModified]
-
-		// No problematic modifications
-		if hasModified && len(modifiedFiles) > 0 {
-			return false
-		}
-
-		// Check if deleted and added files are part of move operations
-		moveFromFiles := make(map[string]bool)
-		moveToFiles := make(map[string]bool)
-		for _, move := range moveOps {
-			moveFromFiles[move.From] = true
-			moveToFiles[move.To] = true
-		}
-
-		// All deleted files should be part of moves
-		if hasDeleted {
-			for _, deleted := range deletedFiles {
-				if !moveFromFiles[deleted] {
-					return false // Found a deletion that's not part of a move
-				}
-			}
-		}
-
-		// All added files should be part of moves (excluding intent-to-add)
-		if hasAdded {
-			for _, added := range addedFiles {
-				if !moveToFiles[added] {
-					return false // Found an addition that's not part of a move
-				}
-			}
-		}
-
-		return true
-	}
-
-	return false
-}
 
 // buildStagingErrorMessage builds a detailed error message about staging area state
 func (s *SafetyChecker) buildStagingErrorMessage(filesByStatus map[FileStatus][]string, intentToAddFiles []string) string {
@@ -432,13 +420,13 @@ func (s *SafetyChecker) CheckActualStagingArea() (*StagingAreaEvaluation, error)
 		return nil, err
 	}
 
-	// Check for file move operations (delete + add pairs)
-	moveOperations := s.detectFileMoveOperations(statusInfo.FilesByStatus)
+	// Check for file move operations using basic status analysis (fallback)
+	moveOperations := s.detectFileMoveOperationsFromStatus(statusInfo.FilesByStatus)
 
 	// Determine if staging area is clean
 	nonIntentToAddStaged := s.filterNonIntentToAdd(statusInfo.StagedFiles, statusInfo.IntentToAddFiles)
 	isClean := len(statusInfo.StagedFiles) == 0
-	allowContinue := len(nonIntentToAddStaged) == 0 || s.isOnlyFileMoves(statusInfo.FilesByStatus, moveOperations)
+	allowContinue := len(nonIntentToAddStaged) == 0 || len(moveOperations) > 0
 
 	evaluation := &StagingAreaEvaluation{
 		IsClean:          isClean,
