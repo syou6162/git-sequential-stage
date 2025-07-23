@@ -85,10 +85,8 @@ func TestRunGitSequentialStage_Usage(t *testing.T) {
 }
 
 func TestHunkListType(t *testing.T) {
-	var hl hunkList
-
 	// Test String method
-	hl = hunkList{"file1.go:1,2", "file2.go:3"}
+	hl := hunkList{"file1.go:1,2", "file2.go:3"}
 	expected := "file1.go:1,2, file2.go:3"
 	if hl.String() != expected {
 		t.Errorf("String() = %q, want %q", hl.String(), expected)

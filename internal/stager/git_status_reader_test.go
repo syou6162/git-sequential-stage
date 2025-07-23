@@ -15,7 +15,7 @@ func TestGitStatusReader_Clean(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Initialize a git repository
 	repo, err := git.PlainInit(tmpDir, false)
@@ -70,7 +70,7 @@ func TestGitStatusReader_StagedFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Initialize a git repository
 	repo, err := git.PlainInit(tmpDir, false)
@@ -182,7 +182,7 @@ func TestGitStatusReader_NotGitRepo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	reader := NewGitStatusReader(tmpDir)
 	info, err := reader.ReadStatus()
