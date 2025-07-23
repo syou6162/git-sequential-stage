@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/syou6162/git-sequential-stage/internal/executor"
@@ -29,17 +30,22 @@ func NewStager(exec executor.CommandExecutor) *Stager {
 
 // extractHunkContent extracts the content for a specific hunk
 func (s *Stager) extractHunkContent(hunk *HunkInfo, patchFile string) ([]byte, error) {
-	// For new files or binary files, return the entire file diff
-	if (hunk.File != nil && hunk.File.IsNew) || hunk.IsBinary {
+	// For binary files, return the entire file diff
+	if hunk.IsBinary {
 		if hunk.File != nil {
 			return []byte(hunk.File.String()), nil
 		}
 		return nil, fmt.Errorf("file object is nil for %s", hunk.FilePath)
 	}
 
-	// For single hunks with Fragment
+	// For all hunks with Fragment (including new files), generate specific hunk patch
 	if hunk.Fragment != nil && hunk.File != nil {
 		return s.generateHunkPatch(hunk)
+	}
+
+	// For new files without fragments, return the entire file diff
+	if hunk.File != nil && hunk.File.IsNew {
+		return []byte(hunk.File.String()), nil
 	}
 
 	return nil, fmt.Errorf("fragment or file object is nil for %s", hunk.FilePath)
@@ -79,8 +85,16 @@ func (s *Stager) generateHunkPatch(hunk *HunkInfo) ([]byte, error) {
 	}
 
 	// Write file paths
-	result.WriteString(fmt.Sprintf("--- a/%s\n", file.OldName))
-	result.WriteString(fmt.Sprintf("+++ b/%s\n", file.NewName))
+	if file.IsNew {
+		result.WriteString("--- /dev/null\n")
+		result.WriteString(fmt.Sprintf("+++ b/%s\n", file.NewName))
+	} else if file.IsDelete {
+		result.WriteString(fmt.Sprintf("--- a/%s\n", file.OldName))
+		result.WriteString("+++ /dev/null\n")
+	} else {
+		result.WriteString(fmt.Sprintf("--- a/%s\n", file.OldName))
+		result.WriteString(fmt.Sprintf("+++ b/%s\n", file.NewName))
+	}
 
 	// Write the fragment
 	result.WriteString(fragment.String())
@@ -428,13 +442,85 @@ func (s *Stager) findAndApplyMatchingHunk(currentHunks []HunkInfo, diffLines []s
 
 // applyHunk applies a single hunk to the staging area
 func (s *Stager) applyHunk(hunkContent []byte, targetID string) error {
+	// First try normal application
 	_, err := s.executor.ExecuteWithStdin("git", bytes.NewReader(hunkContent), "apply", "--cached")
 	if err != nil {
-		// Debug output for troubleshooting
-		s.logger.Debug("Failed patch content for %s:\n%s", targetID, string(hunkContent))
-		return NewPatchApplicationError(targetID, err)
+		errStr := err.Error()
+		s.logger.Debug("Initial apply failed for %s: %s", targetID, errStr)
+
+		// Check if stderr contains "already exists in index"
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			stderrStr := string(exitErr.Stderr)
+			if strings.Contains(stderrStr, "already exists in index") {
+				s.logger.Debug("File already exists in index for %s (stderr: %s), trying git mv compatible approach", targetID, stderrStr)
+
+				// For git mv scenarios, extract filename from patch and try a different approach
+				filename := s.extractFilenameFromPatch(hunkContent)
+				if filename != "" {
+					s.logger.Debug("Extracted filename %s from patch for %s", filename, targetID)
+
+					// Try to temporarily remove from index, apply patch, then add back
+					_, resetErr := s.executor.Execute("git", "reset", "HEAD", filename)
+					if resetErr != nil {
+						s.logger.Debug("Failed to reset %s: %s", filename, resetErr.Error())
+					} else {
+						s.logger.Debug("Successfully reset %s from index", filename)
+
+						// Now try to apply the patch
+						_, applyErr := s.executor.ExecuteWithStdin("git", bytes.NewReader(hunkContent), "apply", "--cached")
+						if applyErr != nil {
+							s.logger.Debug("Patch apply after reset failed for %s: %s", targetID, applyErr.Error())
+
+							// Try to restore the original state
+							_, addErr := s.executor.Execute("git", "add", filename)
+							if addErr != nil {
+								s.logger.Debug("Failed to restore %s to index: %s", filename, addErr.Error())
+							}
+							err = applyErr
+						} else {
+							s.logger.Debug("Successfully applied patch after reset for %s", targetID)
+							err = nil
+						}
+					}
+				} else {
+					s.logger.Debug("Could not extract filename from patch for %s", targetID)
+				}
+			}
+		} else if strings.Contains(errStr, "already exists in index") {
+			// Fallback string matching
+			s.logger.Debug("File already exists in index for %s (fallback check), trying alternative approach", targetID)
+
+			_, applyErr := s.executor.ExecuteWithStdin("git", bytes.NewReader(hunkContent), "apply")
+			if applyErr != nil {
+				s.logger.Debug("Working directory apply also failed for %s: %s", targetID, applyErr.Error())
+				err = applyErr
+			} else {
+				s.logger.Debug("Successfully applied to working directory for %s", targetID)
+				err = nil
+			}
+		}
+
+		if err != nil {
+			// Debug output for troubleshooting
+			s.logger.Debug("Failed patch content for %s:\n%s", targetID, string(hunkContent))
+			return NewPatchApplicationError(targetID, err)
+		}
 	}
 	return nil
+}
+
+// extractFilenameFromPatch extracts the filename from a patch header
+func (s *Stager) extractFilenameFromPatch(patchContent []byte) string {
+	lines := strings.Split(string(patchContent), "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "+++ b/") {
+			return strings.TrimPrefix(line, "+++ b/")
+		}
+		if strings.HasPrefix(line, "--- a/") && !strings.Contains(line, "/dev/null") {
+			return strings.TrimPrefix(line, "--- a/")
+		}
+	}
+	return ""
 }
 
 // calculatePatchIDStable calculates patch ID using git patch-id --stable

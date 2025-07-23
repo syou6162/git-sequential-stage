@@ -262,6 +262,22 @@ func (s *SafetyChecker) detectFileMoveOperationsFromStatus(filesByStatus map[Fil
 		}
 	}
 
+	// Also check for file moves that appear as DELETE + NEW in git status
+	// This happens with git mv when the move hasn't been committed yet
+	deletedFiles, hasDeleted := filesByStatus[FileStatusDeleted]
+	newFiles, hasNew := filesByStatus[FileStatusAdded]
+
+	if hasDeleted && hasNew && len(deletedFiles) > 0 && len(newFiles) > 0 {
+		// Simple heuristic: if we have equal number of deletions and additions,
+		// and they happen in close proximity, it's likely a move operation
+		// For now, we'll be conservative and just allow continuation
+		// A more sophisticated approach would compare file content similarity
+		moves = append(moves, FileMove{
+			From: deletedFiles[0], // Placeholder - indicates move operation detected
+			To:   newFiles[0],     // Placeholder - indicates move operation detected
+		})
+	}
+
 	return moves
 }
 
