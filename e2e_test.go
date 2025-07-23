@@ -590,7 +590,7 @@ index 13d44f9..6a210b7 100644
          self.users = {}
 +        # Add logging capability
 +        self.log_enabled = True
- 
+
      def add_user(self, username, email):
 +        # Add input validation
 +        if not username or not email:
@@ -600,7 +600,7 @@ index 13d44f9..6a210b7 100644
 +        if self.log_enabled:
 +            print(f"User {username} added successfully")
          return True
- 
+
      def get_user(self, username):
 `
 
@@ -2093,6 +2093,125 @@ func main() {
 	// and manages to stage some content from the moved file
 
 	t.Log("Successfully staged hunk from moved file")
+}
+
+// TestGitMvThenModifyFileWithoutCommit tests the case where a file is moved with `git mv`
+// and then modified WITHOUT committing the move first.
+// This should also work as it's a valid workflow.
+func TestGitMvThenModifyFileWithoutCommit(t *testing.T) {
+	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-mv-no-commit-*")
+	defer testRepo.Cleanup()
+	tempDir := testRepo.Path
+
+	// Change to temp directory
+	t.Chdir(tempDir)
+
+	// Create initial file
+	originalFile := "original_module.go"
+	initialContent := `package main
+
+import "fmt"
+
+func oldFunction() {
+	fmt.Println("This is the old function")
+}
+
+func main() {
+	oldFunction()
+}
+`
+	if err := os.WriteFile(originalFile, []byte(initialContent), 0644); err != nil {
+		t.Fatalf("Failed to create initial file: %v", err)
+	}
+
+	// Initial commit
+	if err := exec.Command("git", "add", originalFile).Run(); err != nil {
+		t.Fatalf("Failed to git add: %v", err)
+	}
+	if err := exec.Command("git", "commit", "-m", "Initial commit").Run(); err != nil {
+		t.Fatalf("Failed to git commit: %v", err)
+	}
+
+	// Step 1: Move file using git mv BUT DO NOT COMMIT YET
+	newFile := "renamed_module.go"
+	if err := exec.Command("git", "mv", originalFile, newFile).Run(); err != nil {
+		t.Fatalf("Failed to git mv: %v", err)
+	}
+
+	// Step 2: Modify the moved file (without committing the move)
+	modifiedContent := `package main
+
+import "fmt"
+
+func oldFunction() {
+	fmt.Println("This is the old function")
+	fmt.Println("Adding more functionality to the old function")
+}
+
+func newFunction() {
+	fmt.Println("This is a new function")
+}
+
+func main() {
+	oldFunction()
+	newFunction()
+}
+`
+	if err := os.WriteFile(newFile, []byte(modifiedContent), 0644); err != nil {
+		t.Fatalf("Failed to modify moved file: %v", err)
+	}
+
+	// Debug: Check current git status before generating patch
+	statusOutput, _ := exec.Command("git", "status", "--porcelain").Output()
+	t.Logf("Git status with move and modifications: %s", string(statusOutput))
+
+	// Generate patch for the complete state (move + modifications)
+	// This represents the realistic scenario where someone does git mv + modifications
+	patchFile := "moved_and_modified.patch"
+	patchCmd := exec.Command("git", "diff", "HEAD")
+	patchContent, err := patchCmd.Output()
+	if err != nil {
+		t.Fatalf("Failed to generate patch: %v", err)
+	}
+
+	t.Logf("Patch content length: %d", len(patchContent))
+	if len(patchContent) > 0 {
+		maxLen := 500
+		if len(patchContent) < maxLen {
+			maxLen = len(patchContent)
+		}
+		t.Logf("First %d chars of patch: %s", maxLen, string(patchContent)[:maxLen])
+	}
+
+	if err := os.WriteFile(patchFile, patchContent, 0644); err != nil {
+		t.Fatalf("Failed to write patch file: %v", err)
+	}
+
+	// Now test staging specific hunks from the patch
+	absPatchPath, err := filepath.Abs(patchFile)
+	if err != nil {
+		t.Fatalf("Failed to get absolute path: %v", err)
+	}
+
+	// Attempt to stage first hunk from the moved file
+	// This should work even though we have a move operation in the staging area
+	err = runGitSequentialStage([]string{newFile + ":1"}, absPatchPath)
+	if err != nil {
+		t.Fatalf("Failed to stage hunk from moved and modified file: %v", err)
+	}
+
+	// Verify that changes were staged successfully
+	stagedDiff, err := exec.Command("git", "diff", "--cached").Output()
+	if err != nil {
+		t.Fatalf("Failed to get staged diff: %v", err)
+	}
+
+	// Should contain some changes from the moved file
+	if len(stagedDiff) == 0 {
+		t.Errorf("Expected staged diff to contain changes from moved file, but it was empty")
+	}
+
+	t.Log("Successfully staged hunk from moved and modified file without committing move first")
 }
 
 // TestMultipleFilesMoveAndModify tests git mv of multiple files followed by modifications
