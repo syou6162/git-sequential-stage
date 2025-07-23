@@ -536,7 +536,6 @@ class DataValidator:
 		t.Fatalf("Failed to get working diff: %v", err)
 	}
 
-
 	// 機能的検証: 期待される変更内容が含まれているかチェック
 	// スナップショット比較ではなく、実際の機能をテスト
 
