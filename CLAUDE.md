@@ -13,7 +13,12 @@ git-sequential-stageは、パッチファイルから指定されたハンクを
 ```
 git-sequential-stage/
 ├── main.go                     # CLIエントリーポイント（hunkListカスタムタイプ）
-├── e2e_test.go                 # 包括的E2Eテスト（11テストケース）
+├── e2e_basic_test.go           # 基本機能E2Eテスト
+├── e2e_semantic_test.go        # セマンティックコミット分割テスト（最重要）
+├── e2e_error_test.go           # エラーハンドリングテスト
+├── e2e_advanced_files_test.go  # ファイル操作系テスト
+├── e2e_advanced_performance_test.go # パフォーマンステスト
+├── e2e_advanced_edge_cases_test.go  # エッジケーステスト
 └── internal/
     ├── executor/               # コマンド実行抽象化レイヤー
     ├── stager/                 # パッチIDシステムによる核心ステージングロジック
@@ -138,3 +143,28 @@ CLIは複数の`-hunk`フラグを処理するカスタム`hunkList`タイプを
 - API改善 → `improve:`コミット
 
 パッチIDシステムにより、ハンクに依存関係がある場合や重複する行範囲を変更する場合でも確実に動作します。
+
+## テストファイル分割方針
+
+**重要**: このプロジェクトのE2Eテストは機能別に最適化された構造で分割されています。Claude Codeは以下の指針に従ってください：
+
+### テストファイル構造
+- **`e2e_basic_test.go`**: 基本機能テスト（TestBasicSetup, TestSingleFileSingleHunk等）
+- **`e2e_semantic_test.go`**: セマンティックコミット分割テスト（TestMixedSemanticChanges - 最重要）
+- **`e2e_error_test.go`**: 全エラーハンドリングテスト
+- **`e2e_advanced_files_test.go`**: ファイル操作系テスト
+- **`e2e_advanced_performance_test.go`**: パフォーマンステスト
+- **`e2e_advanced_edge_cases_test.go`**: エッジケーステスト
+
+### Claude Code制約事項
+1. **テストファイルの新規作成禁止**: 既存の6つのE2Eテストファイル以外は作成しない
+2. **テストファイルの自動分割禁止**: ファイルサイズや行数を理由に勝手に分割しない
+3. **テスト内容の変更禁止**: 既存テストの動作を変更・削除・追加しない
+4. **構造の維持**: フラットなファイル構造を維持し、ディレクトリ分割をしない
+
+### 新規テスト追加時
+- 新しいテストが必要な場合は、最も関連性の高い既存ファイルに追加する
+- テスト分類が不明な場合は、ユーザーに確認する
+- 各ファイルの責務範囲を越える場合のみ、ユーザーと相談して対応を決定する
+
+この分割構造は、Go言語のベストプラクティスに従いつつ、Claude Codeでの理解性と保守性を両立させるために設計されています。
