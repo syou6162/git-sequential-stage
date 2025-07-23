@@ -268,14 +268,17 @@ func (s *SafetyChecker) detectFileMoveOperationsFromStatus(filesByStatus map[Fil
 	newFiles, hasNew := filesByStatus[FileStatusAdded]
 
 	if hasDeleted && hasNew && len(deletedFiles) > 0 && len(newFiles) > 0 {
-		// Simple heuristic: if we have equal number of deletions and additions,
-		// and they happen in close proximity, it's likely a move operation
-		// For now, we'll be conservative and just allow continuation
-		// A more sophisticated approach would compare file content similarity
-		moves = append(moves, FileMove{
-			From: deletedFiles[0], // Placeholder - indicates move operation detected
-			To:   newFiles[0],     // Placeholder - indicates move operation detected
-		})
+		// More sophisticated heuristic: only treat as move if counts match exactly
+		// and there are no other file operations that would indicate separate operations
+		if len(deletedFiles) == 1 && len(newFiles) == 1 {
+			// Single deletion + single addition is likely a move operation
+			moves = append(moves, FileMove{
+				From: deletedFiles[0], // Indicates move operation detected
+				To:   newFiles[0],     // Indicates move operation detected
+			})
+		}
+		// If there are multiple deletions and additions, it's likely mixed operations
+		// so we don't treat it as a simple move operation
 	}
 
 	return moves
