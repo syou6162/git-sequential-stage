@@ -562,7 +562,7 @@ index bc6c2b7..65ed03f 100644
 +            return False
          pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
          return re.match(pattern, email) is not None
- 
+
      @staticmethod
      def validate_username(username):
 -        return len(username) >= 3 and username.isalnum()
