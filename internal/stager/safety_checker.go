@@ -136,10 +136,13 @@ func (s *SafetyChecker) EvaluatePatchContent(patchContent string) (*StagingAreaE
 		}, nil
 	}
 
-	// Determine if staging area is clean (only intent-to-add files allowed)
+	// Check for file move operations using patch analysis
+	moveOperations := s.detectFileMoveOperationsFromPatch(patchContent)
+
+	// Determine if staging area is clean (only intent-to-add files allowed, or file moves)
 	nonIntentToAddStaged := s.filterNonIntentToAdd(analysisResult.AllFiles, analysisResult.IntentToAddFiles)
 	isClean := len(analysisResult.AllFiles) == 0
-	allowContinue := len(nonIntentToAddStaged) == 0
+	allowContinue := len(nonIntentToAddStaged) == 0 || len(moveOperations) > 0
 
 	evaluation := &StagingAreaEvaluation{
 		IsClean:          isClean,
@@ -198,6 +201,68 @@ func (s *SafetyChecker) getFilesForStatus(status FileStatus, filesByStatus map[F
 	}
 
 	return files
+}
+
+// FileMove represents a detected file move operation
+type FileMove struct {
+	From string
+	To   string
+}
+
+// detectFileMoveOperationsFromPatch detects file move operations using go-gitdiff patch analysis
+func (s *SafetyChecker) detectFileMoveOperationsFromPatch(patchContent string) []FileMove {
+	var moves []FileMove
+
+	// Use existing patch analysis to detect renames
+	hunks, err := ParsePatchFileWithGitDiff(patchContent)
+	if err != nil {
+		// If patch parsing fails, return empty moves (fallback to original behavior)
+		return moves
+	}
+
+	// Extract rename operations from parsed hunks
+	renamedFiles := make(map[string]FileMove)
+	for _, hunk := range hunks {
+		if hunk.File != nil && hunk.File.IsRename {
+			move := FileMove{
+				From: hunk.File.OldName,
+				To:   hunk.File.NewName,
+			}
+			// Avoid duplicates (same file might have multiple hunks)
+			renamedFiles[move.From+">"+move.To] = move
+		}
+	}
+
+	// Convert map to slice
+	for _, move := range renamedFiles {
+		moves = append(moves, move)
+	}
+
+	return moves
+}
+
+// detectFileMoveOperationsFromStatus detects file move operations from git status (fallback method)
+// This is a simplified version used when patch analysis is not available
+func (s *SafetyChecker) detectFileMoveOperationsFromStatus(filesByStatus map[FileStatus][]string) []FileMove {
+	var moves []FileMove
+
+	// Look for explicit rename operations in status
+	if renamedFiles, exists := filesByStatus[FileStatusRenamed]; exists {
+		for _, renamed := range renamedFiles {
+			// Handle formats like "old.txt -> new.txt" from git status
+			if strings.Contains(renamed, " -> ") {
+				parts := strings.Split(renamed, " -> ")
+				if len(parts) == 2 {
+					moves = append(moves, FileMove{
+						From: strings.TrimSpace(parts[0]),
+						To:   strings.TrimSpace(parts[1]),
+					})
+				}
+			}
+		}
+	}
+
+	return moves
 }
 
 // buildStagingErrorMessage builds a detailed error message about staging area state
@@ -354,10 +419,13 @@ func (s *SafetyChecker) CheckActualStagingArea() (*StagingAreaEvaluation, error)
 		return nil, err
 	}
 
+	// Check for file move operations using basic status analysis (fallback)
+	moveOperations := s.detectFileMoveOperationsFromStatus(statusInfo.FilesByStatus)
+
 	// Determine if staging area is clean
 	nonIntentToAddStaged := s.filterNonIntentToAdd(statusInfo.StagedFiles, statusInfo.IntentToAddFiles)
 	isClean := len(statusInfo.StagedFiles) == 0
-	allowContinue := len(nonIntentToAddStaged) == 0
+	allowContinue := len(nonIntentToAddStaged) == 0 || len(moveOperations) > 0
 
 	evaluation := &StagingAreaEvaluation{
 		IsClean:          isClean,

@@ -191,8 +191,8 @@ rename to new_name.txt
 		t.Error("Expected staging area not to be clean")
 	}
 
-	if evaluation.AllowContinue {
-		t.Error("Expected AllowContinue to be false for renamed files")
+	if !evaluation.AllowContinue {
+		t.Error("Expected AllowContinue to be true for renamed files")
 	}
 
 	// Check FilesByStatus

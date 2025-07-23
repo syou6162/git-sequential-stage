@@ -141,15 +141,6 @@ func (tr *TestRepo) RunCommandOrFail(command string, args ...string) string {
 	return output
 }
 
-// CreateFile creates a file with the given content
-func (tr *TestRepo) CreateFile(filename, content string) {
-	tr.t.Helper()
-	filepath := filepath.Join(tr.Path, filename)
-	if err := os.WriteFile(filepath, []byte(content), 0644); err != nil {
-		tr.t.Fatalf("Failed to create file %s: %v", filename, err)
-	}
-}
-
 // CreateBinaryFile creates a binary file with the given content
 func (tr *TestRepo) CreateBinaryFile(filename string, content []byte) {
 	tr.t.Helper()
@@ -245,6 +236,91 @@ func (tr *TestRepo) GeneratePatch(filename string) {
 	patchPath := filepath.Join(tr.Path, filename)
 	if err := os.WriteFile(patchPath, []byte(output), 0644); err != nil {
 		tr.t.Fatalf("Failed to write patch file: %v", err)
+	}
+}
+
+// CreateFileWithContent creates a file with content, creating directories as needed
+func (tr *TestRepo) CreateFileWithContent(filename, content string) error {
+	tr.t.Helper()
+	fullPath := filepath.Join(tr.Path, filename)
+
+	// Create directory if it doesn't exist
+	dir := filepath.Dir(fullPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory %s: %v", dir, err)
+	}
+
+	if err := os.WriteFile(fullPath, []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to create file %s: %v", filename, err)
+	}
+	return nil
+}
+
+// WriteFile writes content to a file, creating directories as needed
+func (tr *TestRepo) WriteFile(filename, content string) error {
+	return tr.CreateFileWithContent(filename, content)
+}
+
+// WriteBinaryFile creates a binary file with content, creating directories as needed
+func (tr *TestRepo) WriteBinaryFile(filename string, content []byte) error {
+	tr.t.Helper()
+	fullPath := filepath.Join(tr.Path, filename)
+
+	// Create directory if it doesn't exist
+	dir := filepath.Dir(fullPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory %s: %v", dir, err)
+	}
+
+	if err := os.WriteFile(fullPath, content, 0644); err != nil {
+		return fmt.Errorf("failed to create binary file %s: %v", filename, err)
+	}
+	return nil
+}
+
+// CommitAllChanges commits all changes with the given message
+func (tr *TestRepo) CommitAllChanges(message string) error {
+	tr.CommitChanges(message)
+	return nil
+}
+
+// GetTempFilePath returns a path for a temporary file in the repo
+func (tr *TestRepo) GetTempFilePath(filename string) string {
+	return filepath.Join(tr.Path, filename)
+}
+
+// CreatePatchFile creates a patch file from the current diff against the given ref
+func (tr *TestRepo) CreatePatchFile(filename, ref string) error {
+	tr.t.Helper()
+	output, err := tr.RunCommand("git", "diff", ref)
+	if err != nil {
+		return fmt.Errorf("failed to generate patch: %v", err)
+	}
+
+	if err := os.WriteFile(filename, []byte(output), 0644); err != nil {
+		return fmt.Errorf("failed to write patch file: %v", err)
+	}
+	return nil
+}
+
+// GetFilePath returns the full path to a file in the repository
+func (tr *TestRepo) GetFilePath(filename string) string {
+	return filepath.Join(tr.Path, filename)
+}
+
+// CreateFile creates a file in the repository, creating directories as needed
+func (tr *TestRepo) CreateFile(filename, content string) {
+	tr.t.Helper()
+	fullPath := filepath.Join(tr.Path, filename)
+
+	// Create directory if it doesn't exist
+	dir := filepath.Dir(fullPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		tr.t.Fatalf("Failed to create directory %s: %v", dir, err)
+	}
+
+	if err := os.WriteFile(fullPath, []byte(content), 0644); err != nil {
+		tr.t.Fatalf("Failed to create file %s: %v", filename, err)
 	}
 }
 
