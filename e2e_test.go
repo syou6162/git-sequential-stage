@@ -600,7 +600,7 @@ index 13d44f9..6a210b7 100644
 +        if self.log_enabled:
 +            print(f"User {username} added successfully")
          return True
-
+ 
      def get_user(self, username):
 `
 
