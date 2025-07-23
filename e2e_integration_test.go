@@ -44,14 +44,14 @@ func testStagingAreaDetection(t *testing.T) {
 	testutils.CreateAndCommitFile(t, dir, repo, "other.txt", "other content", "Add other file")
 
 	// Create a patch for test.txt
-	os.WriteFile("test.txt", []byte("modified content"), 0644)
+	_ = os.WriteFile("test.txt", []byte("modified content"), 0644)
 	patchFile := filepath.Join(dir, "changes.patch")
 	output, _ := testutils.RunCommand(t, dir, "git", "diff", "HEAD")
-	os.WriteFile(patchFile, []byte(output), 0644)
+	_ = os.WriteFile(patchFile, []byte(output), 0644)
 
 	// Stage a different file to make staging area dirty
-	os.WriteFile("other.txt", []byte("modified other content"), 0644)
-	testutils.RunCommand(t, dir, "git", "add", "other.txt")
+	_ = os.WriteFile("other.txt", []byte("modified other content"), 0644)
+	_, _ = testutils.RunCommand(t, dir, "git", "add", "other.txt")
 
 	// Try to run git-sequential-stage - should fail with staging area not clean
 	err := runGitSequentialStage([]string{"test.txt:1"}, patchFile)
@@ -93,13 +93,13 @@ func testIntentToAddIntegration(t *testing.T) {
 	testutils.CreateAndCommitFile(t, dir, repo, "existing.txt", "existing", "Initial commit")
 
 	// Create new file with intent-to-add
-	os.WriteFile("new_file.py", []byte("print('hello')"), 0644)
-	testutils.RunCommand(t, dir, "git", "add", "-N", "new_file.py")
+	_ = os.WriteFile("new_file.py", []byte("print('hello')"), 0644)
+	_, _ = testutils.RunCommand(t, dir, "git", "add", "-N", "new_file.py")
 
 	// Generate patch
 	patchFile := filepath.Join(dir, "changes.patch")
 	output, _ := testutils.RunCommand(t, dir, "git", "diff", "HEAD")
-	os.WriteFile(patchFile, []byte(output), 0644)
+	_ = os.WriteFile(patchFile, []byte(output), 0644)
 
 	// Run git-sequential-stage - should succeed with intent-to-add
 	err := runGitSequentialStage([]string{"new_file.py:1"}, patchFile)
@@ -129,18 +129,18 @@ func testFileTypeErrorMessages(t *testing.T) {
 	testutils.CreateAndCommitFile(t, dir, repo, "rename_from.txt", "rename me", "Add rename_from.txt")
 
 	// Make various changes
-	os.WriteFile("modify.txt", []byte("modified"), 0644)
-	os.WriteFile("new.txt", []byte("new file"), 0644)
-	os.Remove("delete.txt")
-	testutils.RunCommand(t, dir, "git", "mv", "rename_from.txt", "rename_to.txt")
+	_ = os.WriteFile("modify.txt", []byte("modified"), 0644)
+	_ = os.WriteFile("new.txt", []byte("new file"), 0644)
+	_ = os.Remove("delete.txt")
+	_, _ = testutils.RunCommand(t, dir, "git", "mv", "rename_from.txt", "rename_to.txt")
 
 	// Stage all changes
-	testutils.RunCommand(t, dir, "git", "add", "-A")
+	_, _ = testutils.RunCommand(t, dir, "git", "add", "-A")
 
 	// Generate patch
 	patchFile := filepath.Join(dir, "changes.patch")
 	output, _ := testutils.RunCommand(t, dir, "git", "diff", "HEAD")
-	os.WriteFile(patchFile, []byte(output), 0644)
+	_ = os.WriteFile(patchFile, []byte(output), 0644)
 
 	// Try to run git-sequential-stage
 	err := runGitSequentialStage([]string{"modify.txt:1"}, patchFile)
@@ -204,13 +204,13 @@ func testSemanticCommitWorkflow(t *testing.T) {
 def goodbye():
     print("Goodbye!")`
 
-	os.WriteFile("greetings.py", []byte(code), 0644)
-	testutils.RunCommand(t, dir, "git", "add", "-N", "greetings.py")
+	_ = os.WriteFile("greetings.py", []byte(code), 0644)
+	_, _ = testutils.RunCommand(t, dir, "git", "add", "-N", "greetings.py")
 
 	// Step 2: Generate patch
 	patchFile := filepath.Join(dir, "changes.patch")
 	output, _ := testutils.RunCommand(t, dir, "git", "diff", "HEAD")
-	os.WriteFile(patchFile, []byte(output), 0644)
+	_ = os.WriteFile(patchFile, []byte(output), 0644)
 
 	// Step 3: Try to stage specific hunks
 	err := runGitSequentialStage([]string{"greetings.py:1"}, patchFile)
@@ -234,12 +234,12 @@ func testWorkflowPreservation(t *testing.T) {
 
 	// Create and modify file
 	testutils.CreateAndCommitFile(t, dir, repo, "test.py", "def foo():\n    pass", "Initial")
-	os.WriteFile("test.py", []byte("def foo():\n    print('modified')\n\ndef bar():\n    pass"), 0644)
+	_ = os.WriteFile("test.py", []byte("def foo():\n    print('modified')\n\ndef bar():\n    pass"), 0644)
 
 	// Generate patch
 	patchFile := filepath.Join(dir, "changes.patch")
 	output, _ := testutils.RunCommand(t, dir, "git", "diff", "HEAD")
-	os.WriteFile(patchFile, []byte(output), 0644)
+	_ = os.WriteFile(patchFile, []byte(output), 0644)
 
 	// Get initial state
 	statusBefore, _ := testutils.RunCommand(t, dir, "git", "status", "--porcelain")
@@ -293,12 +293,12 @@ def function3():
     print("modified 3")`
 
 	testutils.CreateAndCommitFile(t, dir, repo, "multi.py", initial, "Initial")
-	os.WriteFile("multi.py", []byte(modified), 0644)
+	_ = os.WriteFile("multi.py", []byte(modified), 0644)
 
 	// Generate patch
 	patchFile := filepath.Join(dir, "changes.patch")
 	output, _ := testutils.RunCommand(t, dir, "git", "diff", "HEAD")
-	os.WriteFile(patchFile, []byte(output), 0644)
+	_ = os.WriteFile(patchFile, []byte(output), 0644)
 
 	// Debug: Check what patch was generated
 	t.Logf("Generated patch:\n%s", output)
@@ -327,7 +327,7 @@ func testErrorCases(t *testing.T) {
 
 	// Test empty patch
 	emptyPatch := filepath.Join(dir, "empty.patch")
-	os.WriteFile(emptyPatch, []byte(""), 0644)
+	_ = os.WriteFile(emptyPatch, []byte(""), 0644)
 
 	err := runGitSequentialStage([]string{"test.txt:1"}, emptyPatch)
 	if err == nil {
@@ -344,11 +344,11 @@ func testErrorCases(t *testing.T) {
 	defer resetDir2()
 
 	testutils.CreateAndCommitFile(t, newDir, repo, "test.txt", "content", "Initial")
-	os.WriteFile("test.txt", []byte("modified"), 0644)
+	_ = os.WriteFile("test.txt", []byte("modified"), 0644)
 
 	patchFile := filepath.Join(newDir, "valid.patch")
 	output, _ := testutils.RunCommand(t, newDir, "git", "diff", "HEAD")
-	os.WriteFile(patchFile, []byte(output), 0644)
+	_ = os.WriteFile(patchFile, []byte(output), 0644)
 
 	// Try to stage non-existent hunk
 	err = runGitSequentialStage([]string{"test.txt:99"}, patchFile)
@@ -369,11 +369,11 @@ func testBasicConsistency(t *testing.T) {
 
 	// Test basic functionality remains unchanged
 	testutils.CreateAndCommitFile(t, dir, repo, "test.py", "def old():\n    pass", "Initial")
-	os.WriteFile("test.py", []byte("def new():\n    print('new')"), 0644)
+	_ = os.WriteFile("test.py", []byte("def new():\n    print('new')"), 0644)
 
 	patchFile := filepath.Join(dir, "changes.patch")
 	output, _ := testutils.RunCommand(t, dir, "git", "diff", "HEAD")
-	os.WriteFile(patchFile, []byte(output), 0644)
+	_ = os.WriteFile(patchFile, []byte(output), 0644)
 
 	// Should work normally with clean staging area
 	err := runGitSequentialStage([]string{"test.py:1"}, patchFile)

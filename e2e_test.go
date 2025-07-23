@@ -892,7 +892,7 @@ func TestErrorCases_NonExistentFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to change directory: %v", err)
 	}
-	defer os.Chdir(originalDir)
+	defer func() { _ = os.Chdir(originalDir) }()
 
 	// 存在しないファイルを指定してgit-sequential-stageを実行
 	err = runGitSequentialStage([]string{"non_existent_file.py:1"}, absPatchPath)
@@ -955,7 +955,7 @@ func TestErrorCases_InvalidHunkNumber(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to change directory: %v", err)
 	}
-	defer os.Chdir(originalDir)
+	defer func() { _ = os.Chdir(originalDir) }()
 
 	// 存在しないハンク番号（ハンク2）を指定してgit-sequential-stageを実行
 	// パッチファイルには1つのハンクしかないはず
@@ -1016,7 +1016,7 @@ func TestErrorCases_EmptyPatchFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to change directory: %v", err)
 	}
-	defer os.Chdir(originalDir)
+	defer func() { _ = os.Chdir(originalDir) }()
 
 	// 空のパッチファイルを指定してgit-sequential-stageを実行
 	err = runGitSequentialStage([]string{"test.py:1"}, absEmptyPatchPath)
@@ -1419,7 +1419,7 @@ func main() {
 	if err := os.Chdir(testRepo.Path); err != nil {
 		t.Fatalf("Failed to change to test repo directory: %v", err)
 	}
-	defer os.Chdir(origDir)
+	defer func() { _ = os.Chdir(origDir) }()
 
 	// git add -N を実行
 	cmd := exec.Command("git", "add", "-N", "main.go")
@@ -1802,12 +1802,6 @@ if __name__ == "__main__":
 	}
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
 
 // TestUntrackedFile tests the behavior when trying to stage hunks from a completely untracked file
 // This test verifies that the tool properly handles files that are not tracked by git (status: ??)
@@ -1828,7 +1822,7 @@ func TestUntrackedFile(t *testing.T) {
 	if err := os.Chdir(testRepo.Path); err != nil {
 		t.Fatalf("Failed to change to test repo directory: %v", err)
 	}
-	defer os.Chdir(origDir)
+	defer func() { _ = os.Chdir(origDir) }()
 
 	// Create a completely new file (untracked - status ??)
 	untrackedFile := "untracked.py"

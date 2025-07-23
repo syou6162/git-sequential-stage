@@ -453,7 +453,7 @@ func TestRealCommandExecutorStderrCapture(t *testing.T) {
 	}
 	defer func() {
 		os.Stderr = oldStderr
-		r.Close()
+		_ = r.Close()
 	}()
 	os.Stderr = w
 
@@ -461,7 +461,7 @@ func TestRealCommandExecutorStderrCapture(t *testing.T) {
 	done := make(chan error, 1)
 	go func() {
 		_, execErr := executor.Execute("ls", "/definitely/does/not/exist")
-		w.Close() // Close write end to signal completion
+		_ = w.Close() // Close write end to signal completion
 		done <- execErr
 	}()
 

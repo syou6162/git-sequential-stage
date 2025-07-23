@@ -49,25 +49,25 @@ func (l *Logger) SetOutput(w io.Writer) {
 // Error logs an error message
 func (l *Logger) Error(format string, args ...interface{}) {
 	if l.level >= ErrorLevel {
-		fmt.Fprintf(l.output, "[ERROR] "+format+"\n", args...)
+		_, _ = fmt.Fprintf(l.output, "[ERROR] "+format+"\n", args...)
 	}
 }
 
 // Info logs an info message
 func (l *Logger) Info(format string, args ...interface{}) {
 	if l.level >= InfoLevel {
-		fmt.Fprintf(l.output, "[INFO] "+format+"\n", args...)
+		_, _ = fmt.Fprintf(l.output, "[INFO] "+format+"\n", args...)
 	}
 }
 
 // Debug logs a debug message
 func (l *Logger) Debug(format string, args ...interface{}) {
 	if l.level >= DebugLevel {
-		fmt.Fprintf(l.output, "[DEBUG] "+format+"\n", args...)
+		_, _ = fmt.Fprintf(l.output, "[DEBUG] "+format+"\n", args...)
 	}
 }
 
 // Printf provides compatibility with existing code
 func (l *Logger) Printf(format string, args ...interface{}) {
-	fmt.Fprintf(l.output, format, args...)
+	_, _ = fmt.Fprintf(l.output, format, args...)
 }
