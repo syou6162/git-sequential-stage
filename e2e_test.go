@@ -590,7 +590,7 @@ index 13d44f9..6a210b7 100644
          self.users = {}
 +        # Add logging capability
 +        self.log_enabled = True
-
+ 
      def add_user(self, username, email):
 +        # Add input validation
 +        if not username or not email:
