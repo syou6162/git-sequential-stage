@@ -1802,7 +1802,6 @@ if __name__ == "__main__":
 	}
 }
 
-
 // TestUntrackedFile tests the behavior when trying to stage hunks from a completely untracked file
 // This test verifies that the tool properly handles files that are not tracked by git (status: ??)
 func TestUntrackedFile(t *testing.T) {

@@ -9,7 +9,6 @@ import (
 
 // Test helper functions
 
-
 // parseAndValidateHunk is a helper to parse patch file and validate hunk extraction
 func parseAndValidateHunk(t *testing.T, patchContent string, hunkIndex int) HunkInfo {
 	t.Helper()
