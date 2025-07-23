@@ -1080,9 +1080,6 @@ func TestErrorCases_EmptyPatchFile(t *testing.T) {
 
 // TestBinaryFileHandling tests handling of binary files in patches
 func TestBinaryFileHandling(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping e2e test in short mode")
-	}
 
 	// Setup test repository
 	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-e2e-*")
@@ -1217,9 +1214,6 @@ func TestBinaryFileHandling(t *testing.T) {
 
 // TestFileModificationAndMove tests handling of file modifications combined with moves
 func TestFileModificationAndMove(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping e2e test in short mode")
-	}
 
 	// Setup test repository
 	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-e2e-*")
@@ -1638,9 +1632,6 @@ func TestErrorCases_MultipleInvalidHunks(t *testing.T) {
 
 // TestLargeFileWithManyHunks tests handling of large files with many hunks
 func TestLargeFileWithManyHunks(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping e2e test in short mode")
-	}
 
 	// Setup test repository
 	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-e2e-*")
@@ -1852,9 +1843,6 @@ func min(a, b int) int {
 // TestUntrackedFile tests the behavior when trying to stage hunks from a completely untracked file
 // This test verifies that the tool properly handles files that are not tracked by git (status: ??)
 func TestUntrackedFile(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping e2e test in short mode")
-	}
 
 	// Setup test repository
 	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-e2e-*")
@@ -1998,9 +1986,6 @@ if __name__ == "__main__":
 // This is a common workflow where users first move/rename a file and then make changes to it.
 // The tool should be able to stage hunks from the modified moved file correctly.
 func TestGitMvThenModifyFile(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping e2e test in short mode")
-	}
 
 	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-e2e-*")
 	defer testRepo.Cleanup()
