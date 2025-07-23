@@ -440,71 +440,104 @@ func (s *Stager) findAndApplyMatchingHunk(currentHunks []HunkInfo, diffLines []s
 	return targetIDs, false, nil
 }
 
+// tryNormalApply attempts to apply the patch using the standard git apply --cached command
+func (s *Stager) tryNormalApply(hunkContent []byte) error {
+	_, err := s.executor.ExecuteWithStdin("git", bytes.NewReader(hunkContent), "apply", "--cached")
+	return err
+}
+
+// isAlreadyExistsError checks if the error indicates that a file already exists in the index
+func (s *Stager) isAlreadyExistsError(err error) bool {
+	if exitErr, ok := err.(*exec.ExitError); ok {
+		return strings.Contains(string(exitErr.Stderr), "already exists in index")
+	}
+	return strings.Contains(err.Error(), "already exists in index")
+}
+
+// tryResetApplyStrategy implements the reset-apply strategy for git mv scenarios
+func (s *Stager) tryResetApplyStrategy(hunkContent []byte, targetID string) error {
+	filename := s.extractFilenameFromPatch(hunkContent)
+	if filename == "" {
+		s.logger.Debug("Could not extract filename from patch for %s", targetID)
+		return fmt.Errorf("could not extract filename from patch")
+	}
+
+	s.logger.Debug("Extracted filename %s from patch for %s", filename, targetID)
+
+	// Try to temporarily remove from index
+	_, resetErr := s.executor.Execute("git", "reset", "HEAD", filename)
+	if resetErr != nil {
+		s.logger.Debug("Failed to reset %s: %s", filename, resetErr.Error())
+		return resetErr
+	}
+
+	s.logger.Debug("Successfully reset %s from index", filename)
+
+	// Now try to apply the patch
+	_, applyErr := s.executor.ExecuteWithStdin("git", bytes.NewReader(hunkContent), "apply", "--cached")
+	if applyErr != nil {
+		s.logger.Debug("Patch apply after reset failed for %s: %s", targetID, applyErr.Error())
+
+		// Try to restore the original state
+		_, addErr := s.executor.Execute("git", "add", filename)
+		if addErr != nil {
+			s.logger.Debug("Failed to restore %s to index: %s", filename, addErr.Error())
+		}
+		return applyErr
+	}
+
+	s.logger.Debug("Successfully applied patch after reset for %s", targetID)
+	return nil
+}
+
+// tryWorkingDirectoryApply attempts to apply the patch to the working directory as a fallback
+func (s *Stager) tryWorkingDirectoryApply(hunkContent []byte, targetID string) error {
+	s.logger.Debug("File already exists in index for %s (fallback check), trying alternative approach", targetID)
+
+	_, applyErr := s.executor.ExecuteWithStdin("git", bytes.NewReader(hunkContent), "apply")
+	if applyErr != nil {
+		s.logger.Debug("Working directory apply also failed for %s: %s", targetID, applyErr.Error())
+		return applyErr
+	}
+
+	s.logger.Debug("Successfully applied to working directory for %s", targetID)
+	return nil
+}
+
+// handleApplyError handles errors from the initial patch application attempt
+func (s *Stager) handleApplyError(hunkContent []byte, targetID string, err error) error {
+	s.logger.Debug("Initial apply failed for %s: %s", targetID, err.Error())
+
+	if !s.isAlreadyExistsError(err) {
+		// For non-"already exists" errors, return the original error
+		s.logger.Debug("Failed patch content for %s:\n%s", targetID, string(hunkContent))
+		return NewPatchApplicationError(targetID, err)
+	}
+
+	// Try reset-apply strategy first (for git mv scenarios)
+	if exitErr, ok := err.(*exec.ExitError); ok {
+		stderrStr := string(exitErr.Stderr)
+		s.logger.Debug("File already exists in index for %s (stderr: %s), trying git mv compatible approach", targetID, stderrStr)
+
+		if resetErr := s.tryResetApplyStrategy(hunkContent, targetID); resetErr == nil {
+			return nil // Success
+		}
+	}
+
+	// Fallback to working directory apply
+	if workingErr := s.tryWorkingDirectoryApply(hunkContent, targetID); workingErr == nil {
+		return nil // Success
+	}
+
+	// All strategies failed
+	s.logger.Debug("Failed patch content for %s:\n%s", targetID, string(hunkContent))
+	return NewPatchApplicationError(targetID, err)
+}
+
 // applyHunk applies a single hunk to the staging area
 func (s *Stager) applyHunk(hunkContent []byte, targetID string) error {
-	// First try normal application
-	_, err := s.executor.ExecuteWithStdin("git", bytes.NewReader(hunkContent), "apply", "--cached")
-	if err != nil {
-		errStr := err.Error()
-		s.logger.Debug("Initial apply failed for %s: %s", targetID, errStr)
-
-		// Check if stderr contains "already exists in index"
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			stderrStr := string(exitErr.Stderr)
-			if strings.Contains(stderrStr, "already exists in index") {
-				s.logger.Debug("File already exists in index for %s (stderr: %s), trying git mv compatible approach", targetID, stderrStr)
-
-				// For git mv scenarios, extract filename from patch and try a different approach
-				filename := s.extractFilenameFromPatch(hunkContent)
-				if filename != "" {
-					s.logger.Debug("Extracted filename %s from patch for %s", filename, targetID)
-
-					// Try to temporarily remove from index, apply patch, then add back
-					_, resetErr := s.executor.Execute("git", "reset", "HEAD", filename)
-					if resetErr != nil {
-						s.logger.Debug("Failed to reset %s: %s", filename, resetErr.Error())
-					} else {
-						s.logger.Debug("Successfully reset %s from index", filename)
-
-						// Now try to apply the patch
-						_, applyErr := s.executor.ExecuteWithStdin("git", bytes.NewReader(hunkContent), "apply", "--cached")
-						if applyErr != nil {
-							s.logger.Debug("Patch apply after reset failed for %s: %s", targetID, applyErr.Error())
-
-							// Try to restore the original state
-							_, addErr := s.executor.Execute("git", "add", filename)
-							if addErr != nil {
-								s.logger.Debug("Failed to restore %s to index: %s", filename, addErr.Error())
-							}
-							err = applyErr
-						} else {
-							s.logger.Debug("Successfully applied patch after reset for %s", targetID)
-							err = nil
-						}
-					}
-				} else {
-					s.logger.Debug("Could not extract filename from patch for %s", targetID)
-				}
-			}
-		} else if strings.Contains(errStr, "already exists in index") {
-			// Fallback string matching
-			s.logger.Debug("File already exists in index for %s (fallback check), trying alternative approach", targetID)
-
-			_, applyErr := s.executor.ExecuteWithStdin("git", bytes.NewReader(hunkContent), "apply")
-			if applyErr != nil {
-				s.logger.Debug("Working directory apply also failed for %s: %s", targetID, applyErr.Error())
-				err = applyErr
-			} else {
-				s.logger.Debug("Successfully applied to working directory for %s", targetID)
-				err = nil
-			}
-		}
-
-		if err != nil {
-			// Debug output for troubleshooting
-			s.logger.Debug("Failed patch content for %s:\n%s", targetID, string(hunkContent))
-			return NewPatchApplicationError(targetID, err)
-		}
+	if err := s.tryNormalApply(hunkContent); err != nil {
+		return s.handleApplyError(hunkContent, targetID, err)
 	}
 	return nil
 }
