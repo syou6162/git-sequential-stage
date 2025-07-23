@@ -131,7 +131,7 @@ func TestStager_StageHunks_WithSafetyCheck_Clean(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create an empty patch file (no changes = clean staging area)
 	patchContent := ""
@@ -157,7 +157,7 @@ func TestStager_StageHunks_WithSafetyCheck_Dirty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create a patch file that simulates already staged changes
 	patchContent := `diff --git a/already_staged.txt b/already_staged.txt
@@ -199,7 +199,7 @@ func TestStager_StageHunks_WithSafetyCheck_NewFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create a patch file with new file (not intent-to-add because it has content)
 	patchContent := `diff --git a/new_file.txt b/new_file.txt

@@ -35,7 +35,7 @@ func setupTestRepo(t *testing.T, testName string) *testRepo {
 
 	// Ensure cleanup
 	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
+		_ = os.RemoveAll(tmpDir)
 	})
 
 	// Change to temp directory
@@ -47,7 +47,7 @@ func setupTestRepo(t *testing.T, testName string) *testRepo {
 		t.Fatalf("Failed to change to temp dir: %v", err)
 	}
 	t.Cleanup(func() {
-		os.Chdir(originalDir)
+		_ = os.Chdir(originalDir)
 	})
 
 	// Initialize git repository

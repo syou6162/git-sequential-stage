@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-git/go-git/v5"
+	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
@@ -65,14 +65,14 @@ func NewTestRepo(t *testing.T, prefix string) *TestRepo {
 	// Initialize git repository
 	repo, err := git.PlainInit(tmpDir, false)
 	if err != nil {
-		os.RemoveAll(tmpDir)
+		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("Failed to initialize git repository: %v", err)
 	}
 
 	// Configure git user
 	cfg, err := repo.Config()
 	if err != nil {
-		os.RemoveAll(tmpDir)
+		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("Failed to get config: %v", err)
 	}
 
@@ -80,7 +80,7 @@ func NewTestRepo(t *testing.T, prefix string) *TestRepo {
 	cfg.User.Email = "test@example.com"
 	err = repo.SetConfig(cfg)
 	if err != nil {
-		os.RemoveAll(tmpDir)
+		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("Failed to set config: %v", err)
 	}
 
@@ -89,7 +89,7 @@ func NewTestRepo(t *testing.T, prefix string) *TestRepo {
 		Path: tmpDir,
 		Repo: repo,
 		cleanup: func() {
-			os.RemoveAll(tmpDir)
+			_ = os.RemoveAll(tmpDir)
 		},
 	}
 
@@ -117,7 +117,7 @@ func (tr *TestRepo) Chdir() func() {
 	}
 
 	return func() {
-		os.Chdir(originalDir)
+		_ = os.Chdir(originalDir)
 	}
 }
 
@@ -374,7 +374,7 @@ func CreateAndCommitFile(t *testing.T, dir string, repo *git.Repository, filenam
 	}
 
 	w, _ := repo.Worktree()
-	w.Add(filename)
+	_, _ = w.Add(filename)
 
 	_, err := w.Commit(message, &git.CommitOptions{
 		Author: &object.Signature{
@@ -404,7 +404,7 @@ func CreateTestRepo(t *testing.T, prefix string) (string, *git.Repository, func(
 	}
 
 	cleanup := func() {
-		os.RemoveAll(tmpDir)
+		_ = os.RemoveAll(tmpDir)
 	}
 
 	return tmpDir, repo, cleanup
@@ -420,7 +420,7 @@ func SetupTestDir(t *testing.T, dir string) func() {
 	}
 
 	return func() {
-		os.Chdir(originalDir)
+		_ = os.Chdir(originalDir)
 	}
 }
 
@@ -443,7 +443,7 @@ func CreateLargeFileWithManyHunks(t *testing.T, tmpDir string, repo *git.Reposit
 
 	// Commit initial version
 	w, _ := repo.Worktree()
-	w.Add(filename)
+	_, _ = w.Add(filename)
 
 	commitOptions := &git.CommitOptions{
 		Author: &object.Signature{

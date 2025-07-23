@@ -395,8 +395,8 @@ func (s *Stager) createTempDiffFile(diffOutput []byte) (string, func(), error) {
 	}
 
 	cleanup := func() {
-		tmpFile.Close()
-		os.Remove(tmpFile.Name())
+		_ = tmpFile.Close()
+		_ = os.Remove(tmpFile.Name())
 	}
 
 	if _, err := tmpFile.Write(diffOutput); err != nil {
@@ -404,7 +404,7 @@ func (s *Stager) createTempDiffFile(diffOutput []byte) (string, func(), error) {
 		return "", nil, NewIOError("write temp file", err)
 	}
 
-	tmpFile.Close()
+	_ = tmpFile.Close()
 	return tmpFile.Name(), cleanup, nil
 }
 

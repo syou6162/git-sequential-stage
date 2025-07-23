@@ -1,7 +1,6 @@
 package stager
 
 import (
-	"strconv"
 	"strings"
 	"testing"
 
@@ -9,32 +8,6 @@ import (
 )
 
 // Test helper functions
-
-// createNewFilePatch creates a patch content for a new file
-func createNewFilePatch(fileName, content string) string {
-	lines := strings.Split(strings.TrimRight(content, "\n"), "\n")
-	lineCount := len(lines)
-	return `diff --git a/` + fileName + ` b/` + fileName + `
-new file mode 100644
-index 0000000..1234567
---- /dev/null
-+++ b/` + fileName + `
-@@ -0,0 +1,` + strconv.Itoa(lineCount) + ` @@
-` + content
-}
-
-// createModificationPatch creates a patch content for file modification
-func createModificationPatch(fileName, addedContent string) string {
-	return `diff --git a/` + fileName + ` b/` + fileName + `
-index abc1234..def5678 100644
---- a/` + fileName + `
-+++ b/` + fileName + `
-@@ -1,3 +1,4 @@
- package main
-
-+` + addedContent + `
- func main() {}`
-}
 
 // parseAndValidateHunk is a helper to parse patch file and validate hunk extraction
 func parseAndValidateHunk(t *testing.T, patchContent string, hunkIndex int) HunkInfo {
