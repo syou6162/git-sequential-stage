@@ -37,15 +37,6 @@ func runGitSequentialStage(hunks []string, patchFile string) error {
 	}
 
 	// Validate arguments
-	if len(hunks) == 0 {
-		return fmt.Errorf("at least one hunk specification is required")
-	}
-
-	if patchFile == "" {
-		return fmt.Errorf("patch file is required")
-	}
-
-	// Validate arguments
 	if err := v.ValidateArgsNew(hunks, patchFile); err != nil {
 		return fmt.Errorf("argument validation failed: %v", err)
 	}
