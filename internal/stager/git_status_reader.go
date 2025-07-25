@@ -73,17 +73,9 @@ func (r *DefaultGitStatusReader) parseGitStatus(status git.Status) (*GitStatusIn
 			continue
 		}
 
-		// Check for intent-to-add files
-		// Intent-to-add files have Staging=Added and may have various worktree states
-		// We need to check if the staged version is empty (intent-to-add marker)
-		if fileStatus.Staging == git.Added {
-			// Check if this is an intent-to-add file by checking the staged blob
-			if isIntentToAddFile := r.isIntentToAddFile(path); isIntentToAddFile {
-				info.StagedFiles = append(info.StagedFiles, path)
-				info.FilesByStatus[FileStatusAdded] = append(info.FilesByStatus[FileStatusAdded], path)
-				info.IntentToAddFiles = append(info.IntentToAddFiles, path)
-				continue
-			}
+		// Check for intent-to-add files - critical for LLM agent semantic commit workflows
+		if r.processIntentToAddFile(path, fileStatus, info) {
+			continue
 		}
 
 		// Add to staged files list
@@ -121,7 +113,29 @@ func (r *DefaultGitStatusReader) parseGitStatus(status git.Status) (*GitStatusIn
 	return info, nil
 }
 
+// processIntentToAddFile processes intent-to-add files for LLM agent workflows
+// Returns true if the file was processed as intent-to-add, false otherwise
+func (r *DefaultGitStatusReader) processIntentToAddFile(path string, fileStatus *git.FileStatus, info *GitStatusInfo) bool {
+	// Only check files with Staging=Added as potential intent-to-add candidates
+	if fileStatus.Staging != git.Added {
+		return false
+	}
+
+	// LLM agents use bulk intent-to-add (git add -N) for multiple files, then selectively stage
+	// We need to check if the staged version is empty (intent-to-add marker) to allow coexistence
+	if isIntentToAddFile := r.isIntentToAddFile(path); isIntentToAddFile {
+		info.StagedFiles = append(info.StagedFiles, path)
+		info.FilesByStatus[FileStatusAdded] = append(info.FilesByStatus[FileStatusAdded], path)
+		info.IntentToAddFiles = append(info.IntentToAddFiles, path)
+		return true
+	}
+
+	return false
+}
+
 // isIntentToAddFile checks if a staged file is an intent-to-add file using go-git
+// This is critical for LLM agent workflows where agents use bulk intent-to-add operations
+// (git ls-files --others | xargs git add -N) and need to stage specific files without conflicts
 func (r *DefaultGitStatusReader) isIntentToAddFile(path string) bool {
 	// Open the repository
 	repo, err := git.PlainOpen(r.repoPath)

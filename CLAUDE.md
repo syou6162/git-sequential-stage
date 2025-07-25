@@ -144,6 +144,35 @@ CLIは複数の`-hunk`フラグを処理するカスタム`hunkList`タイプを
 
 パッチIDシステムにより、ハンクに依存関係がある場合や重複する行範囲を変更する場合でも確実に動作します。
 
+### Intent-to-addワークフロー
+
+LLMエージェントは制限された`git add`コマンドのみ使用可能で、以下のワークフローが標準的です：
+
+**エージェント制約**:
+- 個別ファイルの`git add -N`は禁止
+- 許可されるのは`git ls-files --others --exclude-standard | xargs git add -N`（一括intent-to-add）のみ
+
+**ワークフロー手順**:
+1. **新規ファイル発見**: エージェントが複数の新規ファイルを検出
+2. **一括intent-to-add**: `git ls-files --others | xargs git add -N`でまとめて追加
+3. **パッチ生成**: `git diff HEAD`で全変更を含むパッチを生成
+4. **選択的ステージング**: `git-sequential-stage`で特定ファイルのハンクのみをステージング
+5. **セマンティックコミット**: 意味単位でのコミット作成
+
+**重要な設計判断**:
+- Intent-to-addファイルの存在下でも、ターゲットファイルが明示的に指定されていれば正常動作
+- 安全性チェックはintent-to-addファイルを例外として扱い、エラーを発生させない
+- これにより、エージェントが効率的なセマンティックコミット分割を実現可能
+
+**実装例**:
+```bash
+# エージェントワークフロー例
+git ls-files --others --exclude-standard | xargs git add -N
+git diff HEAD > changes.patch
+./git-sequential-stage -patch="changes.patch" -hunk="specific_file.go:1,3"
+git commit -m "feat: Add logging functionality"
+```
+
 ## テストファイル分割方針
 
 **重要**: このプロジェクトのE2Eテストは機能別に最適化された構造で分割されています。Claude Codeは以下の指針に従ってください：
