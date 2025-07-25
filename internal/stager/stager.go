@@ -305,13 +305,7 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
 
 	// Phase 2: Execution - Sequential staging loop
 	for len(targetIDs) > 0 {
-		// Get target files
-		targetFiles, err := collectTargetFiles(hunkSpecs)
-		if err != nil {
-			return NewInvalidArgumentError("failed to collect target files", err)
-		}
-
-		// Get current diff
+		// Get current diff (reuse targetFiles from Phase 0)
 		diffOutput, err := s.getCurrentDiff(targetFiles)
 		if err != nil {
 			return err
