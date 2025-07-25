@@ -19,6 +19,14 @@ type GitStatusInfo struct {
 	IntentToAddFiles []string
 }
 
+// addIntentToAddFile adds an intent-to-add file to all relevant lists
+// This method handles the side effects of registering an intent-to-add file
+func (info *GitStatusInfo) addIntentToAddFile(path string) {
+	info.StagedFiles = append(info.StagedFiles, path)
+	info.FilesByStatus[FileStatusAdded] = append(info.FilesByStatus[FileStatusAdded], path)
+	info.IntentToAddFiles = append(info.IntentToAddFiles, path)
+}
+
 // DefaultGitStatusReader implements GitStatusReader using go-git
 type DefaultGitStatusReader struct {
 	repoPath string
@@ -74,7 +82,8 @@ func (r *DefaultGitStatusReader) parseGitStatus(status git.Status) (*GitStatusIn
 		}
 
 		// Check for intent-to-add files - critical for LLM agent semantic commit workflows
-		if r.processIntentToAddFile(path, fileStatus, info) {
+		if r.isIntentToAddCandidate(path, fileStatus) {
+			info.addIntentToAddFile(path)
 			continue
 		}
 
@@ -113,24 +122,17 @@ func (r *DefaultGitStatusReader) parseGitStatus(status git.Status) (*GitStatusIn
 	return info, nil
 }
 
-// processIntentToAddFile processes intent-to-add files for LLM agent workflows
-// Returns true if the file was processed as intent-to-add, false otherwise
-func (r *DefaultGitStatusReader) processIntentToAddFile(path string, fileStatus *git.FileStatus, info *GitStatusInfo) bool {
-	// Only check files with Staging=Added as potential intent-to-add candidates
+// isIntentToAddCandidate checks if a file should be handled as intent-to-add (pure function)
+// This is critical for LLM agent semantic commit workflows where bulk intent-to-add is used
+func (r *DefaultGitStatusReader) isIntentToAddCandidate(path string, fileStatus *git.FileStatus) bool {
+	// Only files with Staging=Added can be intent-to-add candidates
 	if fileStatus.Staging != git.Added {
 		return false
 	}
 
 	// LLM agents use bulk intent-to-add (git add -N) for multiple files, then selectively stage
-	// We need to check if the staged version is empty (intent-to-add marker) to allow coexistence
-	if isIntentToAddFile := r.isIntentToAddFile(path); isIntentToAddFile {
-		info.StagedFiles = append(info.StagedFiles, path)
-		info.FilesByStatus[FileStatusAdded] = append(info.FilesByStatus[FileStatusAdded], path)
-		info.IntentToAddFiles = append(info.IntentToAddFiles, path)
-		return true
-	}
-
-	return false
+	// Check if the staged version is empty (intent-to-add marker) to allow coexistence
+	return r.isIntentToAddFile(path)
 }
 
 // isIntentToAddFile checks if a staged file is an intent-to-add file using go-git
