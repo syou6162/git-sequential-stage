@@ -155,6 +155,7 @@ func (r *DefaultGitStatusReader) isIntentToAddFile(path string) bool {
 		return false
 	}
 
-	// Check the IntentToAdd flag
+	// Check the IntentToAdd flag using go-git's native field instead of hardcoded hash values
+	// This provides type-safe intent-to-add detection for LLM agent semantic commit workflows
 	return entry.IntentToAdd
 }
