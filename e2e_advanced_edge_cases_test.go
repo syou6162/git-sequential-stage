@@ -10,9 +10,9 @@ import (
 	"github.com/syou6162/git-sequential-stage/testutils"
 )
 
-// TestIntentToAddFileSafetyCheck はintent-to-addファイルがある場合の安全性チェックを確認します
-// 現在の実装では、intent-to-addファイルは"NEW"として扱われ、安全性チェックでエラーになることを検証します
-func TestIntentToAddFileSafetyCheck(t *testing.T) {
+// TestIntentToAddFileCoexistence はintent-to-addファイルがある場合でも他のファイルのステージングが可能であることを確認します
+// ワーカーパターン: intent-to-addファイルが存在する場合でも、ターゲットファイルが明示的に指定されていれば正常動作する
+func TestIntentToAddFileCoexistence(t *testing.T) {
 	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-e2e-*")
 	defer testRepo.Cleanup()
 
@@ -88,23 +88,24 @@ func main() {
 	// すでにtestRepoのディレクトリにいるので、Chdirは不要
 
 	// 既存ファイルの最初のハンクをステージングしようとする
-	// intent-to-addファイルが存在するため、安全性チェックでエラーになることを期待
+	// intent-to-addファイルが存在する場合でも、ターゲットファイルが指定されていれば正常動作する
 	err = runGitSequentialStage([]string{"existing.go:1"}, absPatchPath)
-	if err == nil {
-		t.Fatal("Expected safety check error due to intent-to-add file, but got no error")
+	if err != nil {
+		t.Fatalf("Expected staging to succeed with intent-to-add files present, but got error: %v", err)
 	}
 
-	// エラーメッセージを確認
-	if !strings.Contains(err.Error(), "SAFETY_CHECK_FAILED") || !strings.Contains(err.Error(), "staging_area_not_clean") {
-		t.Errorf("Expected safety check error, got: %v", err)
+	// ステージングが成功したことを確認
+	stagedDiff, err := exec.Command("git", "diff", "--cached").Output()
+	if err != nil {
+		t.Fatalf("Failed to get staged diff: %v", err)
 	}
 
-	// エラーメッセージにNEWファイル（main.go）が含まれていることを確認
-	if !strings.Contains(err.Error(), "NEW: main.go") {
-		t.Errorf("Expected error to mention NEW file main.go, got: %v", err)
+	// existing.goの変更がステージングされていることを確認
+	if !strings.Contains(string(stagedDiff), "Modified function") {
+		t.Errorf("Expected existing.go changes to be staged, got: %s", stagedDiff)
 	}
 
-	t.Log("Safety check correctly detected intent-to-add file and prevented staging")
+	t.Log("Staging succeeded with intent-to-add files present")
 }
 
 // TestUntrackedFile tests the behavior when trying to stage hunks from a completely untracked file
