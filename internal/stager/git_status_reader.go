@@ -2,6 +2,8 @@ package stager
 
 import (
 	"fmt"
+	"os/exec"
+	"strings"
 
 	"github.com/go-git/go-git/v5"
 )
@@ -124,8 +126,30 @@ func (r *DefaultGitStatusReader) parseGitStatus(status git.Status) (*GitStatusIn
 // isIntentToAddFile checks if a staged file is an intent-to-add file
 // Intent-to-add files have the empty file hash in the index
 func (r *DefaultGitStatusReader) isIntentToAddFile(path string) bool {
-	// For now, use a simplified heuristic
-	// TODO: Implement proper intent-to-add detection using git ls-files
-	// This is a temporary implementation to avoid compilation errors
+	// Check if the file has the empty blob hash (intent-to-add marker)
+	// The empty blob hash is e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+	cmd := exec.Command("git", "ls-files", "-s", path)
+	output, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+
+	// Parse the output: "mode hash stage\tfilename"
+	// Intent-to-add files have hash e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		parts := strings.Fields(line)
+		if len(parts) >= 2 {
+			hash := parts[1]
+			// Empty blob hash indicates intent-to-add
+			if hash == "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391" {
+				return true
+			}
+		}
+	}
+
 	return false
 }
