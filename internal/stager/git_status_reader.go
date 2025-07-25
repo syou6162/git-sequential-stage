@@ -2,8 +2,6 @@ package stager
 
 import (
 	"fmt"
-	"os/exec"
-	"strings"
 
 	"github.com/go-git/go-git/v5"
 )
@@ -123,33 +121,26 @@ func (r *DefaultGitStatusReader) parseGitStatus(status git.Status) (*GitStatusIn
 	return info, nil
 }
 
-// isIntentToAddFile checks if a staged file is an intent-to-add file
-// Intent-to-add files have the empty file hash in the index
+// isIntentToAddFile checks if a staged file is an intent-to-add file using go-git
 func (r *DefaultGitStatusReader) isIntentToAddFile(path string) bool {
-	// Check if the file has the empty blob hash (intent-to-add marker)
-	// The empty blob hash is e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
-	cmd := exec.Command("git", "ls-files", "-s", path)
-	output, err := cmd.Output()
+	// Open the repository
+	repo, err := git.PlainOpen(r.repoPath)
 	if err != nil {
 		return false
 	}
 
-	// Parse the output: "mode hash stage\tfilename"
-	// Intent-to-add files have hash e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	for _, line := range lines {
-		if line == "" {
-			continue
-		}
-		parts := strings.Fields(line)
-		if len(parts) >= 2 {
-			hash := parts[1]
-			// Empty blob hash indicates intent-to-add
-			if hash == "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391" {
-				return true
-			}
-		}
+	// Get the index from repository storer
+	idx, err := repo.Storer.Index()
+	if err != nil {
+		return false
 	}
 
-	return false
+	// Find the entry for the given path
+	entry, err := idx.Entry(path)
+	if err != nil {
+		return false
+	}
+
+	// Check the IntentToAdd flag
+	return entry.IntentToAdd
 }
