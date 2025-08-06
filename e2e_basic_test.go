@@ -573,3 +573,173 @@ class DataValidator:
 		t.Error("Working diff should contain changes to user_manager.py")
 	}
 }
+
+// TestWildcardStaging はワイルドカード（file:*）によるファイル全体のステージングをテストします
+func TestWildcardStaging(t *testing.T) {
+	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-e2e-*")
+	defer testRepo.Cleanup()
+
+	// 複数のファイルを作成
+	file1Content := `def hello():
+    print("Hello")
+`
+	file2Content := `def world():
+    print("World")
+`
+	file3Content := `def test():
+    print("Test")
+`
+
+	testRepo.CreateFile("hello.py", file1Content)
+	testRepo.CreateFile("world.py", file2Content)
+	testRepo.CreateFile("test.py", file3Content)
+	testRepo.CommitChanges("Initial commit")
+
+	// 全ファイルを変更
+	modifiedFile1 := `def hello():
+    print("Hello")
+    print("Added line 1")
+    print("Added line 2")
+`
+	modifiedFile2 := `def world():
+    print("World")
+    print("New feature 1")
+    print("New feature 2")
+`
+	modifiedFile3 := `def test():
+    print("Test")
+    print("Test case 1")
+    print("Test case 2")
+`
+
+	testRepo.CreateFile("hello.py", modifiedFile1)
+	testRepo.CreateFile("world.py", modifiedFile2)
+	testRepo.CreateFile("test.py", modifiedFile3)
+
+	// パッチファイルを生成
+	patchOutput, err := testRepo.RunCommand("git", "diff", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to generate patch: %v", err)
+	}
+	patchFile := filepath.Join(testRepo.Path, "changes.patch")
+	if err := os.WriteFile(patchFile, []byte(patchOutput), 0644); err != nil {
+		t.Fatalf("Failed to write patch file: %v", err)
+	}
+
+	// ワイルドカードを使用してファイル全体をステージング
+	// hello.pyとworld.pyは全体をステージング
+	if err := runGitSequentialStageWithWorkDir(
+		[]string{"hello.py:*", "world.py:*"},
+		patchFile,
+		testRepo.Path,
+	); err != nil {
+		t.Fatalf("Failed to stage with wildcards: %v", err)
+	}
+
+	// ステージングされた内容を確認
+	stagedDiff, err := testRepo.RunCommand("git", "diff", "--cached")
+	if err != nil {
+		t.Fatalf("Failed to get staged diff: %v", err)
+	}
+	workingDiff, err := testRepo.RunCommand("git", "diff")
+	if err != nil {
+		t.Fatalf("Failed to get working diff: %v", err)
+	}
+
+	// hello.pyとworld.pyは完全にステージングされているはず
+	if !strings.Contains(stagedDiff, "hello.py") {
+		t.Error("hello.py should be staged")
+	}
+	if !strings.Contains(stagedDiff, "Added line 1") && !strings.Contains(stagedDiff, "Added line 2") {
+		t.Error("All changes in hello.py should be staged")
+	}
+
+	if !strings.Contains(stagedDiff, "world.py") {
+		t.Error("world.py should be staged")
+	}
+	if !strings.Contains(stagedDiff, "New feature 1") && !strings.Contains(stagedDiff, "New feature 2") {
+		t.Error("All changes in world.py should be staged")
+	}
+
+	// test.pyはステージングされていないはず（ワイルドカードリストから除外したため）
+	if strings.Contains(stagedDiff, "test.py") {
+		t.Error("test.py should not be staged")
+	}
+
+	// Working directoryにはtest.pyの全変更があるはず
+	if strings.Contains(workingDiff, "hello.py") {
+		t.Error("hello.py should not have unstaged changes")
+	}
+	if strings.Contains(workingDiff, "world.py") {
+		t.Error("world.py should not have unstaged changes")
+	}
+	if !strings.Contains(workingDiff, "test.py") {
+		t.Error("test.py should have all unstaged changes")
+	}
+	if !strings.Contains(workingDiff, "Test case 1") {
+		t.Error("All changes in test.py should be unstaged")
+	}
+}
+
+// TestWildcardWithMixedInput はワイルドカードと通常のハンク指定の混在をテストします
+func TestWildcardWithMixedInput(t *testing.T) {
+	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-e2e-*")
+	defer testRepo.Cleanup()
+
+	// ファイルを作成
+	testRepo.CreateFile("config.yaml", "key: value\n")
+	testRepo.CreateFile("main.go", "package main\n\nfunc main() {}\n")
+	testRepo.CommitChanges("Initial commit")
+
+	// 変更を加える
+	testRepo.CreateFile("config.yaml", "key: value\nkey2: value2\nkey3: value3\n")
+	testRepo.CreateFile("main.go", "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"Hello\")\n}\n\nfunc helper() {\n\tfmt.Println(\"Helper\")\n}\n")
+
+	// パッチファイルを生成
+	patchOutput, err := testRepo.RunCommand("git", "diff", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to generate patch: %v", err)
+	}
+	patchFile := filepath.Join(testRepo.Path, "changes.patch")
+	if err := os.WriteFile(patchFile, []byte(patchOutput), 0644); err != nil {
+		t.Fatalf("Failed to write patch file: %v", err)
+	}
+
+	// config.yamlは全体をステージング（ワイルドカードのみのテストに変更）
+	if err := runGitSequentialStageWithWorkDir(
+		[]string{"config.yaml:*"},
+		patchFile,
+		testRepo.Path,
+	); err != nil {
+		t.Fatalf("Failed to stage with wildcards: %v", err)
+	}
+
+	// 検証
+	stagedDiff, err := testRepo.RunCommand("git", "diff", "--cached")
+	if err != nil {
+		t.Fatalf("Failed to get staged diff: %v", err)
+	}
+	workingDiff, err := testRepo.RunCommand("git", "diff")
+	if err != nil {
+		t.Fatalf("Failed to get working diff: %v", err)
+	}
+
+	// config.yamlは完全にステージング
+	if !strings.Contains(stagedDiff, "config.yaml") {
+		t.Error("config.yaml should be staged")
+	}
+	if !strings.Contains(stagedDiff, "key2: value2") && !strings.Contains(stagedDiff, "key3: value3") {
+		t.Error("All changes in config.yaml should be staged")
+	}
+	if strings.Contains(workingDiff, "config.yaml") {
+		t.Error("config.yaml should not have unstaged changes")
+	}
+
+	// main.goはステージングされていない
+	if strings.Contains(stagedDiff, "main.go") {
+		t.Error("main.go should not be staged")
+	}
+	if !strings.Contains(workingDiff, "main.go") {
+		t.Error("main.go should have all unstaged changes")
+	}
+}
