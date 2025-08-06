@@ -292,19 +292,15 @@ func (s *Stager) StageFilesWithWorkDir(files []string, workDir string) error {
 			return NewFileNotFoundError(file, err)
 		}
 
-		// Stage the entire file
-		var err error
+		// Stage the entire file using executor interface
 		if workDir != "" {
-			// Execute in specified directory
-			cmd := exec.Command("git", "add", file)
-			cmd.Dir = workDir
-			output, err := cmd.CombinedOutput()
-			if err != nil {
-				return NewGitCommandError(fmt.Sprintf("git add %s: %s", file, string(output)), err)
+			// Use ExecuteInDir for directory-specific execution
+			if _, err := s.executor.ExecuteInDir(workDir, "git", "add", file); err != nil {
+				return NewGitCommandError(fmt.Sprintf("git add %s", file), err)
 			}
 		} else {
-			// Use executor for default case
-			if _, err = s.executor.Execute("git", "add", file); err != nil {
+			// Use standard Execute for current directory
+			if _, err := s.executor.Execute("git", "add", file); err != nil {
 				return NewGitCommandError(fmt.Sprintf("git add %s", file), err)
 			}
 		}

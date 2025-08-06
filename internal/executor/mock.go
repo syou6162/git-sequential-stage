@@ -24,6 +24,7 @@ type ExecutedCommand struct {
 	Name  string
 	Args  []string
 	Stdin []byte
+	Dir   string
 }
 
 // NewMockCommandExecutor creates a new mock executor
@@ -68,4 +69,20 @@ func (m *MockCommandExecutor) ExecuteWithStdin(name string, stdin io.Reader, arg
 	}
 
 	return nil, fmt.Errorf("unexpected command: %s", key)
+}
+
+// ExecuteInDir implements CommandExecutor.ExecuteInDir
+func (m *MockCommandExecutor) ExecuteInDir(dir string, name string, args ...string) ([]byte, error) {
+	key := fmt.Sprintf("%s %v", name, args)
+	m.ExecutedCommands = append(m.ExecutedCommands, ExecutedCommand{
+		Name: name,
+		Args: args,
+		Dir:  dir,
+	})
+
+	if response, ok := m.Commands[key]; ok {
+		return response.Output, response.Error
+	}
+
+	return nil, fmt.Errorf("unexpected command in dir %s: %s", dir, key)
 }
