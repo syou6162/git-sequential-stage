@@ -271,6 +271,26 @@ func (s *Stager) generateDetailedStagingError(evaluation *StagingAreaEvaluation)
 	return NewSafetyError(StagingAreaNotClean, message, advice.String(), nil)
 }
 
+// StageFiles stages entire files directly using git add.
+// This is used for wildcard specifications (file:*).
+func (s *Stager) StageFiles(files []string) error {
+	for _, file := range files {
+		// Check if file exists
+		if _, err := os.Stat(file); os.IsNotExist(err) {
+			return NewFileNotFoundError(file, err)
+		}
+
+		// Stage the entire file
+		if _, err := s.executor.Execute("git", "add", file); err != nil {
+			return NewGitCommandError(fmt.Sprintf("git add %s", file), err)
+		}
+
+		s.logger.Info("Staged entire file: %s", file)
+	}
+
+	return nil
+}
+
 // StageHunks stages the specified hunks from a patch file to Git's staging area.
 // hunkSpecs should be in the format "file:hunk_numbers" (e.g., "main.go:1,3").
 // The function uses patch IDs to track hunks across changes, solving the drift problem.
