@@ -44,6 +44,7 @@ func runGitSequentialStageWithWorkDir(hunks []string, patchFile string, workDir 
 	// Separate wildcard files from normal hunk specifications
 	wildcardFiles := []string{}
 	normalHunks := []string{}
+	fileSpecTypes := make(map[string]string) // Track specification type per file
 
 	for _, spec := range hunks {
 		parts := strings.Split(spec, ":")
@@ -54,15 +55,28 @@ func runGitSequentialStageWithWorkDir(hunks []string, patchFile string, workDir 
 		file := parts[0]
 		hunksSpec := parts[1]
 
+		// Check if this file has already been specified
+		if existingType, exists := fileSpecTypes[file]; exists {
+			// Check for conflicting specifications
+			if hunksSpec == "*" && existingType == "numbers" {
+				return fmt.Errorf("mixed wildcard and hunk numbers not allowed for file %s", file)
+			}
+			if hunksSpec != "*" && existingType == "wildcard" {
+				return fmt.Errorf("mixed wildcard and hunk numbers not allowed for file %s", file)
+			}
+		}
+
 		if hunksSpec == "*" {
 			// Wildcard: add entire file
 			wildcardFiles = append(wildcardFiles, file)
+			fileSpecTypes[file] = "wildcard"
 		} else {
 			// Check for mixed wildcard and numbers (not allowed)
 			if strings.Contains(hunksSpec, "*") {
 				return fmt.Errorf("mixed wildcard and hunk numbers not allowed in %s", spec)
 			}
 			normalHunks = append(normalHunks, spec)
+			fileSpecTypes[file] = "numbers"
 		}
 	}
 

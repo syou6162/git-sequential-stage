@@ -327,3 +327,36 @@ func TestErrorCases_MultipleInvalidHunks(t *testing.T) {
 		t.Errorf("Expected error message to mention '1 hunk', got: %s", errorMsg)
 	}
 }
+
+// TestErrorCases_SameFileConflict は同一ファイルに対してワイルドカードとハンク番号が混在した場合のエラーテストです
+func TestErrorCases_SameFileConflict(t *testing.T) {
+	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-e2e-*")
+	defer testRepo.Cleanup()
+
+	// ファイルを作成
+	testRepo.CreateFile("main.go", "package main\n\nfunc main() {}\n")
+	testRepo.CommitChanges("Initial commit")
+
+	// ファイルを変更
+	testRepo.CreateFile("main.go", "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"Hello\")\n}\n\nfunc helper() {\n\tfmt.Println(\"Helper\")\n}\n")
+
+	// パッチファイルを生成
+	testRepo.GeneratePatch("changes.patch")
+	patchFile := filepath.Join(testRepo.Path, "changes.patch")
+
+	// 同一ファイルに対してワイルドカードとハンク番号を混在させる
+	err := runGitSequentialStageWithWorkDir(
+		[]string{"main.go:1", "main.go:*"},
+		patchFile,
+		testRepo.Path,
+	)
+
+	// エラーが発生することを確認
+	if err == nil {
+		t.Fatal("Expected error for mixed wildcard and hunk numbers, but got none")
+	}
+
+	if !strings.Contains(err.Error(), "mixed wildcard and hunk numbers not allowed") {
+		t.Errorf("Expected error message to contain 'mixed wildcard and hunk numbers not allowed', got: %v", err)
+	}
+}

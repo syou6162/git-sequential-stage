@@ -147,6 +147,18 @@ func TestWildcardParsing(t *testing.T) {
 			hunks:       []string{"file1.go:*", "file2.go:*", "file3.go:1"},
 			expectError: false,
 		},
+		{
+			name:          "same file with both wildcard and numbers",
+			hunks:         []string{"file.go:1,2", "file.go:*"},
+			expectError:   true,
+			errorContains: "mixed wildcard and hunk numbers not allowed",
+		},
+		{
+			name:          "same file with wildcard then numbers",
+			hunks:         []string{"file.go:*", "file.go:3,4"},
+			expectError:   true,
+			errorContains: "mixed wildcard and hunk numbers not allowed",
+		},
 	}
 
 	for _, tt := range tests {
@@ -158,6 +170,7 @@ func TestWildcardParsing(t *testing.T) {
 			normalHunks := []string{}
 			var parseErr error
 
+			fileSpecTypes := make(map[string]string)
 			for _, spec := range tt.hunks {
 				parts := strings.Split(spec, ":")
 				if len(parts) != 2 {
@@ -168,14 +181,28 @@ func TestWildcardParsing(t *testing.T) {
 				file := parts[0]
 				hunksSpec := parts[1]
 
+				// Check if this file has already been specified
+				if existingType, exists := fileSpecTypes[file]; exists {
+					if hunksSpec == "*" && existingType == "numbers" {
+						parseErr = fmt.Errorf("mixed wildcard and hunk numbers not allowed for file %s", file)
+						break
+					}
+					if hunksSpec != "*" && existingType == "wildcard" {
+						parseErr = fmt.Errorf("mixed wildcard and hunk numbers not allowed for file %s", file)
+						break
+					}
+				}
+
 				if hunksSpec == "*" {
 					wildcardFiles = append(wildcardFiles, file)
+					fileSpecTypes[file] = "wildcard"
 				} else {
 					if strings.Contains(hunksSpec, "*") {
 						parseErr = fmt.Errorf("mixed wildcard and hunk numbers not allowed in %s", spec)
 						break
 					}
 					normalHunks = append(normalHunks, spec)
+					fileSpecTypes[file] = "numbers"
 				}
 			}
 
