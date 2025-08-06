@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/syou6162/git-sequential-stage/internal/executor"
@@ -275,34 +274,15 @@ func (s *Stager) generateDetailedStagingError(evaluation *StagingAreaEvaluation)
 // StageFiles stages entire files directly using git add.
 // This is used for wildcard specifications (file:*).
 func (s *Stager) StageFiles(files []string) error {
-	return s.StageFilesWithWorkDir(files, "")
-}
-
-// StageFilesWithWorkDir stages files with a specific work directory
-func (s *Stager) StageFilesWithWorkDir(files []string, workDir string) error {
 	for _, file := range files {
-		// Build full path for existence check if workDir is provided
-		checkPath := file
-		if workDir != "" {
-			checkPath = filepath.Join(workDir, file)
-		}
-
 		// Check if file exists
-		if _, err := os.Stat(checkPath); os.IsNotExist(err) {
+		if _, err := os.Stat(file); os.IsNotExist(err) {
 			return NewFileNotFoundError(file, err)
 		}
 
-		// Stage the entire file using executor interface
-		if workDir != "" {
-			// Use ExecuteInDir for directory-specific execution
-			if _, err := s.executor.ExecuteInDir(workDir, "git", "add", file); err != nil {
-				return NewGitCommandError(fmt.Sprintf("git add %s", file), err)
-			}
-		} else {
-			// Use standard Execute for current directory
-			if _, err := s.executor.Execute("git", "add", file); err != nil {
-				return NewGitCommandError(fmt.Sprintf("git add %s", file), err)
-			}
+		// Stage the entire file
+		if _, err := s.executor.Execute("git", "add", file); err != nil {
+			return NewGitCommandError(fmt.Sprintf("git add %s", file), err)
 		}
 
 		s.logger.Info("Staged entire file: %s", file)

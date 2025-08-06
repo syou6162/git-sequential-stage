@@ -26,11 +26,14 @@ func (h *hunkList) Set(value string) error {
 // runGitSequentialStage は git-sequential-stage の主要なロジックを実行します
 // テストから直接呼び出せるように分離されています
 func runGitSequentialStage(hunks []string, patchFile string) error {
-	return runGitSequentialStageWithWorkDir(hunks, patchFile, "")
-}
+	// Validate required arguments
+	if len(hunks) == 0 {
+		return fmt.Errorf("at least one -hunk flag is required")
+	}
+	if patchFile == "" {
+		return fmt.Errorf("-patch flag is required")
+	}
 
-// runGitSequentialStageWithWorkDir は作業ディレクトリを指定可能なバージョン
-func runGitSequentialStageWithWorkDir(hunks []string, patchFile string, workDir string) error {
 	// Create real command executor
 	exec := executor.NewRealCommandExecutor()
 	s := stager.NewStager(exec)
@@ -96,7 +99,7 @@ func runGitSequentialStageWithWorkDir(hunks []string, patchFile string, workDir 
 
 	// Stage wildcard files directly with git add (after hunks)
 	if len(wildcardFiles) > 0 {
-		if err := s.StageFilesWithWorkDir(wildcardFiles, workDir); err != nil {
+		if err := s.StageFiles(wildcardFiles); err != nil {
 			return fmt.Errorf("failed to stage wildcard files: %v", err)
 		}
 	}

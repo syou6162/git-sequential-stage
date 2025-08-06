@@ -626,12 +626,14 @@ func TestWildcardStaging(t *testing.T) {
 		t.Fatalf("Failed to write patch file: %v", err)
 	}
 
+	// テストリポジトリのディレクトリに移動
+	defer testRepo.Chdir()()
+
 	// ワイルドカードを使用してファイル全体をステージング
 	// hello.pyとworld.pyは全体をステージング
-	if err := runGitSequentialStageWithWorkDir(
+	if err := runGitSequentialStage(
 		[]string{"hello.py:*", "world.py:*"},
 		patchFile,
-		testRepo.Path,
 	); err != nil {
 		t.Fatalf("Failed to stage with wildcards: %v", err)
 	}
@@ -705,11 +707,13 @@ func TestWildcardWithMixedInput(t *testing.T) {
 		t.Fatalf("Failed to write patch file: %v", err)
 	}
 
+	// テストリポジトリのディレクトリに移動
+	defer testRepo.Chdir()()
+
 	// config.yamlは全体をステージング（ワイルドカードのみのテストに変更）
-	if err := runGitSequentialStageWithWorkDir(
+	if err := runGitSequentialStage(
 		[]string{"config.yaml:*"},
 		patchFile,
-		testRepo.Path,
 	); err != nil {
 		t.Fatalf("Failed to stage with wildcards: %v", err)
 	}

@@ -344,11 +344,13 @@ func TestErrorCases_SameFileConflict(t *testing.T) {
 	testRepo.GeneratePatch("changes.patch")
 	patchFile := filepath.Join(testRepo.Path, "changes.patch")
 
+	// テストリポジトリのディレクトリに移動
+	defer testRepo.Chdir()()
+
 	// 同一ファイルに対してワイルドカードとハンク番号を混在させる
-	err := runGitSequentialStageWithWorkDir(
+	err := runGitSequentialStage(
 		[]string{"main.go:1", "main.go:*"},
 		patchFile,
-		testRepo.Path,
 	)
 
 	// エラーが発生することを確認
