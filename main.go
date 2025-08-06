@@ -96,15 +96,18 @@ func main() {
 		patchFile = flag.String("patch", "", "Path to the patch file")
 	)
 
-	flag.Var(&hunks, "hunk", "File:hunk_numbers to stage (e.g., path/to/file.py:1,3). Can be specified multiple times")
+	flag.Var(&hunks, "hunk", "File:hunk_numbers to stage (e.g., path/to/file.py:1,3) or file:* for entire file. Can be specified multiple times")
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s -patch=<patch_file> -hunk=<file:numbers> [-hunk=<file:numbers>...]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s -patch=<patch_file> -hunk=<file:numbers|*> [-hunk=<file:numbers|*>...]\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "\nStages specified hunks from a patch file sequentially.\n\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		flag.PrintDefaults()
-		fmt.Fprintf(os.Stderr, "\nExample:\n")
+		fmt.Fprintf(os.Stderr, "\nExamples:\n")
+		fmt.Fprintf(os.Stderr, "  # Stage specific hunks\n")
 		fmt.Fprintf(os.Stderr, "  %s -patch=changes.patch -hunk=\"src/main.go:1,3\" -hunk=\"src/test.go:2\"\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "\n  # Stage entire files using wildcard\n")
+		fmt.Fprintf(os.Stderr, "  %s -patch=changes.patch -hunk=\"src/logger.go:*\" -hunk=\"src/test.go:1,2\"\n", os.Args[0])
 	}
 
 	flag.Parse()
