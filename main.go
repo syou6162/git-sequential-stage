@@ -26,6 +26,11 @@ func (h *hunkList) Set(value string) error {
 // runGitSequentialStage は git-sequential-stage の主要なロジックを実行します
 // テストから直接呼び出せるように分離されています
 func runGitSequentialStage(hunks []string, patchFile string) error {
+	return runGitSequentialStageWithWorkDir(hunks, patchFile, "")
+}
+
+// runGitSequentialStageWithWorkDir は作業ディレクトリを指定可能なバージョン
+func runGitSequentialStageWithWorkDir(hunks []string, patchFile string, workDir string) error {
 	// Create real command executor
 	exec := executor.NewRealCommandExecutor()
 	s := stager.NewStager(exec)
@@ -36,14 +41,50 @@ func runGitSequentialStage(hunks []string, patchFile string) error {
 		return fmt.Errorf("dependency check failed: %v", err)
 	}
 
-	// Validate arguments
-	if err := v.ValidateArgsNew(hunks, patchFile); err != nil {
-		return fmt.Errorf("argument validation failed: %v", err)
+	// Separate wildcard files from normal hunk specifications
+	wildcardFiles := []string{}
+	normalHunks := []string{}
+
+	for _, spec := range hunks {
+		parts := strings.Split(spec, ":")
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid hunk specification: %s (expected format: file:hunks)", spec)
+		}
+
+		file := parts[0]
+		hunksSpec := parts[1]
+
+		if hunksSpec == "*" {
+			// Wildcard: add entire file
+			wildcardFiles = append(wildcardFiles, file)
+		} else {
+			// Check for mixed wildcard and numbers (not allowed)
+			if strings.Contains(hunksSpec, "*") {
+				return fmt.Errorf("mixed wildcard and hunk numbers not allowed in %s", spec)
+			}
+			normalHunks = append(normalHunks, spec)
+		}
 	}
 
-	// Stage hunks
-	if err := s.StageHunks(hunks, patchFile); err != nil {
-		return fmt.Errorf("failed to stage hunks: %v", err)
+	// Stage specific hunks first if any
+	// (Need to process hunks before wildcard to maintain patch consistency)
+	if len(normalHunks) > 0 {
+		// Validate arguments for normal hunks
+		if err := v.ValidateArgsNew(normalHunks, patchFile); err != nil {
+			return fmt.Errorf("argument validation failed: %v", err)
+		}
+
+		// Stage hunks
+		if err := s.StageHunks(normalHunks, patchFile); err != nil {
+			return fmt.Errorf("failed to stage hunks: %v", err)
+		}
+	}
+
+	// Stage wildcard files directly with git add (after hunks)
+	if len(wildcardFiles) > 0 {
+		if err := s.StageFilesWithWorkDir(wildcardFiles, workDir); err != nil {
+			return fmt.Errorf("failed to stage wildcard files: %v", err)
+		}
 	}
 
 	return nil
