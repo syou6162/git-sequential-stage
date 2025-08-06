@@ -76,9 +76,23 @@ CLIは複数の`-hunk`フラグを処理するカスタム`hunkList`タイプを
 ./git-sequential-stage -patch="changes.patch" \
   -hunk="src/main.go:1,3" \
   -hunk="src/utils.go:2,4"
+
+# ワイルドカード使用（ファイル全体をステージング）
+./git-sequential-stage -patch="changes.patch" \
+  -hunk="src/logger.go:*" \
+  -hunk="src/config.yaml:*"
+
+# ワイルドカードと通常のハンク指定の混在
+./git-sequential-stage -patch="changes.patch" \
+  -hunk="src/logger.go:*" \
+  -hunk="src/main.go:1,3" \
+  -hunk="docs/README.md:*"
 ```
 
-**重要な注意**: ツールは`file:hunk_numbers`形式を期待します。単なるハンク番号ではありません。
+**重要な注意**:
+- ツールは`file:hunk_numbers`または`file:*`形式を期待します
+- ワイルドカード（`*`）指定時は`git add file`でファイル全体をステージング
+- 同一ファイルでワイルドカードと番号の混在は不可（例: `file:1,*,3`はエラー）
 
 ## テスト戦略
 

@@ -66,13 +66,19 @@ go build
 ## Usage
 
 ```bash
-git-sequential-stage -patch=<patch_file> -hunk=<file:hunks> [-hunk=<file:hunks>...]
+git-sequential-stage -patch=<patch_file> -hunk=<file:hunks|*> [-hunk=<file:hunks|*>...]
 ```
 
 ### Options
 
 - `-patch`: Path to the patch file
-- `-hunk`: File and hunk specification in the format `file:hunk_numbers` (can be specified multiple times)
+- `-hunk`: File and hunk specification in the format:
+  - `file:hunk_numbers` - Stage specific hunks (e.g., `main.go:1,3`)
+  - `file:*` - Stage entire file using wildcard (e.g., `logger.go:*`)
+
+### Wildcard Feature
+
+The wildcard (`*`) feature allows you to stage entire files without specifying individual hunk numbers. This is particularly useful for LLM agents that may struggle with counting hunks accurately.
 
 ### Examples
 
@@ -82,6 +88,15 @@ git diff > changes.patch
 
 # Stage hunks 1 and 3 from main.go
 git-sequential-stage -patch=changes.patch -hunk="main.go:1,3"
+
+# Stage entire file using wildcard
+git-sequential-stage -patch=changes.patch -hunk="logger.go:*"
+
+# Mix wildcards and specific hunks across different files
+git-sequential-stage -patch=changes.patch \
+  -hunk="config.yaml:*" \
+  -hunk="main.go:1,2" \
+  -hunk="utils.go:*"
 
 # Stage multiple files with different hunks
 git-sequential-stage -patch=changes.patch \
