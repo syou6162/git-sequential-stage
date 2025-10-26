@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -404,7 +405,26 @@ func function3() {
 		t.Errorf("Expected 2 lines of output, got %d:\n%s", len(lines), output)
 	}
 
-	// Check that file1.go and file2.go are in the output
+	// Verify sort order (alphabetically)
+	if len(lines) >= 2 {
+		if !strings.HasPrefix(lines[0], "file1.go:") {
+			t.Errorf("Expected first line to start with 'file1.go:', got: %s", lines[0])
+		}
+		if !strings.HasPrefix(lines[1], "file2.go:") {
+			t.Errorf("Expected second line to start with 'file2.go:', got: %s", lines[1])
+		}
+	}
+
+	// Verify format with regex: "filename: count"
+	// Pattern: <filename>: <number> or <filename>: *
+	formatRegex := regexp.MustCompile(`^[^:]+: (\d+|\*)$`)
+	for i, line := range lines {
+		if !formatRegex.MatchString(line) {
+			t.Errorf("Line %d does not match expected format 'filename: count', got: %s", i+1, line)
+		}
+	}
+
+	// Check specific content
 	hasFile1 := false
 	hasFile2 := false
 	for _, line := range lines {
@@ -429,5 +449,141 @@ func function3() {
 	}
 	if !hasFile2 {
 		t.Errorf("Output does not contain file2.go:\n%s", output)
+	}
+}
+
+// TestRunCountHunksCommand_BinaryFiles tests count-hunks output format with binary files
+func TestRunCountHunksCommand_BinaryFiles(t *testing.T) {
+	testRepo := testutils.NewTestRepo(t, "count-hunks-binary-*")
+	defer testRepo.Cleanup()
+
+	// Change to test repo directory
+	origDir, _ := os.Getwd()
+	defer func() { _ = os.Chdir(origDir) }()
+	_ = os.Chdir(testRepo.Path)
+
+	// Create initial files
+	file1 := "text.go"
+	file1Content := `package main
+
+func main() {
+}
+`
+	if err := os.WriteFile(file1, []byte(file1Content), 0644); err != nil {
+		t.Fatalf("Failed to write text file: %v", err)
+	}
+
+	// Create binary file
+	binaryFile := "image.png"
+	binaryContent := []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d}
+	if err := os.WriteFile(binaryFile, binaryContent, 0644); err != nil {
+		t.Fatalf("Failed to write binary file: %v", err)
+	}
+
+	// Initial commit
+	gitAddCmd := exec.Command("git", "add", ".")
+	if output, err := gitAddCmd.CombinedOutput(); err != nil {
+		t.Fatalf("Failed to git add: %v\nOutput: %s", err, output)
+	}
+
+	gitCommitCmd := exec.Command("git", "commit", "-m", "Initial commit")
+	if output, err := gitCommitCmd.CombinedOutput(); err != nil {
+		t.Fatalf("Failed to git commit: %v\nOutput: %s", err, output)
+	}
+
+	// Make changes
+	file1ModifiedContent := `package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("Hello")
+}
+`
+	if err := os.WriteFile(file1, []byte(file1ModifiedContent), 0644); err != nil {
+		t.Fatalf("Failed to modify text file: %v", err)
+	}
+
+	// Modify binary file
+	binaryModified := []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0xff, 0xff, 0xff, 0xff}
+	if err := os.WriteFile(binaryFile, binaryModified, 0644); err != nil {
+		t.Fatalf("Failed to modify binary file: %v", err)
+	}
+
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("Failed to create pipe: %v", err)
+	}
+	os.Stdout = w
+
+	outCh := make(chan string, 1)
+	go func() {
+		var buf bytes.Buffer
+		if _, err := io.Copy(&buf, r); err != nil {
+			t.Errorf("Failed to copy output: %v", err)
+		}
+		outCh <- buf.String()
+	}()
+
+	// Run count-hunks command
+	runErr := runCountHunksCommand([]string{})
+
+	// Close write end and restore stdout
+	if err := w.Close(); err != nil {
+		t.Fatalf("Failed to close pipe: %v", err)
+	}
+	os.Stdout = oldStdout
+
+	// Get captured output
+	output := <-outCh
+
+	// Check for errors
+	if runErr != nil {
+		t.Fatalf("runCountHunksCommand failed: %v", runErr)
+	}
+
+	// Verify output
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	if len(lines) != 2 {
+		t.Errorf("Expected 2 lines of output, got %d:\n%s", len(lines), output)
+	}
+
+	// Verify sort order (alphabetically: image.png, text.go)
+	if len(lines) >= 2 {
+		if !strings.HasPrefix(lines[0], "image.png:") {
+			t.Errorf("Expected first line to start with 'image.png:', got: %s", lines[0])
+		}
+		if !strings.HasPrefix(lines[1], "text.go:") {
+			t.Errorf("Expected second line to start with 'text.go:', got: %s", lines[1])
+		}
+	}
+
+	// Verify binary file shows "*" and text file shows count
+	hasBinary := false
+	hasText := false
+	for _, line := range lines {
+		if strings.Contains(line, "image.png") {
+			hasBinary = true
+			// Binary file should show "*"
+			if !strings.Contains(line, ": *") {
+				t.Errorf("Expected image.png to show '*', got: %s", line)
+			}
+		}
+		if strings.Contains(line, "text.go") {
+			hasText = true
+			// Text file should show number
+			if !strings.Contains(line, ": 1") {
+				t.Errorf("Expected text.go to show '1', got: %s", line)
+			}
+		}
+	}
+
+	if !hasBinary {
+		t.Errorf("Output does not contain image.png:\n%s", output)
+	}
+	if !hasText {
+		t.Errorf("Output does not contain text.go:\n%s", output)
 	}
 }
