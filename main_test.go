@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/syou6162/git-sequential-stage/internal/executor"
 )
 
 func TestRunGitSequentialStage_Usage(t *testing.T) {
@@ -224,6 +226,7 @@ func TestWildcardParsing(t *testing.T) {
 		})
 	}
 }
+
 // TestSubcommandRouting tests the subcommand routing functionality
 func TestSubcommandRouting(t *testing.T) {
 	tests := []struct {
@@ -275,5 +278,24 @@ func TestSubcommandRouting(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestCountHunksInRepository_NoChanges tests counting hunks when there are no changes
+func TestCountHunksInRepository_NoChanges(t *testing.T) {
+	// Mock executor that returns empty diff
+	mockExec := executor.NewMockCommandExecutor()
+	mockExec.Commands["git [diff HEAD]"] = executor.MockResponse{
+		Output: []byte(""),
+		Error:  nil,
+	}
+
+	result, err := countHunksInRepository(mockExec)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	if len(result) != 0 {
+		t.Errorf("Expected empty map for no changes, got %v", result)
 	}
 }

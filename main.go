@@ -148,6 +148,12 @@ func runStageCommand(args []string) error {
 	return runGitSequentialStage(hunks, *patchFile)
 }
 
+// countHunksInRepository counts the number of hunks per file in the repository
+func countHunksInRepository(exec executor.CommandExecutor) (map[string]int, error) {
+	// Stub implementation for GREEN phase
+	return make(map[string]int), nil
+}
+
 // runCountHunksCommand handles the 'count-hunks' subcommand
 func runCountHunksCommand(args []string) error {
 	// Stub implementation for now
