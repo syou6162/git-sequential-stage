@@ -589,3 +589,32 @@ func (s *Stager) calculatePatchIDStable(hunkPatch []byte) (string, error) {
 
 	return "", NewGitCommandError("git patch-id", fmt.Errorf("unexpected output"))
 }
+
+// CountHunksInWorkingTree counts the number of hunks per file in the working tree
+// by comparing the working tree to HEAD. Returns a map of file paths to hunk counts.
+func (s *Stager) CountHunksInWorkingTree() (map[string]int, error) {
+	// Execute git diff HEAD to get all changes
+	output, err := s.executor.Execute("git", "diff", "HEAD")
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute git diff: %w", err)
+	}
+
+	// If no changes, return empty map
+	if len(output) == 0 {
+		return make(map[string]int), nil
+	}
+
+	// Parse the diff using existing parser
+	hunks, err := ParsePatchFileWithGitDiff(string(output))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse diff: %w", err)
+	}
+
+	// Count hunks per file
+	hunkCounts := make(map[string]int)
+	for _, hunk := range hunks {
+		hunkCounts[hunk.FilePath]++
+	}
+
+	return hunkCounts, nil
+}

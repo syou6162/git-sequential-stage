@@ -149,41 +149,14 @@ func runStageCommand(args []string) error {
 	return runGitSequentialStage(hunks, *patchFile)
 }
 
-// countHunksInRepository counts the number of hunks per file in the repository
-func countHunksInRepository(exec executor.CommandExecutor) (map[string]int, error) {
-	// Execute git diff HEAD to get all changes
-	output, err := exec.Execute("git", "diff", "HEAD")
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute git diff: %w", err)
-	}
-
-	// If no changes, return empty map
-	if len(output) == 0 {
-		return make(map[string]int), nil
-	}
-
-	// Parse the diff using existing parser
-	hunks, err := stager.ParsePatchFileWithGitDiff(string(output))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse diff: %w", err)
-	}
-
-	// Count hunks per file
-	hunkCounts := make(map[string]int)
-	for _, hunk := range hunks {
-		hunkCounts[hunk.FilePath]++
-	}
-
-	return hunkCounts, nil
-}
-
 // runCountHunksCommand handles the 'count-hunks' subcommand
 func runCountHunksCommand(args []string) error {
-	// Create command executor
+	// Create command executor and stager
 	exec := executor.NewRealCommandExecutor()
+	s := stager.NewStager(exec)
 
 	// Count hunks in repository
-	hunkCounts, err := countHunksInRepository(exec)
+	hunkCounts, err := s.CountHunksInWorkingTree()
 	if err != nil {
 		return fmt.Errorf("failed to count hunks: %w", err)
 	}

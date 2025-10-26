@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/syou6162/git-sequential-stage/internal/executor"
+	"github.com/syou6162/git-sequential-stage/internal/stager"
 )
 
 func TestRunGitSequentialStage_Usage(t *testing.T) {
@@ -290,7 +291,8 @@ func TestCountHunksInRepository_NoChanges(t *testing.T) {
 		Error:  nil,
 	}
 
-	result, err := countHunksInRepository(mockExec)
+	s := stager.NewStager(mockExec)
+	result, err := s.CountHunksInWorkingTree()
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -316,7 +318,8 @@ index 1234567..abcdefg 100644
 		Error: nil,
 	}
 
-	result, err := countHunksInRepository(mockExec)
+	s := stager.NewStager(mockExec)
+	result, err := s.CountHunksInWorkingTree()
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
