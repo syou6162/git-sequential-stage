@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/syou6162/git-sequential-stage/internal/executor"
@@ -178,8 +179,27 @@ func countHunksInRepository(exec executor.CommandExecutor) (map[string]int, erro
 
 // runCountHunksCommand handles the 'count-hunks' subcommand
 func runCountHunksCommand(args []string) error {
-	// Stub implementation for now
-	// Will be implemented in later tasks
+	// Create command executor
+	exec := executor.NewRealCommandExecutor()
+
+	// Count hunks in repository
+	hunkCounts, err := countHunksInRepository(exec)
+	if err != nil {
+		return fmt.Errorf("failed to count hunks: %w", err)
+	}
+
+	// Sort filenames alphabetically
+	var filenames []string
+	for filename := range hunkCounts {
+		filenames = append(filenames, filename)
+	}
+	sort.Strings(filenames)
+
+	// Output in "filename: count" format
+	for _, filename := range filenames {
+		fmt.Printf("%s: %d\n", filename, hunkCounts[filename])
+	}
+
 	return nil
 }
 
@@ -203,47 +223,18 @@ func routeSubcommand(args []string) error {
 }
 
 func main() {
-	var (
-		hunks     hunkList
-		patchFile = flag.String("patch", "", "Path to the patch file")
-	)
-
-	flag.Var(&hunks, "hunk", "File:hunk_numbers to stage (e.g., path/to/file.py:1,3) or file:* for entire file. Can be specified multiple times")
-
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s -patch=<patch_file> -hunk=<file:numbers|*> [-hunk=<file:numbers|*>...]\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "\nStages specified hunks from a patch file sequentially.\n\n")
-		fmt.Fprintf(os.Stderr, "Options:\n")
-		flag.PrintDefaults()
-		fmt.Fprintf(os.Stderr, "\nExamples:\n")
-		fmt.Fprintf(os.Stderr, "  # Stage specific hunks\n")
-		fmt.Fprintf(os.Stderr, "  %s -patch=changes.patch -hunk=\"src/main.go:1,3\" -hunk=\"src/test.go:2\"\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "\n  # Stage entire files using wildcard\n")
-		fmt.Fprintf(os.Stderr, "  %s -patch=changes.patch -hunk=\"src/logger.go:*\" -hunk=\"src/test.go:1,2\"\n", os.Args[0])
-	}
-
-	flag.Parse()
-
-	// Validate patch file is provided
-	if *patchFile == "" {
-		fmt.Fprintf(os.Stderr, "Error: -patch flag is required\n\n")
-		flag.Usage()
+	// Check if a subcommand is provided
+	if len(os.Args) < 2 {
+		showUsage()
 		os.Exit(1)
 	}
 
-	// Validate arguments
-	if len(hunks) == 0 {
-		fmt.Fprintf(os.Stderr, "Error: at least one -hunk flag is required\n\n")
-		flag.Usage()
+	// Route to subcommand
+	if err := routeSubcommand(os.Args[1:]); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n\n", err)
+		showUsage()
 		os.Exit(1)
 	}
-
-	// Run the main logic
-	if err := runGitSequentialStage(hunks, *patchFile); err != nil {
-		handleStageError(err)
-	}
-
-	fmt.Printf("Successfully staged specified hunks\n")
 }
 
 func handleStageError(err error) {
