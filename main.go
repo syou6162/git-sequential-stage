@@ -228,6 +228,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Handle global help flag
+	if os.Args[1] == "-h" || os.Args[1] == "--help" {
+		showUsage()
+		os.Exit(0)
+	}
+
 	// Route to subcommand
 	if err := routeSubcommand(os.Args[1:]); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n\n", err)
