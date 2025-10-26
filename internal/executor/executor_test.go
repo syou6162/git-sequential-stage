@@ -485,3 +485,83 @@ func TestRealCommandExecutorStderrCapture(t *testing.T) {
 		t.Log("This may be expected behavior on some systems")
 	}
 }
+
+func TestWrapGitError(t *testing.T) {
+	tests := []struct {
+		name        string
+		err         error
+		commandDesc string
+		want        string
+	}{
+		{
+			name:        "nil error",
+			err:         nil,
+			commandDesc: "git diff",
+			want:        "",
+		},
+		{
+			name:        "not a git repository",
+			err:         &exec.ExitError{Stderr: []byte("fatal: not a git repository (or any of the parent directories): .git")},
+			commandDesc: "git diff",
+			want:        "not in a git repository. Please run this command from within a git repository",
+		},
+		{
+			name:        "Not a git repository (warning format)",
+			err:         &exec.ExitError{Stderr: []byte("warning: Not a git repository. Use --no-index to compare two paths outside a working tree")},
+			commandDesc: "git diff",
+			want:        "not in a git repository. Please run this command from within a git repository",
+		},
+		{
+			name:        "git command not found",
+			err:         &exec.ExitError{Stderr: []byte("git: command not found")},
+			commandDesc: "git diff",
+			want:        "git command not found. Please install git:\n  macOS: brew install git\n  Ubuntu/Debian: sudo apt-get install git\n  Fedora/RHEL: sudo yum install git",
+		},
+		{
+			name:        "executable file not found",
+			err:         &exec.ExitError{Stderr: []byte("exec: \"git\": executable file not found in $PATH")},
+			commandDesc: "git diff",
+			want:        "git command not found. Please install git:\n  macOS: brew install git\n  Ubuntu/Debian: sudo apt-get install git\n  Fedora/RHEL: sudo yum install git",
+		},
+		{
+			name:        "ambiguous argument HEAD",
+			err:         &exec.ExitError{Stderr: []byte("fatal: ambiguous argument 'HEAD': unknown revision or path not in the working tree.")},
+			commandDesc: "git diff",
+			want:        "no commits yet in this repository. Please make an initial commit first",
+		},
+		{
+			name:        "generic error with stderr",
+			err:         &exec.ExitError{Stderr: []byte("some other git error")},
+			commandDesc: "git apply",
+			want:        "failed to execute git apply:",
+		},
+		{
+			name:        "non-ExitError",
+			err:         errors.New("generic error"),
+			commandDesc: "git diff",
+			want:        "failed to execute git diff: generic error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := WrapGitError(tt.err, tt.commandDesc)
+
+			if tt.want == "" {
+				if got != nil {
+					t.Errorf("WrapGitError() = %v, want nil", got)
+				}
+				return
+			}
+
+			if got == nil {
+				t.Errorf("WrapGitError() = nil, want error containing %q", tt.want)
+				return
+			}
+
+			if !strings.Contains(got.Error(), tt.want) {
+				t.Errorf("WrapGitError() = %v, want error containing %q", got.Error(), tt.want)
+			}
+		})
+	}
+}

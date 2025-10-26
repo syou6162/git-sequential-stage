@@ -192,7 +192,7 @@ func runCountHunksCommand(args []string) error {
 	// Execute git diff HEAD
 	output, err := exec.Execute("git", "diff", "HEAD")
 	if err != nil {
-		return fmt.Errorf("failed to execute git diff: %w", err)
+		return executor.WrapGitError(err, "git diff")
 	}
 
 	// Count hunks in diff output
