@@ -4,7 +4,7 @@ go 1.24.2
 
 require (
 	github.com/bluekeyes/go-gitdiff v0.8.1
-	github.com/go-git/go-git/v5 v5.16.2
+	github.com/go-git/go-git/v5 v5.16.3
 )
 
 require (
