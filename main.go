@@ -107,21 +107,68 @@ func runGitSequentialStage(hunks []string, patchFile string) error {
 	return nil
 }
 
+// showUsage displays the top-level usage information
+// nolint:unused // Will be used when subcommand routing is implemented
+func showUsage() {
+	fmt.Fprintf(os.Stderr, "Usage: %s <subcommand> [options]\n\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "Subcommands:\n")
+	fmt.Fprintf(os.Stderr, "  stage         Stage specified hunks from a patch file\n")
+	fmt.Fprintf(os.Stderr, "  count-hunks   Count hunks per file in the working tree\n")
+	fmt.Fprintf(os.Stderr, "\nUse '%s <subcommand> -h' for more information about a subcommand.\n", os.Args[0])
+}
+
+// runStageCommand handles the 'stage' subcommand
+func runStageCommand(args []string) error {
+	// Create a new FlagSet for the stage subcommand
+	stageFlags := flag.NewFlagSet("stage", flag.ExitOnError)
+	var hunks hunkList
+	patchFile := stageFlags.String("patch", "", "Path to the patch file")
+	stageFlags.Var(&hunks, "hunk", "File:hunk_numbers to stage (e.g., path/to/file.py:1,3) or file:* for entire file")
+
+	stageFlags.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s stage -patch=<patch_file> -hunk=<file:numbers|*> [-hunk=<file:numbers|*>...]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "\nStages specified hunks from a patch file sequentially.\n\n")
+		fmt.Fprintf(os.Stderr, "Options:\n")
+		stageFlags.PrintDefaults()
+	}
+
+	if err := stageFlags.Parse(args); err != nil {
+		return err
+	}
+
+	// Validate required flags
+	if *patchFile == "" {
+		return fmt.Errorf("patch file required")
+	}
+	if len(hunks) == 0 {
+		return fmt.Errorf("at least one -hunk flag is required")
+	}
+
+	// Call the existing implementation
+	return runGitSequentialStage(hunks, *patchFile)
+}
+
+// runCountHunksCommand handles the 'count-hunks' subcommand
+func runCountHunksCommand(args []string) error {
+	// Stub implementation for now
+	// Will be implemented in later tasks
+	return nil
+}
+
 // routeSubcommand routes to the appropriate subcommand handler
-// Minimal implementation for GREEN phase: returns fixed errors for testing
 func routeSubcommand(args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("subcommand required")
 	}
 
 	subcommand := args[0]
+	subcommandArgs := args[1:]
+
 	switch subcommand {
 	case "stage":
-		// For now, return an error since we haven't implemented flag parsing yet
-		return fmt.Errorf("patch file required")
+		return runStageCommand(subcommandArgs)
 	case "count-hunks":
-		// Minimal implementation: return nil to pass the test
-		return nil
+		return runCountHunksCommand(subcommandArgs)
 	default:
 		return fmt.Errorf("unknown subcommand: %s", subcommand)
 	}
