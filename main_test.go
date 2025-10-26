@@ -299,3 +299,33 @@ func TestCountHunksInRepository_NoChanges(t *testing.T) {
 		t.Errorf("Expected empty map for no changes, got %v", result)
 	}
 }
+
+// TestCountHunksInRepository_SingleFileOneHunk tests counting one hunk in one file
+func TestCountHunksInRepository_SingleFileOneHunk(t *testing.T) {
+	// Mock executor that returns diff with one file and one hunk
+	mockExec := executor.NewMockCommandExecutor()
+	mockExec.Commands["git [diff HEAD]"] = executor.MockResponse{
+		Output: []byte(`diff --git a/main.go b/main.go
+index 1234567..abcdefg 100644
+--- a/main.go
++++ b/main.go
+@@ -10,1 +10,2 @@ func main() {
+ 	fmt.Println("Hello")
++	fmt.Println("World")
+`),
+		Error: nil,
+	}
+
+	result, err := countHunksInRepository(mockExec)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	expected := map[string]int{"main.go": 1}
+	if len(result) != len(expected) {
+		t.Errorf("Expected %d files, got %d", len(expected), len(result))
+	}
+	if result["main.go"] != 1 {
+		t.Errorf("Expected main.go to have 1 hunk, got %d", result["main.go"])
+	}
+}

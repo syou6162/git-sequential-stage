@@ -150,8 +150,30 @@ func runStageCommand(args []string) error {
 
 // countHunksInRepository counts the number of hunks per file in the repository
 func countHunksInRepository(exec executor.CommandExecutor) (map[string]int, error) {
-	// Stub implementation for GREEN phase
-	return make(map[string]int), nil
+	// Execute git diff HEAD to get all changes
+	output, err := exec.Execute("git", "diff", "HEAD")
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute git diff: %w", err)
+	}
+
+	// If no changes, return empty map
+	if len(output) == 0 {
+		return make(map[string]int), nil
+	}
+
+	// Parse the diff using existing parser
+	hunks, err := stager.ParsePatchFileWithGitDiff(string(output))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse diff: %w", err)
+	}
+
+	// Count hunks per file
+	hunkCounts := make(map[string]int)
+	for _, hunk := range hunks {
+		hunkCounts[hunk.FilePath]++
+	}
+
+	return hunkCounts, nil
 }
 
 // runCountHunksCommand handles the 'count-hunks' subcommand
