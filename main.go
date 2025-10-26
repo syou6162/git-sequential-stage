@@ -24,6 +24,15 @@ func (h *hunkList) Set(value string) error {
 	return nil
 }
 
+// usageShownError is an error type that indicates usage was already shown
+type usageShownError struct {
+	message string
+}
+
+func (e *usageShownError) Error() string {
+	return e.message
+}
+
 // runGitSequentialStage は git-sequential-stage の主要なロジックを実行します
 // テストから直接呼び出せるように分離されています
 func runGitSequentialStage(hunks []string, patchFile string) error {
@@ -138,10 +147,14 @@ func runStageCommand(args []string) error {
 
 	// Validate required flags
 	if *patchFile == "" {
-		return fmt.Errorf("patch file required")
+		stageFlags.Usage()
+		fmt.Fprintf(os.Stderr, "\nError: patch file required\n")
+		return &usageShownError{message: "patch file required"}
 	}
 	if len(hunks) == 0 {
-		return fmt.Errorf("at least one -hunk flag is required")
+		stageFlags.Usage()
+		fmt.Fprintf(os.Stderr, "\nError: at least one -hunk flag is required\n")
+		return &usageShownError{message: "at least one -hunk flag is required"}
 	}
 
 	// Call the existing implementation
@@ -248,8 +261,12 @@ func main() {
 
 	// Route to subcommand
 	if err := routeSubcommand(os.Args[1:]); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n\n", err)
-		showUsage()
+		// Check if usage was already shown (e.g., by a subcommand)
+		if _, ok := err.(*usageShownError); !ok {
+			// Usage not shown yet, show top-level usage
+			fmt.Fprintf(os.Stderr, "Error: %v\n\n", err)
+			showUsage()
+		}
 		os.Exit(1)
 	}
 }
