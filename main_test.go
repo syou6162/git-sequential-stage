@@ -1,9 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/syou6162/git-sequential-stage/testutils"
 )
 
 func TestRunGitSequentialStage_Usage(t *testing.T) {
@@ -281,14 +287,147 @@ func TestSubcommandRouting(t *testing.T) {
 
 // TestRunCountHunksCommand_Integration tests the count-hunks command integration
 func TestRunCountHunksCommand_Integration(t *testing.T) {
-	// This is an integration test that requires actual git repository
-	// The detailed unit tests are in internal/stager/count_hunks_test.go
+	// Setup test repository
+	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-count-hunks-*")
+	defer testRepo.Cleanup()
+	tempDir := testRepo.Path
 
-	// Just verify that the command can be called without crashing
-	// It will return an error if not in a git repo, which is expected
-	err := runCountHunksCommand([]string{})
+	// Change to temp directory
+	t.Chdir(tempDir)
 
-	// We don't assert on the error because this test might not be in a git repo
-	// The important part is that it doesn't panic
-	_ = err
+	// Create test files
+	file1 := "file1.go"
+	file1Content := `package main
+
+func function1() {
+	println("function1")
+}
+
+func function2() {
+	println("function2")
+}
+`
+	if err := os.WriteFile(file1, []byte(file1Content), 0644); err != nil {
+		t.Fatalf("Failed to write file1: %v", err)
+	}
+
+	file2 := "file2.go"
+	file2Content := `package main
+
+func function3() {
+	println("function3")
+}
+`
+	if err := os.WriteFile(file2, []byte(file2Content), 0644); err != nil {
+		t.Fatalf("Failed to write file2: %v", err)
+	}
+
+	// Initial commit
+	gitAddCmd := exec.Command("git", "add", ".")
+	if output, err := gitAddCmd.CombinedOutput(); err != nil {
+		t.Fatalf("Failed to git add: %v\nOutput: %s", err, output)
+	}
+
+	gitCommitCmd := exec.Command("git", "commit", "-m", "Initial commit")
+	if output, err := gitCommitCmd.CombinedOutput(); err != nil {
+		t.Fatalf("Failed to git commit: %v\nOutput: %s", err, output)
+	}
+
+	// Make changes to create hunks
+	file1ModifiedContent := `package main
+
+import "fmt"
+
+func function1() {
+	fmt.Println("function1 modified")
+}
+
+func function2() {
+	println("function2")
+}
+
+func function4() {
+	println("function4")
+}
+`
+	if err := os.WriteFile(file1, []byte(file1ModifiedContent), 0644); err != nil {
+		t.Fatalf("Failed to modify file1: %v", err)
+	}
+
+	file2ModifiedContent := `package main
+
+func function3() {
+	println("function3 modified")
+}
+`
+	if err := os.WriteFile(file2, []byte(file2ModifiedContent), 0644); err != nil {
+		t.Fatalf("Failed to modify file2: %v", err)
+	}
+
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("Failed to create pipe: %v", err)
+	}
+	os.Stdout = w
+
+	outCh := make(chan string, 1)
+	go func() {
+		var buf bytes.Buffer
+		if _, err := io.Copy(&buf, r); err != nil {
+			t.Errorf("Failed to copy output: %v", err)
+		}
+		outCh <- buf.String()
+	}()
+
+	// Run count-hunks command
+	runErr := runCountHunksCommand([]string{})
+
+	// Close write end and restore stdout
+	if err := w.Close(); err != nil {
+		t.Fatalf("Failed to close pipe: %v", err)
+	}
+	os.Stdout = oldStdout
+
+	// Get captured output
+	output := <-outCh
+
+	// Check for errors
+	if runErr != nil {
+		t.Fatalf("runCountHunksCommand failed: %v", runErr)
+	}
+
+	// Verify output
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	if len(lines) != 2 {
+		t.Errorf("Expected 2 lines of output, got %d:\n%s", len(lines), output)
+	}
+
+	// Check that file1.go and file2.go are in the output
+	hasFile1 := false
+	hasFile2 := false
+	for _, line := range lines {
+		if strings.Contains(line, "file1.go") {
+			hasFile1 = true
+			// file1.go should have 1 hunk (all changes are adjacent)
+			if !strings.Contains(line, ": 1") {
+				t.Errorf("Expected file1.go to have 1 hunk, got: %s", line)
+			}
+		}
+		if strings.Contains(line, "file2.go") {
+			hasFile2 = true
+			// file2.go should have 1 hunk
+			if !strings.Contains(line, ": 1") {
+				t.Errorf("Expected file2.go to have 1 hunk, got: %s", line)
+			}
+		}
+	}
+
+	if !hasFile1 {
+		t.Errorf("Output does not contain file1.go:\n%s", output)
+	}
+	if !hasFile2 {
+		t.Errorf("Output does not contain file2.go:\n%s", output)
+	}
 }
