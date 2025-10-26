@@ -38,12 +38,7 @@ func runGitSequentialStage(hunks []string, patchFile string) error {
 	// Create real command executor
 	exec := executor.NewRealCommandExecutor()
 	s := stager.NewStager(exec)
-
-	// Check dependencies
 	v := validator.NewValidator(exec)
-	if err := v.CheckDependencies(); err != nil {
-		return fmt.Errorf("dependency check failed: %v", err)
-	}
 
 	// Separate wildcard files from normal hunk specifications
 	wildcardFiles := []string{}
@@ -183,12 +178,6 @@ func runCountHunksCommand(args []string) error {
 	// Create command executor
 	exec := executor.NewRealCommandExecutor()
 
-	// Check dependencies
-	v := validator.NewValidator(exec)
-	if err := v.CheckDependencies(); err != nil {
-		return fmt.Errorf("dependency check failed: %v", err)
-	}
-
 	// Execute git diff HEAD
 	output, err := exec.Execute("git", "diff", "HEAD")
 	if err != nil {
@@ -246,6 +235,14 @@ func main() {
 	if os.Args[1] == "-h" || os.Args[1] == "--help" {
 		showUsage()
 		os.Exit(0)
+	}
+
+	// Check dependencies early (git installation and repository)
+	exec := executor.NewRealCommandExecutor()
+	v := validator.NewValidator(exec)
+	if err := v.CheckDependencies(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 
 	// Route to subcommand
