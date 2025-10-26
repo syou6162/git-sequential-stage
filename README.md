@@ -126,8 +126,11 @@ Analyzes the current repository's working directory changes and displays the num
 ```
 file1.go: 3
 file2.go: 1
+image.png: *
 src/main.go: 2
 ```
+
+**Note:** Binary files are displayed with `*` instead of a number, indicating that they must be staged using the wildcard syntax (e.g., `-hunk="image.png:*"`). Binary files don't have traditional hunks and cannot be staged with specific hunk numbers.
 
 This subcommand is particularly useful for LLM agents to:
 - Determine how to split changes semantically
