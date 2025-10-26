@@ -150,7 +150,15 @@ func runStageCommand(args []string) error {
 	}
 
 	// Call the existing implementation
-	return runGitSequentialStage(hunks, *patchFile)
+	if err := runGitSequentialStage(hunks, *patchFile); err != nil {
+		handleStageError(err)
+		// handleStageError calls os.Exit(1), so this return is never reached
+		return err
+	}
+
+	// Success: display success message
+	fmt.Printf("Successfully staged specified hunks\n")
+	return nil
 }
 
 // runCountHunksCommand handles the 'count-hunks' subcommand
