@@ -183,6 +183,12 @@ func runCountHunksCommand(args []string) error {
 	// Create command executor
 	exec := executor.NewRealCommandExecutor()
 
+	// Check dependencies
+	v := validator.NewValidator(exec)
+	if err := v.CheckDependencies(); err != nil {
+		return fmt.Errorf("dependency check failed: %v", err)
+	}
+
 	// Execute git diff HEAD
 	output, err := exec.Execute("git", "diff", "HEAD")
 	if err != nil {
