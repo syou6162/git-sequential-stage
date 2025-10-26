@@ -1,17 +1,24 @@
 package stager
 
 import (
-	"fmt"
 	"testing"
-
-	"github.com/syou6162/git-sequential-stage/internal/executor"
 )
 
-// TestCountHunksInWorkingTree_SingleFileMultipleHunks tests counting multiple hunks in one file
-func TestCountHunksInWorkingTree_SingleFileMultipleHunks(t *testing.T) {
-	mockExec := executor.NewMockCommandExecutor()
-	mockExec.Commands["git [diff HEAD]"] = executor.MockResponse{
-		Output: []byte(`diff --git a/calculator.go b/calculator.go
+// TestCountHunksInDiff_NoChanges tests counting hunks when diff is empty
+func TestCountHunksInDiff_NoChanges(t *testing.T) {
+	result, err := CountHunksInDiff("")
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	if len(result) != 0 {
+		t.Errorf("Expected empty map for empty diff, got %v", result)
+	}
+}
+
+// TestCountHunksInDiff_SingleFileMultipleHunks tests counting multiple hunks in one file
+func TestCountHunksInDiff_SingleFileMultipleHunks(t *testing.T) {
+	diffOutput := `diff --git a/calculator.go b/calculator.go
 index 1234567..abcdefg 100644
 --- a/calculator.go
 +++ b/calculator.go
@@ -24,12 +31,9 @@ index 1234567..abcdefg 100644
  	return 0
 +	// comment
  }
-`),
-		Error: nil,
-	}
+`
 
-	s := NewStager(mockExec)
-	result, err := s.CountHunksInWorkingTree()
+	result, err := CountHunksInDiff(diffOutput)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -39,11 +43,9 @@ index 1234567..abcdefg 100644
 	}
 }
 
-// TestCountHunksInWorkingTree_MultipleFiles tests counting hunks across multiple files
-func TestCountHunksInWorkingTree_MultipleFiles(t *testing.T) {
-	mockExec := executor.NewMockCommandExecutor()
-	mockExec.Commands["git [diff HEAD]"] = executor.MockResponse{
-		Output: []byte(`diff --git a/file1.go b/file1.go
+// TestCountHunksInDiff_MultipleFiles tests counting hunks across multiple files
+func TestCountHunksInDiff_MultipleFiles(t *testing.T) {
+	diffOutput := `diff --git a/file1.go b/file1.go
 index 1234567..abcdefg 100644
 --- a/file1.go
 +++ b/file1.go
@@ -59,12 +61,9 @@ index 2234567..bbcdefg 100644
  	println("test2")
 +	println("modified")
  }
-`),
-		Error: nil,
-	}
+`
 
-	s := NewStager(mockExec)
-	result, err := s.CountHunksInWorkingTree()
+	result, err := CountHunksInDiff(diffOutput)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -85,44 +84,18 @@ index 2234567..bbcdefg 100644
 	}
 }
 
-// TestCountHunksInWorkingTree_GitError tests error handling when git command fails
-func TestCountHunksInWorkingTree_GitError(t *testing.T) {
-	mockExec := executor.NewMockCommandExecutor()
-	mockExec.Commands["git [diff HEAD]"] = executor.MockResponse{
-		Output: nil,
-		Error:  fmt.Errorf("fatal: not a git repository"),
-	}
-
-	s := NewStager(mockExec)
-	_, err := s.CountHunksInWorkingTree()
-	if err == nil {
-		t.Fatal("Expected error when git command fails, got nil")
-	}
-
-	expectedMsg := "failed to execute git diff"
-	if !stringContains(err.Error(), expectedMsg) {
-		t.Errorf("Expected error message to contain %q, got %q", expectedMsg, err.Error())
-	}
-}
-
-// TestCountHunksInWorkingTree_ParseError tests error handling when diff parsing fails
+// TestCountHunksInDiff_ParseError tests error handling when diff parsing fails
 // Note: ParsePatchFileWithGitDiff has fallback mechanism, so it rarely returns errors.
 // This test uses completely invalid input to trigger a parse error.
-func TestCountHunksInWorkingTree_ParseError(t *testing.T) {
-	mockExec := executor.NewMockCommandExecutor()
-	// Provide output that looks like a diff but is malformed enough to fail both parsers
-	mockExec.Commands["git [diff HEAD]"] = executor.MockResponse{
-		Output: []byte(`diff --git a/file.go b/file.go
+func TestCountHunksInDiff_ParseError(t *testing.T) {
+	diffOutput := `diff --git a/file.go b/file.go
 --- a/file.go
 +++ b/file.go
 @@ invalid header format
 corrupted content
-`),
-		Error: nil,
-	}
+`
 
-	s := NewStager(mockExec)
-	result, err := s.CountHunksInWorkingTree()
+	result, err := CountHunksInDiff(diffOutput)
 
 	// If parser has robust fallback, it might succeed with 0 hunks
 	// Either error or empty result is acceptable

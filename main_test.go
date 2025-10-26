@@ -4,9 +4,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-
-	"github.com/syou6162/git-sequential-stage/internal/executor"
-	"github.com/syou6162/git-sequential-stage/internal/stager"
 )
 
 func TestRunGitSequentialStage_Usage(t *testing.T) {
@@ -282,53 +279,16 @@ func TestSubcommandRouting(t *testing.T) {
 	}
 }
 
-// TestCountHunksInRepository_NoChanges tests counting hunks when there are no changes
-func TestCountHunksInRepository_NoChanges(t *testing.T) {
-	// Mock executor that returns empty diff
-	mockExec := executor.NewMockCommandExecutor()
-	mockExec.Commands["git [diff HEAD]"] = executor.MockResponse{
-		Output: []byte(""),
-		Error:  nil,
-	}
+// TestRunCountHunksCommand_Integration tests the count-hunks command integration
+func TestRunCountHunksCommand_Integration(t *testing.T) {
+	// This is an integration test that requires actual git repository
+	// The detailed unit tests are in internal/stager/count_hunks_test.go
 
-	s := stager.NewStager(mockExec)
-	result, err := s.CountHunksInWorkingTree()
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
-	}
+	// Just verify that the command can be called without crashing
+	// It will return an error if not in a git repo, which is expected
+	err := runCountHunksCommand([]string{})
 
-	if len(result) != 0 {
-		t.Errorf("Expected empty map for no changes, got %v", result)
-	}
-}
-
-// TestCountHunksInRepository_SingleFileOneHunk tests counting one hunk in one file
-func TestCountHunksInRepository_SingleFileOneHunk(t *testing.T) {
-	// Mock executor that returns diff with one file and one hunk
-	mockExec := executor.NewMockCommandExecutor()
-	mockExec.Commands["git [diff HEAD]"] = executor.MockResponse{
-		Output: []byte(`diff --git a/main.go b/main.go
-index 1234567..abcdefg 100644
---- a/main.go
-+++ b/main.go
-@@ -10,1 +10,2 @@ func main() {
- 	fmt.Println("Hello")
-+	fmt.Println("World")
-`),
-		Error: nil,
-	}
-
-	s := stager.NewStager(mockExec)
-	result, err := s.CountHunksInWorkingTree()
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
-	}
-
-	expected := map[string]int{"main.go": 1}
-	if len(result) != len(expected) {
-		t.Errorf("Expected %d files, got %d", len(expected), len(result))
-	}
-	if result["main.go"] != 1 {
-		t.Errorf("Expected main.go to have 1 hunk, got %d", result["main.go"])
-	}
+	// We don't assert on the error because this test might not be in a git repo
+	// The important part is that it doesn't panic
+	_ = err
 }

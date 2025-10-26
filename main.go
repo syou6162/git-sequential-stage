@@ -172,12 +172,17 @@ func runCountHunksCommand(args []string) error {
 		return err
 	}
 
-	// Create command executor and stager
+	// Create command executor
 	exec := executor.NewRealCommandExecutor()
-	s := stager.NewStager(exec)
 
-	// Count hunks in repository
-	hunkCounts, err := s.CountHunksInWorkingTree()
+	// Execute git diff HEAD
+	output, err := exec.Execute("git", "diff", "HEAD")
+	if err != nil {
+		return fmt.Errorf("failed to execute git diff: %w", err)
+	}
+
+	// Count hunks in diff output
+	hunkCounts, err := stager.CountHunksInDiff(string(output))
 	if err != nil {
 		return fmt.Errorf("failed to count hunks: %w", err)
 	}

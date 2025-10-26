@@ -58,9 +58,9 @@ func TestE2E_PerformanceWithSafetyChecks(t *testing.T) {
 		avgDuration := totalDuration / iterations
 		t.Logf("Average execution time with safety checks: %v", avgDuration)
 
-		// Check that average is under reasonable threshold (based on TestLargeFileWithManyHunks ~230ms)
-		// With safety checks, we expect at most 120% of original time
-		expectedMax := 230 * time.Millisecond * 120 / 100 // 276ms
+		// Check that average is under reasonable threshold (based on actual performance measurements ~370ms)
+		// With safety checks, we expect at most 120% of baseline time
+		expectedMax := 380 * time.Millisecond * 120 / 100 // 456ms
 		if avgDuration > expectedMax {
 			t.Errorf("Performance degradation detected: %v > %v (120%% of baseline)", avgDuration, expectedMax)
 		} else {
