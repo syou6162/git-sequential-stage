@@ -38,8 +38,8 @@ index 1234567..abcdefg 100644
 		t.Fatalf("Expected no error, got %v", err)
 	}
 
-	if result["calculator.go"] != 2 {
-		t.Errorf("Expected calculator.go to have 2 hunks, got %d", result["calculator.go"])
+	if result["calculator.go"] != "2" {
+		t.Errorf("Expected calculator.go to have 2 hunks, got %s", result["calculator.go"])
 	}
 }
 
@@ -68,9 +68,9 @@ index 2234567..bbcdefg 100644
 		t.Fatalf("Expected no error, got %v", err)
 	}
 
-	expected := map[string]int{
-		"file1.go": 1,
-		"file2.go": 1,
+	expected := map[string]string{
+		"file1.go": "1",
+		"file2.go": "1",
 	}
 
 	if len(result) != len(expected) {
@@ -79,7 +79,7 @@ index 2234567..bbcdefg 100644
 
 	for file, expectedCount := range expected {
 		if result[file] != expectedCount {
-			t.Errorf("Expected %s to have %d hunks, got %d", file, expectedCount, result[file])
+			t.Errorf("Expected %s to have %s hunks, got %s", file, expectedCount, result[file])
 		}
 	}
 }
@@ -106,6 +106,70 @@ corrupted content
 		}
 	} else if len(result) != 0 {
 		t.Errorf("Expected empty result for malformed diff, got %v", result)
+	}
+}
+
+// TestCountHunksInDiff_BinaryFile tests that binary files are counted as "*"
+func TestCountHunksInDiff_BinaryFile(t *testing.T) {
+	diffOutput := `diff --git a/image.png b/image.png
+new file mode 100644
+index 0000000..abc123
+Binary files /dev/null and b/image.png differ
+`
+
+	result, err := CountHunksInDiff(diffOutput)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	if result["image.png"] != "*" {
+		t.Errorf("Expected image.png to have '*' (wildcard), got %s", result["image.png"])
+	}
+}
+
+// TestCountHunksInDiff_MixedBinaryAndText tests counting hunks with both binary and text files
+func TestCountHunksInDiff_MixedBinaryAndText(t *testing.T) {
+	diffOutput := `diff --git a/image.png b/image.png
+new file mode 100644
+index 0000000..abc123
+Binary files /dev/null and b/image.png differ
+diff --git a/main.go b/main.go
+index 1234567..abcdefg 100644
+--- a/main.go
++++ b/main.go
+@@ -1,3 +1,4 @@
+ package main
++import "fmt"
+
+ func main() {
+@@ -10,2 +11,3 @@ func test() {
+ 	return 0
++	// comment
+ }
+diff --git a/logo.jpg b/logo.jpg
+index def456..ghi789 100644
+Binary files a/logo.jpg and b/logo.jpg differ
+`
+
+	result, err := CountHunksInDiff(diffOutput)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	expected := map[string]string{
+		"image.png": "*",
+		"main.go":   "2",
+		"logo.jpg":  "*",
+	}
+
+	if len(result) != len(expected) {
+		t.Errorf("Expected %d files, got %d", len(expected), len(result))
+	}
+
+	for file, expectedCount := range expected {
+		if result[file] != expectedCount {
+			t.Errorf("Expected %s to have %s, got %s", file, expectedCount, result[file])
+		}
 	}
 }
 
