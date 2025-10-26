@@ -109,13 +109,12 @@ func runGitSequentialStage(hunks []string, patchFile string) error {
 }
 
 // showUsage displays the top-level usage information
-// nolint:unused // Will be used when subcommand routing is implemented
 func showUsage() {
 	fmt.Fprintf(os.Stderr, "Usage: %s <subcommand> [options]\n\n", os.Args[0])
 	fmt.Fprintf(os.Stderr, "Subcommands:\n")
 	fmt.Fprintf(os.Stderr, "  stage         Stage specified hunks from a patch file\n")
-	fmt.Fprintf(os.Stderr, "  count-hunks   Count hunks per file in the working tree\n")
-	fmt.Fprintf(os.Stderr, "\nUse '%s <subcommand> -h' for more information about a subcommand.\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "  count-hunks   Count hunks per file in the current repository\n")
+	fmt.Fprintf(os.Stderr, "\nRun '%s <subcommand> --help' for subcommand-specific options.\n", os.Args[0])
 }
 
 // runStageCommand handles the 'stage' subcommand
@@ -131,6 +130,11 @@ func runStageCommand(args []string) error {
 		fmt.Fprintf(os.Stderr, "\nStages specified hunks from a patch file sequentially.\n\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		stageFlags.PrintDefaults()
+		fmt.Fprintf(os.Stderr, "\nExamples:\n")
+		fmt.Fprintf(os.Stderr, "  # Stage specific hunks\n")
+		fmt.Fprintf(os.Stderr, "  %s stage -patch=changes.patch -hunk=\"src/main.go:1,3\" -hunk=\"src/test.go:2\"\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  # Stage entire files using wildcard\n")
+		fmt.Fprintf(os.Stderr, "  %s stage -patch=changes.patch -hunk=\"src/logger.go:*\" -hunk=\"src/test.go:1,2\"\n", os.Args[0])
 	}
 
 	if err := stageFlags.Parse(args); err != nil {
@@ -151,6 +155,23 @@ func runStageCommand(args []string) error {
 
 // runCountHunksCommand handles the 'count-hunks' subcommand
 func runCountHunksCommand(args []string) error {
+	// Create a new FlagSet for the count-hunks subcommand
+	countFlags := flag.NewFlagSet("count-hunks", flag.ExitOnError)
+
+	countFlags.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s count-hunks\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "\nCount hunks per file in the current repository.\n\n")
+		fmt.Fprintf(os.Stderr, "This command runs 'git diff HEAD' and counts the number of hunks for each modified file.\n")
+		fmt.Fprintf(os.Stderr, "Output format: <filepath>: <count>\n")
+		fmt.Fprintf(os.Stderr, "Files are sorted alphabetically.\n\n")
+		fmt.Fprintf(os.Stderr, "Examples:\n")
+		fmt.Fprintf(os.Stderr, "  %s count-hunks\n", os.Args[0])
+	}
+
+	if err := countFlags.Parse(args); err != nil {
+		return err
+	}
+
 	// Create command executor and stager
 	exec := executor.NewRealCommandExecutor()
 	s := stager.NewStager(exec)
