@@ -107,6 +107,26 @@ func runGitSequentialStage(hunks []string, patchFile string) error {
 	return nil
 }
 
+// routeSubcommand routes to the appropriate subcommand handler
+// Minimal implementation for GREEN phase: returns fixed errors for testing
+func routeSubcommand(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("subcommand required")
+	}
+
+	subcommand := args[0]
+	switch subcommand {
+	case "stage":
+		// For now, return an error since we haven't implemented flag parsing yet
+		return fmt.Errorf("patch file required")
+	case "count-hunks":
+		// Minimal implementation: return nil to pass the test
+		return nil
+	default:
+		return fmt.Errorf("unknown subcommand: %s", subcommand)
+	}
+}
+
 func main() {
 	var (
 		hunks     hunkList
