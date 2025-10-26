@@ -198,8 +198,9 @@ func runCountHunksCommand(args []string) error {
 	sort.Strings(filenames)
 
 	// Output in "filename: count" format
+	// For binary files, this will show "*" instead of a number
 	for _, filename := range filenames {
-		fmt.Printf("%s: %d\n", filename, hunkCounts[filename])
+		fmt.Printf("%s: %s\n", filename, hunkCounts[filename])
 	}
 
 	return nil
