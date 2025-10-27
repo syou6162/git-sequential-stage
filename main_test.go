@@ -224,3 +224,57 @@ func TestWildcardParsing(t *testing.T) {
 		})
 	}
 }
+
+// TestSubcommandRouting tests the subcommand routing functionality
+func TestSubcommandRouting(t *testing.T) {
+	tests := []struct {
+		name           string
+		args           []string
+		expectError    bool
+		errorContains  string
+		outputContains string
+	}{
+		{
+			name:          "no subcommand shows usage",
+			args:          []string{},
+			expectError:   true,
+			errorContains: "subcommand required",
+		},
+		{
+			name:          "unknown subcommand shows error",
+			args:          []string{"unknown"},
+			expectError:   true,
+			errorContains: "unknown subcommand",
+		},
+		{
+			name:        "stage subcommand with no args shows usage",
+			args:        []string{"stage"},
+			expectError: true,
+			// Will check for flag parsing error
+		},
+		{
+			name:        "count-hunks subcommand executes",
+			args:        []string{"count-hunks"},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Call the routing function
+			err := routeSubcommand(tt.args)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("Expected error containing %q but got none", tt.errorContains)
+				} else if tt.errorContains != "" && !strings.Contains(err.Error(), tt.errorContains) {
+					t.Errorf("Expected error containing %q, got %v", tt.errorContains, err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}

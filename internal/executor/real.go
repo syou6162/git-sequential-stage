@@ -2,6 +2,7 @@ package executor
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os/exec"
 	"strings"
@@ -66,4 +67,42 @@ func (r *RealCommandExecutor) ExecuteWithStdin(name string, stdin io.Reader, arg
 	}
 
 	return output, nil
+}
+
+// WrapGitError wraps a git command error with a user-friendly message based on stderr content
+func WrapGitError(err error, commandDesc string) error {
+	if err == nil {
+		return nil
+	}
+
+	// Check if it's an ExitError with stderr
+	exitErr, ok := err.(*exec.ExitError)
+	if !ok {
+		// Not an ExitError, return as-is with generic message
+		return fmt.Errorf("failed to execute %s: %w", commandDesc, err)
+	}
+
+	stderr := string(exitErr.Stderr)
+
+	// Check for common git errors and provide user-friendly messages
+	if strings.Contains(stderr, "fatal: not a git repository") ||
+		strings.Contains(stderr, "Not a git repository") {
+		return fmt.Errorf("not in a git repository. Please run this command from within a git repository")
+	}
+
+	if strings.Contains(stderr, "git: command not found") ||
+		strings.Contains(stderr, "executable file not found") {
+		return fmt.Errorf("git command not found. Please install git:\n  macOS: brew install git\n  Ubuntu/Debian: sudo apt-get install git\n  Fedora/RHEL: sudo yum install git")
+	}
+
+	if strings.Contains(stderr, "fatal: ambiguous argument 'HEAD'") {
+		return fmt.Errorf("no commits yet in this repository. Please make an initial commit first")
+	}
+
+	// Return original error with stderr content for other cases
+	if stderr != "" {
+		return fmt.Errorf("failed to execute %s: %w\nstderr: %s", commandDesc, err, strings.TrimSpace(stderr))
+	}
+
+	return fmt.Errorf("failed to execute %s: %w", commandDesc, err)
 }
