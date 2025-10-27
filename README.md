@@ -37,13 +37,42 @@ This tool is primarily designed for integration with LLM agents (such as Claude 
 
 When integrated with LLM agents, the typical workflow becomes:
 
-1. **Analysis**: LLM analyzes the current diff and identifies semantic units
-2. **Planning**: LLM determines optimal commit structure
-3. **Staging**: `git-sequential-stage` applies changes incrementally using patch IDs
-4. **Committing**: Each semantic unit becomes a focused, meaningful commit
-5. **Iteration**: Process repeats until all changes are committed
+1. **Hunk Discovery**: LLM runs `git-sequential-stage count-hunks` to understand the structure of changes
+2. **Analysis**: LLM analyzes the current diff and identifies semantic units based on hunk counts
+3. **Planning**: LLM determines optimal commit structure by grouping related hunks
+4. **Staging**: `git-sequential-stage stage` applies changes incrementally using patch IDs
+5. **Committing**: Each semantic unit becomes a focused, meaningful commit
+6. **Iteration**: Process repeats until all changes are committed
 
 This approach ensures that even large, complex changes result in clean, reviewable commit history.
+
+### Example LLM Agent Workflow
+
+```bash
+# 1. Agent checks what needs to be committed
+git-sequential-stage count-hunks
+# Output:
+# src/logger.go: 2
+# src/api.go: 3
+# tests/logger_test.go: 1
+
+# 2. Agent decides semantic grouping:
+#    - logger.go hunks 1,2 → logging feature
+#    - api.go hunks 1,2,3 → API improvements
+#    - logger_test.go hunk 1 → tests
+
+# 3. Agent creates commits
+git diff HEAD > changes.patch
+
+git-sequential-stage stage -patch=changes.patch -hunk="src/logger.go:1,2"
+git commit -m "feat: Add structured logging system"
+
+git-sequential-stage stage -patch=changes.patch -hunk="src/api.go:1,2,3"
+git commit -m "improve: Enhance API endpoint performance"
+
+git-sequential-stage stage -patch=changes.patch -hunk="tests/logger_test.go:1"
+git commit -m "test: Add logger unit tests"
+```
 
 ## Prerequisites
 
@@ -65,16 +94,48 @@ go build
 
 ## Usage
 
+The tool provides two subcommands:
+
 ```bash
-git-sequential-stage -patch=<patch_file> -hunk=<file:hunks|*> [-hunk=<file:hunks|*>...]
+# Show help
+git-sequential-stage -h
+git-sequential-stage --help
+
+# Stage hunks from a patch file
+git-sequential-stage stage -patch=<patch_file> -hunk=<file:hunks|*> [-hunk=<file:hunks|*>...]
+
+# Count hunks in current repository
+git-sequential-stage count-hunks
 ```
 
-### Options
+### stage subcommand
 
+Stages specified hunks from a patch file sequentially.
+
+**Options:**
 - `-patch`: Path to the patch file
 - `-hunk`: File and hunk specification in the format:
   - `file:hunk_numbers` - Stage specific hunks (e.g., `main.go:1,3`)
   - `file:*` - Stage entire file using wildcard (e.g., `logger.go:*`)
+
+### count-hunks subcommand
+
+Analyzes the current repository's working directory changes and displays the number of hunks per file. This helps determine which hunk numbers to use with the `stage` subcommand.
+
+**Output format:**
+```
+file1.go: 3
+file2.go: 1
+image.png: *
+src/main.go: 2
+```
+
+**Note:** Binary files are displayed with `*` instead of a number, indicating that they must be staged using the wildcard syntax (e.g., `-hunk="image.png:*"`). Binary files don't have traditional hunks and cannot be staged with specific hunk numbers.
+
+This subcommand is particularly useful for LLM agents to:
+- Determine how to split changes semantically
+- Plan which hunks belong to which commit
+- Avoid manual counting errors
 
 ### Wildcard Feature
 
@@ -83,46 +144,69 @@ The wildcard (`*`) feature allows you to stage entire files without specifying i
 ### Examples
 
 ```bash
-# Generate a patch file
+# Step 1: Check how many hunks each file has
+git-sequential-stage count-hunks
+# Output:
+# main.go: 3
+# logger.go: 2
+# README.md: 1
+
+# Step 2: Generate a patch file
 git diff > changes.patch
 
-# Stage hunks 1 and 3 from main.go
-git-sequential-stage -patch=changes.patch -hunk="main.go:1,3"
+# Step 3: Stage hunks 1 and 3 from main.go
+git-sequential-stage stage -patch=changes.patch -hunk="main.go:1,3"
 
 # Stage entire file using wildcard
-git-sequential-stage -patch=changes.patch -hunk="logger.go:*"
+git-sequential-stage stage -patch=changes.patch -hunk="logger.go:*"
 
 # Mix wildcards and specific hunks across different files
-git-sequential-stage -patch=changes.patch \
+git-sequential-stage stage -patch=changes.patch \
   -hunk="config.yaml:*" \
   -hunk="main.go:1,2" \
   -hunk="utils.go:*"
 
 # Stage multiple files with different hunks
-git-sequential-stage -patch=changes.patch \
+git-sequential-stage stage -patch=changes.patch \
   -hunk="main.go:1,3" \
   -hunk="internal/stager/stager.go:2,4,5" \
   -hunk="README.md:1"
 
 # Stage all changes from a specific file
 git diff main.go > main.patch
-git-sequential-stage -patch=main.patch -hunk="main.go:1,2,3"
+git-sequential-stage stage -patch=main.patch -hunk="main.go:1,2,3"
 ```
 
 ## New Features
 
+### Subcommand Structure
+
+The tool now uses a subcommand architecture for better organization:
+- **stage**: Original hunk staging functionality
+- **count-hunks**: New feature to analyze and count hunks per file
+
+This structure makes it easier for LLM agents to discover and use different features programmatically.
+
+### count-hunks Subcommand
+
+A new subcommand that analyzes working directory changes and reports hunk counts per file. This eliminates the need for manual hunk counting and enables LLM agents to:
+- Automatically determine the scope of changes
+- Plan semantic commit boundaries
+- Avoid off-by-one errors in hunk numbering
+
 ### Enhanced Patch Parsing with go-gitdiff
 
-The tool now uses the `go-gitdiff` library for more robust patch parsing, providing:
+The tool uses the `go-gitdiff` library for robust patch parsing, providing:
 - Better handling of special file operations (renames, deletions, binary files)
 - Fallback to legacy parser for maximum compatibility
 - Improved error messages with custom error types
 
 ### Improved Architecture
 
+- **Pure Function Design**: Core logic separated from I/O operations for better testability
 - **Refactored StageHunks**: Split into smaller, focused functions for better maintainability
 - **Custom Error Types**: Structured error handling with context information
-- **Better Test Coverage**: Enhanced test suite covering edge cases
+- **Better Test Coverage**: Enhanced test suite covering edge cases and integration scenarios
 
 ## Safety Features
 
@@ -246,10 +330,13 @@ This will display the exact patch content that failed to apply, which can help d
 
 ```
 git-sequential-stage/
-├── main.go                 # CLI entry point
+├── main.go                 # CLI entry point with subcommand routing
 ├── internal/
 │   ├── executor/          # Command execution abstraction
 │   ├── stager/            # Core staging logic
+│   │   ├── stager.go      # Hunk staging implementation
+│   │   ├── count_hunks.go # Hunk counting (pure function)
+│   │   └── ...
 │   └── validator/         # Dependency and argument validation
 ```
 
