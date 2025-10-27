@@ -160,8 +160,7 @@ func runStageCommand(args []string) error {
 	// Call the existing implementation
 	if err := runGitSequentialStage(hunks, *patchFile); err != nil {
 		handleStageError(err)
-		// handleStageError calls os.Exit(1), so this return is never reached
-		return err
+		// handleStageError calls os.Exit(1) and never returns
 	}
 
 	// Success: display success message

@@ -1,6 +1,7 @@
 package stager
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -101,7 +102,7 @@ corrupted content
 	// Either error or empty result is acceptable
 	if err != nil {
 		expectedMsg := "failed to parse diff"
-		if !stringContains(err.Error(), expectedMsg) {
+		if !strings.Contains(err.Error(), expectedMsg) {
 			t.Errorf("Expected error message to contain %q, got %q", expectedMsg, err.Error())
 		}
 	} else if len(result) != 0 {
@@ -171,14 +172,4 @@ Binary files a/logo.jpg and b/logo.jpg differ
 			t.Errorf("Expected %s to have %s, got %s", file, expectedCount, result[file])
 		}
 	}
-}
-
-// Helper function to check if a string contains a substring
-func stringContains(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
