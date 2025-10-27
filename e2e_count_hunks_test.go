@@ -12,6 +12,9 @@ import (
 	"github.com/syou6162/git-sequential-stage/testutils"
 )
 
+// formatRegex is used to validate output format: "filename: count"
+var formatRegex = regexp.MustCompile(`^[^:]+: (\d+|\*)$`)
+
 // TestE2E_CountHunks_NoChanges tests count-hunks with no working tree changes
 func TestE2E_CountHunks_NoChanges(t *testing.T) {
 	testRepo := testutils.NewTestRepo(t, "count-hunks-nochanges-*")
@@ -127,7 +130,6 @@ func test() {
 	}
 
 	// Verify format: "filename: count"
-	formatRegex := regexp.MustCompile(`^[^:]+: (\d+|\*)$`)
 	for i, line := range lines {
 		if !formatRegex.MatchString(line) {
 			t.Errorf("Line %d does not match expected format 'filename: count', got: %s", i+1, line)
