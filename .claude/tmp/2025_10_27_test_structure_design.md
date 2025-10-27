@@ -1,5 +1,16 @@
 # テスト構造設計と移行計画
 
+**バージョン**: 第3版（分割版）
+**最終更新**: 2025-10-27
+
+## 改訂履歴
+
+- **第3版（分割版）**: PR8を3つ、PR9を4つに分割してレビュー可能性を向上（16 PRs、約7.7時間）
+- **第2版**: 3エージェントレビュー結果を統合、Phase 0追加、時間見積もり現実化（11 PRs、約6時間）
+- **第1版**: 初版（7 PRs、31分 - Claude実行のみ）
+
+---
+
 ## 現状分析
 
 ### E2Eテスト（9ファイル、26テスト）
@@ -390,7 +401,7 @@ internal/
 
 ---
 
-### Phase 2: E2Eテストの整理（6 PRs、約244分）
+### Phase 2: E2Eテストの整理（11 PRs、約334分）
 
 #### PR5: count-hunks E2Eの削減
 
@@ -423,17 +434,22 @@ e2e_count_hunks_test.go:
 ```
 移動:
 - internal/stager/semantic_commit_test.go (7 tests, 685行)
-  → ルートディレクトリの e2e_workflows_test.go に統合
+  → ルートディレクトリに移動（ファイル名そのまま）
 
 理由:
 - semantic_commit_test.goは実際にはワークフローテスト
 - internal/stager/に配置されているのは不適切
 - E2Eワークフローテストとして再配置
+- PR11でe2e_workflows_test.goに統合される
+
+注意: PR11との関係
+- このPRではルートディレクトリに移動するだけ
+- PR11で他のE2Eファイルと一緒にe2e_workflows_test.goに統合
 ```
 
 **影響範囲**: internal/stager/とルートディレクトリ
 
-**所要時間**: 12分（Claude） + 20分（レビュー） + 10分（修正） = 42分
+**所要時間**: 5分（Claude） + 10分（レビュー） + 5分（修正） = 20分
 
 **レビューポイント**:
 - [ ] 7個のテストが全て移動されているか
@@ -479,19 +495,16 @@ Phase 7c: E2Eテストの削除（Claude Code実行）
 
 ---
 
-#### PR8: E2E basic + files 統合
+#### PR8: E2E basic テストの移行（Phase 1/3）
 
 **作業内容**:
 ```
-統合:
+移行:
 - e2e_basic_test.go (6 tests, 749行)
-- e2e_advanced_files_test.go (5 tests, 641行)
-  → e2e_stage_test.go (8テスト)
+  → e2e_stage_test.go に移行（新規作成）
 
 削除:
 - TestBasicSetup (セットアップのみ、他で検証済み)
-- TestBinaryFileHandling (ユニットテストで十分)
-- TestMultipleFilesMoveAndModify_Skip (Skip状態)
 
 維持:
 - TestSingleFileSingleHunk → TestStage_SingleHunk
@@ -499,63 +512,203 @@ Phase 7c: E2Eテストの削除（Claude Code実行）
 - TestMultipleFilesMultipleHunks → TestStage_MultipleFiles
 - TestWildcardStaging → TestStage_Wildcard
 - TestWildcardWithMixedInput → TestStage_WildcardMixed
+```
+
+**理由**:
+- PR8を3つに分割して、レビュー可能なサイズに
+- まずbasicテストを新規ファイルに移行
+
+**影響範囲**: e2e_basic_test.go と e2e_stage_test.go（新規）
+
+**所要時間**: 8分（Claude） + 15分（レビュー） + 7分（修正） = 30分
+
+**レビューポイント**:
+- [ ] 5個のテストが正しく移行されているか
+- [ ] テスト名が命名規則に従っているか
+- [ ] e2e_basic_test.goは削除されているか
+
+---
+
+#### PR9: E2E file operation テストの移行（Phase 2/3）
+
+**作業内容**:
+```
+移行:
+- e2e_advanced_files_test.go (5 tests, 641行)
+  → e2e_stage_test.go に追加
+
+削除:
+- TestBinaryFileHandling (ユニットテストで十分)
+- TestMultipleFilesMoveAndModify_Skip (Skip状態)
+
+維持:
 - TestFileModificationAndMove → TestStage_FileModify
 - TestGitMvThenModifyFile → TestStage_GitMvModify
 - TestGitMvThenModifyFileWithoutCommit → TestStage_GitMvUncommitted
 ```
 
 **理由**:
-- 機能（stage / count-hunks / workflows）で分類
-- advanced/basic の区別は不要
-- stageサブコマンドの統合テストとして一元化
+- ファイル操作系テストをe2e_stage_test.goに統合
+- バイナリとスキップテストは削除
 
-**影響範囲**: E2Eファイルの再構成（2ファイル → 1ファイル）
+**影響範囲**: e2e_advanced_files_test.go と e2e_stage_test.go
 
-**所要時間**: 15分（Claude） + 25分（レビュー） + 10分（修正） = 50分
+**所要時間**: 8分（Claude） + 15分（レビュー） + 7分（修正） = 30分
 
 **レビューポイント**:
-- [ ] 重要なテストケースが失われていないか
-- [ ] テスト名が一貫性のある命名規則に従っているか
-- [ ] 統合後のファイルが適切なサイズか
+- [ ] 3個のテストが正しく追加されているか
+- [ ] 削除すべきテストが削除されているか
+- [ ] e2e_advanced_files_test.goは削除されているか
 
 ---
 
-#### PR9: E2E workflows 統合
+#### PR10: E2E stage テストの最終調整（Phase 3/3）
+
+**作業内容**:
+```
+最終調整:
+- e2e_stage_test.go の整理
+  - ヘルパー関数の統合
+  - 重複コードの削除
+  - テストの実行順序最適化
+  - コメントとドキュメント追加
+
+最終構成: 8テスト、約1,000行
+```
+
+**理由**:
+- PR8とPR9で統合したテストの最終調整
+- コードの整理とドキュメント化
+
+**影響範囲**: e2e_stage_test.go のみ
+
+**所要時間**: 10分（Claude） + 20分（レビュー） + 10分（修正） = 40分
+
+**レビューポイント**:
+- [ ] ヘルパー関数が適切に統合されているか
+- [ ] 全テストが正常に実行されるか
+- [ ] ドキュメントが適切か
+
+---
+
+#### PR11: semantic_commit_test.go の統合準備（Phase 1/4）
+
+**作業内容**:
+```
+統合:
+- semantic_commit_test.go (7 tests, 685行) - PR6で移動済み
+  → e2e_workflows_test.go に移行（新規作成）
+
+維持:
+- 7つのテスト全てそのまま（既に適切な名前）
+```
+
+**理由**:
+- PR6でルートに移動したsemantic_commit_test.goを統合開始
+- まずこのファイルを新規e2e_workflows_test.goに移行
+
+**影響範囲**: semantic_commit_test.go と e2e_workflows_test.go（新規）
+
+**所要時間**: 8分（Claude） + 15分（レビュー） + 7分（修正） = 30分
+
+**レビューポイント**:
+- [ ] 7個のテストが全て移行されているか
+- [ ] テストヘルパー関数も移行されているか
+- [ ] semantic_commit_test.goは削除されているか
+
+---
+
+#### PR12: E2E semantic テストの統合（Phase 2/4）
 
 **作業内容**:
 ```
 統合:
 - e2e_semantic_test.go (1 test, 287行)
-- e2e_advanced_edge_cases_test.go (2 tests, 251行)
-- e2e_integration_test.go (1 test, 390行)
-- semantic_commit_test.go からの移動分 (7 tests, 685行)
-  → e2e_workflows_test.go (11テスト)
+  → e2e_workflows_test.go に追加
 
 維持:
 - TestMixedSemanticChanges → TestWorkflow_SemanticCommit
-- TestIntentToAddFileCoexistence → TestWorkflow_IntentToAdd
-- TestUntrackedFile → TestWorkflow_UntrackedFile
-- TestE2E_FinalIntegration → そのまま
-- semantic_commit_test.goの7テスト → そのまま（既に適切な名前）
 ```
 
 **理由**:
-- ワークフロー系のテストを一元化
-- セマンティックコミット分割などの実使用シナリオをまとめる
-- 統合テストとワークフローテストを明確に区別
+- セマンティックコミット関連のテストを統合
+- ワークフローとしての一貫性を持たせる
 
-**影響範囲**: E2Eファイルの大規模再構成（4ファイル → 1ファイル）
+**影響範囲**: e2e_semantic_test.go と e2e_workflows_test.go
 
-**所要時間**: 12分（Claude） + 20分（レビュー） + 10分（修正） = 42分
+**所要時間**: 5分（Claude） + 10分（レビュー） + 5分（修正） = 20分
+
+**レビューポイント**:
+- [ ] テストが正しく統合されているか
+- [ ] テスト名が適切か
+- [ ] e2e_semantic_test.goは削除されているか
+
+---
+
+#### PR13: E2E edge cases テストの統合（Phase 3/4）
+
+**作業内容**:
+```
+統合:
+- e2e_advanced_edge_cases_test.go (2 tests, 251行)
+  → e2e_workflows_test.go に追加
+
+維持:
+- TestIntentToAddFileCoexistence → TestWorkflow_IntentToAdd
+- TestUntrackedFile → TestWorkflow_UntrackedFile
+```
+
+**理由**:
+- エッジケース系のワークフローテストを統合
+- 実使用シナリオとして整理
+
+**影響範囲**: e2e_advanced_edge_cases_test.go と e2e_workflows_test.go
+
+**所要時間**: 5分（Claude） + 10分（レビュー） + 5分（修正） = 20分
+
+**レビューポイント**:
+- [ ] 2個のテストが正しく統合されているか
+- [ ] テスト名が命名規則に従っているか
+- [ ] e2e_advanced_edge_cases_test.goは削除されているか
+
+---
+
+#### PR14: E2E integration テストの統合（Phase 4/4）
+
+**作業内容**:
+```
+統合:
+- e2e_integration_test.go (1 test, 390行)
+  → e2e_workflows_test.go に追加
+
+最終調整:
+- ヘルパー関数の統合と重複削除
+- テストの実行順序最適化
+- ドキュメント追加
+
+最終構成: 11テスト、約930行
+
+維持:
+- TestE2E_FinalIntegration → そのまま
+```
+
+**理由**:
+- 最終統合テストを追加して完成
+- ワークフローテスト全体の最終調整
+
+**影響範囲**: e2e_integration_test.go と e2e_workflows_test.go
+
+**所要時間**: 10分（Claude） + 20分（レビュー） + 10分（修正） = 40分
 
 **レビューポイント**:
 - [ ] 全11テストが正しく統合されているか
 - [ ] ワークフローテストとしての一貫性があるか
 - [ ] テストヘルパー関数が適切に整理されているか
+- [ ] e2e_integration_test.goは削除されているか
 
 ---
 
-#### PR10: E2E performance 統合
+#### PR15: E2E performance 統合
 
 **作業内容**:
 ```
@@ -589,7 +742,7 @@ Phase 7c: E2Eテストの削除（Claude Code実行）
 
 ### Phase 3: ドキュメント化（1 PR、約15分）
 
-#### PR11: CLAUDE.md にルール追記
+#### PR16: CLAUDE.md にルール追記
 
 **作業内容**:
 ```markdown
@@ -682,25 +835,36 @@ E2Eテスト: 4ファイル（-5ファイル）
 | 1 | PR3 | 特殊ファイル統合 | 2ファイル | 8分 | 15分 | 7分 | 30分 |
 | 1 | PR4 | エラーファイルリネーム | 1ファイル | 3分 | 8分 | 4分 | 15分 |
 | 2 | PR5 | count-hunks削減 | 1ファイル | 5分 | 10分 | 5分 | 20分 |
-| 2 | PR6 | semantic移動 | 2ファイル | 12分 | 20分 | 10分 | 42分 |
+| 2 | PR6 | semantic移動 | 2ファイル | 5分 | 10分 | 5分 | 20分 |
 | 2 | PR7 | E2Eエラーユニット化 | 複数ファイル | - | 30分 | 30分 | 60分 |
-| 2 | PR8 | E2E basic+files | 3ファイル | 15分 | 25分 | 10分 | 50分 |
-| 2 | PR9 | E2E workflows | 5ファイル | 12分 | 20分 | 10分 | 42分 |
-| 2 | PR10 | E2E performance | 3ファイル | 8分 | 15分 | 7分 | 30分 |
-| 3 | PR11 | ドキュメント化 | 1ファイル | 5分 | 8分 | 2分 | 15分 |
+| 2 | PR8 | E2E basic移行 (1/3) | 2ファイル | 8分 | 15分 | 7分 | 30分 |
+| 2 | PR9 | E2E files移行 (2/3) | 2ファイル | 8分 | 15分 | 7分 | 30分 |
+| 2 | PR10 | E2E stage調整 (3/3) | 1ファイル | 10分 | 20分 | 10分 | 40分 |
+| 2 | PR11 | semantic統合 (1/4) | 2ファイル | 8分 | 15分 | 7分 | 30分 |
+| 2 | PR12 | semantic統合 (2/4) | 2ファイル | 5分 | 10分 | 5分 | 20分 |
+| 2 | PR13 | edge cases統合 (3/4) | 2ファイル | 5分 | 10分 | 5分 | 20分 |
+| 2 | PR14 | integration統合 (4/4) | 2ファイル | 10分 | 20分 | 10分 | 40分 |
+| 2 | PR15 | E2E performance | 3ファイル | 8分 | 15分 | 7分 | 30分 |
+| 3 | PR16 | ドキュメント化 | 1ファイル | 5分 | 8分 | 2分 | 15分 |
 
 **合計**:
 - **Phase 0**: 15-30分（環境整備）
-- **11 PRs**: 約364分（約6時間）
-  - Claude実行: 約83分
-  - レビュー: 約181分
-  - 修正対応: 約100分
-- **総計**: 約6-6.5時間
+- **16 PRs**: 約460分（約7.7時間）
+  - Claude実行: 約108分
+  - レビュー: 約231分
+  - 修正対応: 約121分
+- **総計**: 約7.9-8.2時間
 
-**旧計画との比較**:
+**旧計画（第1回レビュー前）との比較**:
 - 旧: 7 PRs、31分（Claude実行のみ）
-- 新: 11 PRs、約83分（Claude実行）+ 約181分（レビュー）+ 約100分（修正）
-- **実際の所要時間がClaude実行だけでも約2.7倍、総計で約12倍に**
+- 第1回改訂: 11 PRs、約364分（約6時間）
+- **今回（分割版）: 16 PRs、約460分（約7.7時間）**
+
+**第1回改訂版からの変更**:
+- PR8を3つに分割（50分 → 100分）
+- PR9を4つに分割（42分 → 110分）
+- PR6の時間短縮（42分 → 20分）
+- 合計: 364分 → 460分（+96分、約1.6時間増）
 
 ### 想定作業フロー
 
@@ -708,10 +872,12 @@ E2Eテスト: 4ファイル（-5ファイル）
 2. **プロンプト準備**: この計画書を参照
 3. **Claude Codeに指示**: 例「PR1の作業を実行して」
 4. **Claude Code実行**: ファイル移動・統合・テスト実行
-5. **人間レビュー**: diffを確認
+5. **人間レビュー**: diffを確認（15-30分/PR）
 6. **修正対応**: 必要に応じてClaude Codeに修正指示
 7. **コミット・プッシュ**: PRを作成
 8. **次のPRへ**: 順番通りに実施
+
+**重要**: PR8-10とPR11-14は段階的な統合プロセスのため、順序を守ること
 
 ### 効果
 
@@ -733,7 +899,13 @@ E2Eテスト: 4ファイル（-5ファイル）
 1. **Phase 0は必須**: テストが全てパスしてから移行開始
 2. **PR7は人間の判断が必要**: カバレッジ確認を人間が実施
 3. **PRの順序厳守**: 依存関係があるため順番通り実施
+   - **PR8-10は連続**: E2E stageテストの3段階統合
+   - **PR11-14は連続**: E2E workflowsテストの4段階統合
 4. **各PR後に全テスト実行**: リグレッション防止
 5. **カバレッジ測定**: Phase 0と全PR完了後に測定し、低下していないこと確認
-6. **段階的な統合**: 大規模な変更は複数PRに分割済み（特にPhase 2）
+6. **段階的な統合のメリット**:
+   - 各PRが20-40分でレビュー可能
+   - 問題発生時の切り戻しが容易
+   - 進捗が明確に可視化される
 7. **テスト名の一貫性**: リネーム時は命名規則に従う（Test[対象]_[シナリオ]）
+8. **PR6とPR11の関係**: PR6でsemantic_commit_test.goを移動、PR11で統合開始
