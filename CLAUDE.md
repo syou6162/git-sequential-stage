@@ -252,7 +252,8 @@ git commit -m "test: Add logger tests"
 **重要**: このプロジェクトのE2Eテストは機能別に最適化された構造で分割されています。Claude Codeは以下の指針に従ってください：
 
 ### テストファイル構造
-- **`e2e_basic_test.go`**: 基本機能テスト（TestBasicSetup, TestSingleFileSingleHunk等）
+- **`e2e_basic_test.go`**: 基本機能テスト（TestBasicSetup, TestSingleFileSingleHunk等）- stageサブコマンド
+- **`e2e_count_hunks_test.go`**: count-hunksサブコマンドのテスト
 - **`e2e_semantic_test.go`**: セマンティックコミット分割テスト（TestMixedSemanticChanges - 最重要）
 - **`e2e_error_test.go`**: 全エラーハンドリングテスト
 - **`e2e_advanced_files_test.go`**: ファイル操作系テスト
@@ -260,7 +261,7 @@ git commit -m "test: Add logger tests"
 - **`e2e_advanced_edge_cases_test.go`**: エッジケーステスト
 
 ### Claude Code制約事項
-1. **テストファイルの新規作成禁止**: 既存の6つのE2Eテストファイル以外は作成しない
+1. **テストファイルの新規作成禁止**: 既存の7つのE2Eテストファイル以外は作成しない
 2. **テストファイルの自動分割禁止**: ファイルサイズや行数を理由に勝手に分割しない
 3. **テスト内容の変更禁止**: 既存テストの動作を変更・削除・追加しない
 4. **構造の維持**: フラットなファイル構造を維持し、ディレクトリ分割をしない
