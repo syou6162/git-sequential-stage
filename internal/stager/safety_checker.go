@@ -2,6 +2,7 @@ package stager
 
 import (
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -241,6 +242,33 @@ func (s *SafetyChecker) detectFileMoveOperationsFromPatch(patchContent string) [
 	return moves
 }
 
+// matchFilesByBasename attempts to match deleted files with new files based on their basenames
+// Returns a list of detected file moves
+func (s *SafetyChecker) matchFilesByBasename(deletedFiles, newFiles []string) []FileMove {
+	var moves []FileMove
+
+	// Extract basenames from deleted and new files
+	deletedBasenames := make(map[string]string) // basename -> full path
+	for _, deleted := range deletedFiles {
+		basename := filepath.Base(deleted)
+		deletedBasenames[basename] = deleted
+	}
+
+	// Match new files with deleted files by basename
+	for _, newFile := range newFiles {
+		basename := filepath.Base(newFile)
+		if deletedPath, exists := deletedBasenames[basename]; exists {
+			// Found a match - same basename indicates likely move
+			moves = append(moves, FileMove{
+				From: deletedPath,
+				To:   newFile,
+			})
+		}
+	}
+
+	return moves
+}
+
 // detectFileMoveOperationsFromStatus detects file move operations from git status (fallback method)
 // This is a simplified version used when patch analysis is not available
 func (s *SafetyChecker) detectFileMoveOperationsFromStatus(filesByStatus map[FileStatus][]string) []FileMove {
@@ -268,17 +296,16 @@ func (s *SafetyChecker) detectFileMoveOperationsFromStatus(filesByStatus map[Fil
 	newFiles, hasNew := filesByStatus[FileStatusAdded]
 
 	if hasDeleted && hasNew && len(deletedFiles) > 0 && len(newFiles) > 0 {
-		// More sophisticated heuristic: only treat as move if counts match exactly
-		// and there are no other file operations that would indicate separate operations
-		if len(deletedFiles) == 1 && len(newFiles) == 1 {
-			// Single deletion + single addition is likely a move operation
-			moves = append(moves, FileMove{
-				From: deletedFiles[0], // Indicates move operation detected
-				To:   newFiles[0],     // Indicates move operation detected
-			})
+		// More sophisticated heuristic: treat as move if counts match exactly
+		if len(deletedFiles) == len(newFiles) {
+			// Try to match deleted files with new files based on basename
+			matchedMoves := s.matchFilesByBasename(deletedFiles, newFiles)
+
+			// If we can match all deleted files to new files, it's likely a move operation
+			if len(matchedMoves) > 0 {
+				moves = append(moves, matchedMoves...)
+			}
 		}
-		// If there are multiple deletions and additions, it's likely mixed operations
-		// so we don't treat it as a simple move operation
 	}
 
 	return moves

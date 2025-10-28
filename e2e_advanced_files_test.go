@@ -639,3 +639,122 @@ func TestMultipleFilesMoveAndModify_Skip(t *testing.T) {
 
 	t.Log("Successfully staged selective hunks from multiple moved files")
 }
+
+// TestMultipleFilesGitMvWithStagedRename tests the safety checker's handling of multiple git mv operations
+// This reproduces the issue where multiple files are moved (showing as DELETED + NEW in staging area)
+// and the safety checker should allow continuing with the target files
+func TestMultipleFilesGitMvWithStagedRename(t *testing.T) {
+	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-multi-mv-*")
+	defer testRepo.Cleanup()
+
+	// Change to temp directory
+	t.Chdir(testRepo.Path)
+
+	// Create directory structure
+	if err := os.MkdirAll("skills", 0755); err != nil {
+		t.Fatalf("Failed to create skills directory: %v", err)
+	}
+
+	// Create initial files
+	file1 := "skills/spec.md"
+	file2 := "skills/guide.md"
+	file3 := "skills/main.md"
+
+	content1 := "# Specification\nOriginal content for spec\n"
+	content2 := "# Style Guide\nOriginal content for guide\n"
+	content3 := "# Main Document\nSection 1\nSection 2\n"
+
+	if err := os.WriteFile(file1, []byte(content1), 0644); err != nil {
+		t.Fatalf("Failed to create file1: %v", err)
+	}
+	if err := os.WriteFile(file2, []byte(content2), 0644); err != nil {
+		t.Fatalf("Failed to create file2: %v", err)
+	}
+	if err := os.WriteFile(file3, []byte(content3), 0644); err != nil {
+		t.Fatalf("Failed to create file3: %v", err)
+	}
+
+	// Disable commit signing for tests
+	if err := exec.Command("git", "config", "commit.gpgsign", "false").Run(); err != nil {
+		t.Fatalf("Failed to disable gpg signing: %v", err)
+	}
+
+	// Initial commit
+	addCmd := exec.Command("git", "add", ".")
+	if output, err := addCmd.CombinedOutput(); err != nil {
+		t.Fatalf("Failed to git add: %v\nOutput: %s", err, output)
+	}
+	commitCmd := exec.Command("git", "commit", "-m", "Initial files")
+	if output, err := commitCmd.CombinedOutput(); err != nil {
+		t.Fatalf("Failed to commit: %v\nOutput: %s", err, output)
+	}
+
+	// Create references subdirectory
+	if err := os.MkdirAll("skills/references", 0755); err != nil {
+		t.Fatalf("Failed to create references directory: %v", err)
+	}
+
+	// Move files using git mv (simulating user's scenario)
+	newFile1 := "skills/references/spec.md"
+	newFile2 := "skills/references/guide.md"
+
+	if err := exec.Command("git", "mv", file1, newFile1).Run(); err != nil {
+		t.Fatalf("Failed to git mv file1: %v", err)
+	}
+	if err := exec.Command("git", "mv", file2, newFile2).Run(); err != nil {
+		t.Fatalf("Failed to git mv file2: %v", err)
+	}
+
+	// Modify main.md as well
+	modifiedContent3 := "# Main Document\nSection 1 - updated\nSection 2 - updated\nSection 3 - new\n"
+	if err := os.WriteFile(file3, []byte(modifiedContent3), 0644); err != nil {
+		t.Fatalf("Failed to modify file3: %v", err)
+	}
+
+	// Check git status to see how files are represented
+	statusOutput, _ := exec.Command("git", "status", "--porcelain").Output()
+	t.Logf("Git status after moves:\n%s", string(statusOutput))
+
+	// Generate patch with git diff HEAD
+	patchFile := "changes.patch"
+	patchCmd := exec.Command("git", "diff", "HEAD")
+	patchContent, err := patchCmd.Output()
+	if err != nil {
+		t.Fatalf("Failed to generate patch: %v", err)
+	}
+
+	t.Logf("Patch content length: %d bytes", len(patchContent))
+	if err := os.WriteFile(patchFile, patchContent, 0644); err != nil {
+		t.Fatalf("Failed to write patch: %v", err)
+	}
+
+	// Now try to stage hunks from the moved files and modified file
+	// This should succeed because the safety checker should detect file moves
+	absPatchPath, err := filepath.Abs(patchFile)
+	if err != nil {
+		t.Fatalf("Failed to get absolute path: %v", err)
+	}
+
+	// Try to stage the entire moved files (using wildcard) and modified file hunks
+	err = runGitSequentialStage([]string{
+		newFile1 + ":*",  // Moved file 1
+		newFile2 + ":*",  // Moved file 2
+		file3 + ":1",     // Modified file hunk 1
+	}, absPatchPath)
+
+	if err != nil {
+		t.Fatalf("Failed to stage hunks with file moves in staging area: %v", err)
+	}
+
+	// Verify that content was staged
+	stagedDiff, err := exec.Command("git", "diff", "--cached").Output()
+	if err != nil {
+		t.Fatalf("Failed to get staged diff: %v", err)
+	}
+
+	if len(stagedDiff) == 0 {
+		t.Error("Expected staged content but got empty diff")
+	}
+
+	t.Log("Successfully staged hunks with multiple file moves in staging area")
+}
