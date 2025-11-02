@@ -133,11 +133,7 @@ if __name__ == "__main__":
 		"-    print(f\"Result: {result}\")",
 	}
 
-	for _, expected := range expectedChanges {
-		if !strings.Contains(stagedDiff, expected) {
-			t.Errorf("Expected staged diff to contain '%s', but it didn't.\nActual diff:\n%s", expected, stagedDiff)
-		}
-	}
+	testutils.AssertDiffContains(t, stagedDiff, expectedChanges...)
 
 	if strings.TrimSpace(workingDiff) != "" {
 		t.Errorf("Expected no changes in working directory, but got:\n%s", workingDiff)
@@ -280,24 +276,12 @@ if __name__ == "__main__":
 		"+        raise ValueError(\"Cannot divide by zero\")",
 	}
 
-	for _, expected := range expectedChangesHunk2 {
-		if !strings.Contains(stagedDiff, expected) {
-			t.Errorf("Expected staged diff to contain hunk 2 change '%s', but it didn't.\nActual diff:\n%s", expected, stagedDiff)
-		}
-	}
+	testutils.AssertDiffContains(t, stagedDiff, expectedChangesHunk2...)
 
-	for _, unexpected := range unexpectedChangesHunk1 {
-		if strings.Contains(stagedDiff, unexpected) {
-			t.Errorf("Staged diff should not contain hunk 1 change '%s', but it did.\nActual diff:\n%s", unexpected, stagedDiff)
-		}
-	}
+	testutils.AssertDiffNotContains(t, stagedDiff, unexpectedChangesHunk1...)
 
 	// ハンク1の変更がワーキングディレクトリに残っていることを確認
-	for _, expected := range unexpectedChangesHunk1 {
-		if !strings.Contains(workingDiff, expected) {
-			t.Errorf("Expected working diff to contain remaining hunk 1 change '%s', but it didn't.\nActual working diff:\n%s", expected, workingDiff)
-		}
-	}
+	testutils.AssertDiffContains(t, workingDiff, unexpectedChangesHunk1...)
 }
 
 // TestMultipleFilesMultipleHunks は複数ファイル複数ハンクのケースをテストします
@@ -489,29 +473,10 @@ class DataValidator:
 	// validator.pyは全ハンクをステージングするため、除外される変更はなし
 	unexpectedValidatorChanges := []string{}
 
-	for _, expected := range expectedUserManagerChanges {
-		if !strings.Contains(stagedDiff, expected) {
-			t.Errorf("Expected staged diff to contain user_manager.py change '%s', but it didn't.\nActual diff:\n%s", expected, stagedDiff)
-		}
-	}
-
-	for _, expected := range expectedValidatorChanges {
-		if !strings.Contains(stagedDiff, expected) {
-			t.Errorf("Expected staged diff to contain validator.py change '%s', but it didn't.\nActual diff:\n%s", expected, stagedDiff)
-		}
-	}
-
-	for _, unexpected := range unexpectedUserManagerChanges {
-		if strings.Contains(stagedDiff, unexpected) {
-			t.Errorf("Staged diff should not contain user_manager.py change '%s', but it did.\nActual diff:\n%s", unexpected, stagedDiff)
-		}
-	}
-
-	for _, unexpected := range unexpectedValidatorChanges {
-		if strings.Contains(stagedDiff, unexpected) {
-			t.Errorf("Staged diff should not contain validator.py change '%s', but it did.\nActual diff:\n%s", unexpected, stagedDiff)
-		}
-	}
+	testutils.AssertDiffContains(t, stagedDiff, expectedUserManagerChanges...)
+	testutils.AssertDiffContains(t, stagedDiff, expectedValidatorChanges...)
+	testutils.AssertDiffNotContains(t, stagedDiff, unexpectedUserManagerChanges...)
+	testutils.AssertDiffNotContains(t, stagedDiff, unexpectedValidatorChanges...)
 
 	// 検証3: ワーキングディレクトリに残りの変更があるか
 	workingDiff, err := testRepo.RunCommand("git", "diff")
@@ -531,11 +496,7 @@ class DataValidator:
 		"# New password validation method",
 	}
 
-	for _, expectedChange := range expectedStagedChanges {
-		if !strings.Contains(stagedDiff, expectedChange) {
-			t.Errorf("Staged diff should contain '%s', but it doesn't.\nActual diff:\n%s", expectedChange, stagedDiff)
-		}
-	}
+	testutils.AssertDiffContains(t, stagedDiff, expectedStagedChanges...)
 
 	// Working diff の検証: 期待される変更が含まれているか
 	expectedWorkingChanges := []string{
@@ -548,11 +509,7 @@ class DataValidator:
 		"print(f\"User {username} added successfully\")",
 	}
 
-	for _, expectedChange := range expectedWorkingChanges {
-		if !strings.Contains(workingDiff, expectedChange) {
-			t.Errorf("Working diff should contain '%s', but it doesn't.\nActual diff:\n%s", expectedChange, workingDiff)
-		}
-	}
+	testutils.AssertDiffContains(t, workingDiff, expectedWorkingChanges...)
 
 	// ファイル別の検証: 正しいファイルが変更されているか
 	if !strings.Contains(stagedDiff, "user_manager.py") {
