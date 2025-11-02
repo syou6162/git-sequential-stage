@@ -5,8 +5,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"sort"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/syou6162/git-sequential-stage/internal/executor"
 	"github.com/syou6162/git-sequential-stage/internal/stager"
@@ -251,8 +254,13 @@ func main() {
 		os.Exit(0)
 	}
 
-	// Create context
-	ctx := context.Background()
+	// Create context with signal handling and timeout
+	baseCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// Add 5 minute timeout on top of signal handling
+	ctx, cancel := context.WithTimeout(baseCtx, 5*time.Minute)
+	defer cancel()
 
 	// Check dependencies early (git installation and repository)
 	exec := executor.NewRealCommandExecutor()
