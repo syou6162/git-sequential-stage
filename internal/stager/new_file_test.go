@@ -439,7 +439,7 @@ Binary files /dev/null and b/image.png differ`,
 			hunk := parseAndValidateHunk(t, tt.patchContent, tt.hunkIndex)
 
 			// Call the method under test
-			result, err := stager.extractHunkContent(&hunk, "/tmp/test.patch")
+			result, err := stager.extractHunkContent(&hunk)
 
 			if tt.expectError && err == nil {
 				t.Error("Expected error but got none")

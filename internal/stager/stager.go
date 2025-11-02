@@ -29,7 +29,7 @@ func NewStager(exec executor.CommandExecutor) *Stager {
 }
 
 // extractHunkContent extracts the content for a specific hunk
-func (s *Stager) extractHunkContent(hunk *HunkInfo, patchFile string) ([]byte, error) {
+func (s *Stager) extractHunkContent(hunk *HunkInfo) ([]byte, error) {
 	// For binary files, return the entire file diff
 	if hunk.IsBinary {
 		if hunk.File != nil {
@@ -108,9 +108,9 @@ func setFallbackPatchID(hunk *HunkInfo) {
 }
 
 // calculatePatchIDsForHunks calculates patch IDs for all hunks in the list
-func (s *Stager) calculatePatchIDsForHunks(allHunks []HunkInfo, patchContent string, patchFile string) error {
+func (s *Stager) calculatePatchIDsForHunks(allHunks []HunkInfo) error {
 	for i := range allHunks {
-		hunkContent, err := s.extractHunkContent(&allHunks[i], patchFile)
+		hunkContent, err := s.extractHunkContent(&allHunks[i])
 		if err != nil {
 			// Continue without this hunk
 			s.logger.Debug("Failed to extract hunk content for hunk %d: %v", allHunks[i].GlobalIndex, err)
@@ -338,17 +338,8 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
 			return NewParsingError("current diff", err)
 		}
 
-		diffLines := strings.Split(string(diffOutput), "\n")
-
-		// Create temp file for hunk processing
-		tmpFileName, cleanup, err := s.createTempDiffFile(diffOutput)
-		if err != nil {
-			return err
-		}
-		defer cleanup()
-
 		// Find and apply matching hunk
-		newTargetIDs, applied, err := s.findAndApplyMatchingHunk(currentHunks, diffLines, tmpFileName, targetIDs)
+		newTargetIDs, applied, err := s.findAndApplyMatchingHunk(currentHunks, targetIDs)
 		if err != nil {
 			return err
 		}
@@ -377,7 +368,7 @@ func (s *Stager) preparePatchData(patchFile string) ([]HunkInfo, error) {
 	}
 
 	// Calculate patch IDs for all hunks
-	if err := s.calculatePatchIDsForHunks(allHunks, patchContent, patchFile); err != nil {
+	if err := s.calculatePatchIDsForHunks(allHunks); err != nil {
 		s.logger.Error("Failed to calculate patch IDs: %v", err)
 		return nil, NewGitCommandError("patch-id calculation", err)
 	}
@@ -401,31 +392,10 @@ func (s *Stager) getCurrentDiff(targetFiles map[string]bool) ([]byte, error) {
 	return diffOutput, nil
 }
 
-// createTempDiffFile creates a temporary file with diff content
-func (s *Stager) createTempDiffFile(diffOutput []byte) (string, func(), error) {
-	tmpFile, err := os.CreateTemp("", "current_diff_*.patch")
-	if err != nil {
-		return "", nil, NewIOError("create temp file", err)
-	}
-
-	cleanup := func() {
-		_ = tmpFile.Close()
-		_ = os.Remove(tmpFile.Name())
-	}
-
-	if _, err := tmpFile.Write(diffOutput); err != nil {
-		cleanup()
-		return "", nil, NewIOError("write temp file", err)
-	}
-
-	_ = tmpFile.Close()
-	return tmpFile.Name(), cleanup, nil
-}
-
 // findAndApplyMatchingHunk finds a matching hunk and applies it
-func (s *Stager) findAndApplyMatchingHunk(currentHunks []HunkInfo, diffLines []string, tmpFileName string, targetIDs []string) ([]string, bool, error) {
+func (s *Stager) findAndApplyMatchingHunk(currentHunks []HunkInfo, targetIDs []string) ([]string, bool, error) {
 	for i := range currentHunks {
-		hunkContent, err := s.extractHunkContent(&currentHunks[i], tmpFileName)
+		hunkContent, err := s.extractHunkContent(&currentHunks[i])
 		if err != nil || len(hunkContent) == 0 {
 			continue
 		}
