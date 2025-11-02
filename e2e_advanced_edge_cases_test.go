@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -89,7 +90,7 @@ func main() {
 
 	// 既存ファイルの最初のハンクをステージングしようとする
 	// intent-to-addファイルが存在する場合でも、ターゲットファイルが指定されていれば正常動作する
-	err = runGitSequentialStage([]string{"existing.go:1"}, absPatchPath)
+	err = runGitSequentialStage(context.Background(), []string{"existing.go:1"}, absPatchPath)
 	if err != nil {
 		t.Fatalf("Expected staging to succeed with intent-to-add files present, but got error: %v", err)
 	}
@@ -178,7 +179,7 @@ if __name__ == "__main__":
 	}
 
 	// Try to stage hunks from the untracked file - should fail
-	err = runGitSequentialStage([]string{untrackedFile + ":1"}, absPatchPath)
+	err = runGitSequentialStage(context.Background(), []string{untrackedFile + ":1"}, absPatchPath)
 	if err == nil {
 		t.Fatal("Expected error when trying to stage untracked file, but got none")
 	}
@@ -234,7 +235,7 @@ if __name__ == "__main__":
 	}
 
 	// Now staging should work
-	err = runGitSequentialStage([]string{untrackedFile + ":1"}, absPatchPath2)
+	err = runGitSequentialStage(context.Background(), []string{untrackedFile + ":1"}, absPatchPath2)
 	if err != nil {
 		t.Fatalf("Failed to stage intent-to-add file: %v", err)
 	}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -73,7 +74,7 @@ func TestBinaryFileHandling(t *testing.T) {
 		t.Fatalf("Failed to get absolute path: %v", err)
 	}
 
-	if err := runGitSequentialStage([]string{"document.txt:1"}, absPatchPath); err != nil {
+	if err := runGitSequentialStage(context.Background(), []string{"document.txt:1"}, absPatchPath); err != nil {
 		t.Fatalf("Failed to stage text file changes: %v", err)
 	}
 
@@ -123,7 +124,7 @@ func TestBinaryFileHandling(t *testing.T) {
 	// 1. Skip binary files with an appropriate message
 	// 2. Stage the entire binary file change (since hunks don't apply)
 	// The exact behavior depends on git's handling of binary files
-	err = runGitSequentialStage([]string{"image.png:1"}, absPatchPath)
+	err = runGitSequentialStage(context.Background(), []string{"image.png:1"}, absPatchPath)
 	if err == nil {
 		// If it succeeds, verify the binary file is staged
 		gitStatusCmd := exec.Command("git", "status", "--porcelain")
@@ -226,7 +227,7 @@ if __name__ == "__main__":
 		t.Fatalf("Failed to get absolute path: %v", err)
 	}
 
-	err = runGitSequentialStage([]string{"old_module.py:1"}, absPatchPath)
+	err = runGitSequentialStage(context.Background(), []string{"old_module.py:1"}, absPatchPath)
 	if err != nil {
 		t.Fatalf("Failed to stage first hunk: %v", err)
 	}
@@ -424,7 +425,7 @@ func main() {
 	}
 
 	// Attempt to stage first hunk from the moved file
-	err = runGitSequentialStage([]string{newFile + ":1"}, absPatchPath)
+	err = runGitSequentialStage(context.Background(), []string{newFile + ":1"}, absPatchPath)
 	if err != nil {
 		t.Fatalf("Failed to stage hunk from moved file: %v", err)
 	}
@@ -546,7 +547,7 @@ func main() {
 
 	// Attempt to stage first hunk from the moved file
 	// This should work even though we have a move operation in the staging area
-	err = runGitSequentialStage([]string{newFile + ":1"}, absPatchPath)
+	err = runGitSequentialStage(context.Background(), []string{newFile + ":1"}, absPatchPath)
 	if err != nil {
 		t.Fatalf("Failed to stage hunk from moved and modified file: %v", err)
 	}
@@ -612,7 +613,7 @@ func TestMultipleFilesMoveAndModify_Skip(t *testing.T) {
 	}
 
 	// Test with only one file to ensure it works
-	err = runGitSequentialStage([]string{
+	err = runGitSequentialStage(context.Background(), []string{
 		"lib/calculations.py:1", // Enhanced calculate function
 	}, absPatchPath)
 

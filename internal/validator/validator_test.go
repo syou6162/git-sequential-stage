@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -43,7 +44,7 @@ func TestValidator_CheckDependencies(t *testing.T) {
 			tt.setup(mock)
 
 			v := NewValidator(mock)
-			err := v.CheckDependencies()
+			err := v.CheckDependencies(context.Background())
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("CheckDependencies() error = %v, wantErr %v", err, tt.wantErr)

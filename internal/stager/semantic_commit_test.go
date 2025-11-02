@@ -1,6 +1,7 @@
 package stager
 
 import (
+	"context"
 	"errors"
 	"os"
 	"os/exec"
@@ -52,13 +53,13 @@ func setupTestRepo(t *testing.T, testName string) *testRepo {
 
 	// Initialize git repository
 	execCmd := executor.NewRealCommandExecutor()
-	if _, err := execCmd.Execute("git", "init"); err != nil {
+	if _, err := execCmd.Execute(context.Background(), "git", "init"); err != nil {
 		t.Fatalf("Failed to initialize git repo: %v", err)
 	}
-	if _, err := execCmd.Execute("git", "config", "user.name", "Test User"); err != nil {
+	if _, err := execCmd.Execute(context.Background(), "git", "config", "user.name", "Test User"); err != nil {
 		t.Fatalf("Failed to set git user name: %v", err)
 	}
-	if _, err := execCmd.Execute("git", "config", "user.email", "test@example.com"); err != nil {
+	if _, err := execCmd.Execute(context.Background(), "git", "config", "user.email", "test@example.com"); err != nil {
 		t.Fatalf("Failed to set git user email: %v", err)
 	}
 
@@ -77,10 +78,10 @@ func (r *testRepo) createInitialCommit() {
 	if err := os.WriteFile(initialFile, []byte("initial content"), 0644); err != nil {
 		r.t.Fatalf("Failed to create initial file: %v", err)
 	}
-	if _, err := r.execCmd.Execute("git", "add", initialFile); err != nil {
+	if _, err := r.execCmd.Execute(context.Background(), "git", "add", initialFile); err != nil {
 		r.t.Fatalf("Failed to add initial file: %v", err)
 	}
-	if _, err := r.execCmd.Execute("git", "commit", "-m", "Initial commit"); err != nil {
+	if _, err := r.execCmd.Execute(context.Background(), "git", "commit", "-m", "Initial commit"); err != nil {
 		r.t.Fatalf("Failed to create initial commit: %v", err)
 	}
 }
@@ -98,7 +99,7 @@ func (r *testRepo) createFileWithContent(filename, content string) {
 func (r *testRepo) gitAddIntentToAdd(filename string) {
 	r.t.Helper()
 
-	if _, err := r.execCmd.Execute("git", "add", "-N", filename); err != nil {
+	if _, err := r.execCmd.Execute(context.Background(), "git", "add", "-N", filename); err != nil {
 		r.t.Fatalf("Failed to intent-to-add file %s: %v", filename, err)
 	}
 }
@@ -107,7 +108,7 @@ func (r *testRepo) gitAddIntentToAdd(filename string) {
 func (r *testRepo) gitAdd(filename string) {
 	r.t.Helper()
 
-	if _, err := r.execCmd.Execute("git", "add", filename); err != nil {
+	if _, err := r.execCmd.Execute(context.Background(), "git", "add", filename); err != nil {
 		r.t.Fatalf("Failed to add file %s: %v", filename, err)
 	}
 }
@@ -116,7 +117,7 @@ func (r *testRepo) gitAdd(filename string) {
 func (r *testRepo) gitCommit(message string) {
 	r.t.Helper()
 
-	if _, err := r.execCmd.Execute("git", "commit", "-m", message); err != nil {
+	if _, err := r.execCmd.Execute(context.Background(), "git", "commit", "-m", message); err != nil {
 		r.t.Fatalf("Failed to commit: %v", err)
 	}
 }
@@ -125,7 +126,7 @@ func (r *testRepo) gitCommit(message string) {
 func (r *testRepo) generatePatchFile(filename string) string {
 	r.t.Helper()
 
-	patchOutput, err := r.execCmd.Execute("git", "diff", "HEAD")
+	patchOutput, err := r.execCmd.Execute(context.Background(), "git", "diff", "HEAD")
 	if err != nil {
 		r.t.Fatalf("Failed to generate patch: %v", err)
 	}
@@ -139,7 +140,7 @@ func (r *testRepo) generatePatchFile(filename string) string {
 func (r *testRepo) getGitStatus() string {
 	r.t.Helper()
 
-	output, err := r.execCmd.Execute("git", "status", "--porcelain")
+	output, err := r.execCmd.Execute(context.Background(), "git", "status", "--porcelain")
 	if err != nil {
 		r.t.Fatalf("Failed to get git status: %v", err)
 	}
@@ -225,7 +226,7 @@ def farewell():
 	// Step 3: Use git-sequential-stage to stage the first hunk
 	stager := NewStager(repo.execCmd)
 	hunkSpecs := []string{newFileName + ":1"}
-	err := stager.StageHunks(hunkSpecs, patchFile)
+	err := stager.StageHunks(context.Background(), hunkSpecs, patchFile)
 
 	// With intent-to-add files, the safety check may detect them as new files
 	if err != nil {
@@ -240,7 +241,7 @@ def farewell():
 	}
 
 	// Verify the hunk was staged
-	stagedOutput, err := repo.execCmd.Execute("git", "diff", "--cached")
+	stagedOutput, err := repo.execCmd.Execute(context.Background(), "git", "diff", "--cached")
 	if err != nil {
 		t.Fatalf("Failed to get staged diff: %v", err)
 	}
@@ -252,7 +253,7 @@ def farewell():
 	repo.gitCommit("feat: add hello function")
 
 	// Verify commit was created
-	logOutput, err := repo.execCmd.Execute("git", "log", "--oneline")
+	logOutput, err := repo.execCmd.Execute(context.Background(), "git", "log", "--oneline")
 	if err != nil {
 		t.Fatalf("Failed to get git log: %v", err)
 	}
@@ -261,7 +262,7 @@ def farewell():
 	}
 
 	// Verify remaining content is still in working directory
-	workingDiff, err := repo.execCmd.Execute("git", "diff", "HEAD")
+	workingDiff, err := repo.execCmd.Execute(context.Background(), "git", "diff", "HEAD")
 	if err != nil {
 		t.Fatalf("Failed to get working diff: %v", err)
 	}
@@ -311,7 +312,7 @@ print("modified content")`
 	// Try to use git-sequential-stage - should error due to normal staging
 	stager := NewStager(repo.execCmd)
 	hunkSpecs := []string{newFileName + ":1"}
-	err := stager.StageHunks(hunkSpecs, patchFile)
+	err := stager.StageHunks(context.Background(), hunkSpecs, patchFile)
 
 	// Should get a safety error about staging area not being clean
 	assertSafetyError(t, err, StagingAreaNotClean)
@@ -340,7 +341,7 @@ func TestSemanticCommitWorkflow_MultipleIntentToAddFiles(t *testing.T) {
 	repo.createFileWithContent(file2Name, file2Content)
 
 	// Intent-to-add both files
-	if _, err := repo.execCmd.Execute("git", "add", "-N", file1Name, file2Name); err != nil {
+	if _, err := repo.execCmd.Execute(context.Background(), "git", "add", "-N", file1Name, file2Name); err != nil {
 		t.Fatalf("Failed to intent-to-add files: %v", err)
 	}
 
@@ -351,7 +352,7 @@ func TestSemanticCommitWorkflow_MultipleIntentToAddFiles(t *testing.T) {
 	// Stage hunks from both files
 	stager := NewStager(repo.execCmd)
 	hunkSpecs := []string{file1Name + ":1", file2Name + ":1"}
-	err := stager.StageHunks(hunkSpecs, patchFile)
+	err := stager.StageHunks(context.Background(), hunkSpecs, patchFile)
 
 	// With intent-to-add files, the safety check may detect them as new files
 	// This behavior is acceptable as the check is being conservative
@@ -368,7 +369,7 @@ func TestSemanticCommitWorkflow_MultipleIntentToAddFiles(t *testing.T) {
 	}
 
 	// Verify both hunks were staged
-	stagedOutput, err := repo.execCmd.Execute("git", "diff", "--cached")
+	stagedOutput, err := repo.execCmd.Execute(context.Background(), "git", "diff", "--cached")
 	if err != nil {
 		t.Fatalf("Failed to get staged diff: %v", err)
 	}
@@ -383,7 +384,7 @@ func TestSemanticCommitWorkflow_MultipleIntentToAddFiles(t *testing.T) {
 	repo.gitCommit("feat: add multiple functions")
 
 	// Verify commit was created
-	logOutput, err := repo.execCmd.Execute("git", "log", "--oneline")
+	logOutput, err := repo.execCmd.Execute(context.Background(), "git", "log", "--oneline")
 	if err != nil {
 		t.Fatalf("Failed to get git log: %v", err)
 	}
@@ -421,7 +422,7 @@ def function3():
 	// Stage the only hunk (large files are often added as a single hunk)
 	stager := NewStager(repo.execCmd)
 	hunkSpecs := []string{largeFileName + ":1"}
-	err := stager.StageHunks(hunkSpecs, patchFile)
+	err := stager.StageHunks(context.Background(), hunkSpecs, patchFile)
 
 	// With intent-to-add files, the safety check may detect them as new files
 	if err != nil {
@@ -436,7 +437,7 @@ def function3():
 	}
 
 	// Verify selected hunks were staged
-	stagedOutput, err := repo.execCmd.Execute("git", "diff", "--cached")
+	stagedOutput, err := repo.execCmd.Execute(context.Background(), "git", "diff", "--cached")
 	if err != nil {
 		t.Fatalf("Failed to get staged diff: %v", err)
 	}
@@ -454,7 +455,7 @@ def function3():
 	repo.gitCommit("feat: add selected functions")
 
 	// Since we staged the entire file (single hunk), there should be no changes in working directory
-	workingDiff, err := repo.execCmd.Execute("git", "diff", "HEAD")
+	workingDiff, err := repo.execCmd.Execute(context.Background(), "git", "diff", "HEAD")
 	if err != nil {
 		t.Fatalf("Failed to get working diff: %v", err)
 	}
@@ -487,7 +488,7 @@ func TestSemanticCommitWorkflow_ErrorHandling(t *testing.T) {
 	// Try to stage a non-existent hunk
 	stager := NewStager(repo.execCmd)
 	hunkSpecs := []string{newFileName + ":99"} // Non-existent hunk number
-	err := stager.StageHunks(hunkSpecs, patchFile)
+	err := stager.StageHunks(context.Background(), hunkSpecs, patchFile)
 
 	// Should get an error
 	if err == nil {
@@ -547,7 +548,7 @@ def another_function():
 	// Try to stage hunks from untracked file - should fail
 	stager := NewStager(repo.execCmd)
 	hunkSpecs := []string{untrackedFileName + ":1"}
-	err := stager.StageHunks(hunkSpecs, patchFile)
+	err := stager.StageHunks(context.Background(), hunkSpecs, patchFile)
 
 	// Should get an error
 	if err == nil {
@@ -586,7 +587,7 @@ def another_function():
 	}
 
 	// Try to stage hunks again - may succeed or fail due to safety check
-	err2 := stager.StageHunks(hunkSpecs, patchFile2)
+	err2 := stager.StageHunks(context.Background(), hunkSpecs, patchFile2)
 
 	if err2 != nil {
 		// Check if it's a safety error (expected for intent-to-add)
@@ -599,7 +600,7 @@ def another_function():
 		}
 	} else {
 		// If staging succeeded, verify the result
-		stagedOutput, err := repo.execCmd.Execute("git", "diff", "--cached")
+		stagedOutput, err := repo.execCmd.Execute(context.Background(), "git", "diff", "--cached")
 		if err != nil {
 			t.Fatalf("Failed to get staged diff: %v", err)
 		}
@@ -653,7 +654,7 @@ def modified_function():
 		existingFileName + ":1",
 		untrackedFileName + ":1",
 	}
-	err := stager.StageHunks(hunkSpecs, patchFile)
+	err := stager.StageHunks(context.Background(), hunkSpecs, patchFile)
 
 	// Should fail because untracked file is not in patch
 	if err == nil {
@@ -666,13 +667,13 @@ def modified_function():
 	}
 
 	// Stage only the existing file changes
-	err2 := stager.StageHunks([]string{existingFileName + ":1"}, patchFile)
+	err2 := stager.StageHunks(context.Background(), []string{existingFileName + ":1"}, patchFile)
 	if err2 != nil {
 		t.Fatalf("Failed to stage existing file changes: %v", err2)
 	}
 
 	// Verify only existing file changes are staged
-	stagedOutput, err := repo.execCmd.Execute("git", "diff", "--cached")
+	stagedOutput, err := repo.execCmd.Execute(context.Background(), "git", "diff", "--cached")
 	if err != nil {
 		t.Fatalf("Failed to get staged diff: %v", err)
 	}

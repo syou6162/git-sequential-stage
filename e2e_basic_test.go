@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -100,7 +101,7 @@ if __name__ == "__main__":
 	// 一時的にディレクトリを変更してrunGitSequentialStageを実行
 	defer testRepo.Chdir()()
 
-	err = runGitSequentialStage([]string{"calculator.py:1"}, absPatchPath)
+	err = runGitSequentialStage(context.Background(), []string{"calculator.py:1"}, absPatchPath)
 	if err != nil {
 		t.Fatalf("git-sequential-stage failed: %v", err)
 	}
@@ -239,7 +240,7 @@ if __name__ == "__main__":
 	// 一時的にディレクトリを変更してrunGitSequentialStageを実行
 	defer testRepo.Chdir()()
 
-	err = runGitSequentialStage([]string{"math_operations.py:2"}, absPatchPath)
+	err = runGitSequentialStage(context.Background(), []string{"math_operations.py:2"}, absPatchPath)
 	if err != nil {
 		t.Fatalf("git-sequential-stage failed: %v", err)
 	}
@@ -439,7 +440,7 @@ class DataValidator:
 	// 一時的にディレクトリを変更してrunGitSequentialStageを実行
 	defer testRepo.Chdir()()
 
-	err = runGitSequentialStage([]string{"user_manager.py:2", "validator.py:1"}, absPatchPath)
+	err = runGitSequentialStage(context.Background(), []string{"user_manager.py:2", "validator.py:1"}, absPatchPath)
 	if err != nil {
 		t.Fatalf("git-sequential-stage failed: %v", err)
 	}
@@ -631,7 +632,7 @@ func TestWildcardStaging(t *testing.T) {
 
 	// ワイルドカードを使用してファイル全体をステージング
 	// hello.pyとworld.pyは全体をステージング
-	if err := runGitSequentialStage(
+	if err := runGitSequentialStage(context.Background(),
 		[]string{"hello.py:*", "world.py:*"},
 		patchFile,
 	); err != nil {
@@ -711,7 +712,7 @@ func TestWildcardWithMixedInput(t *testing.T) {
 	defer testRepo.Chdir()()
 
 	// config.yamlは全体をステージング（ワイルドカードのみのテストに変更）
-	if err := runGitSequentialStage(
+	if err := runGitSequentialStage(context.Background(),
 		[]string{"config.yaml:*"},
 		patchFile,
 	); err != nil {

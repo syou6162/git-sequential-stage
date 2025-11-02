@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -54,7 +55,7 @@ func testStagingAreaDetection(t *testing.T) {
 	_, _ = testutils.RunCommand(t, dir, "git", "add", "other.txt")
 
 	// Try to run git-sequential-stage - should fail with staging area not clean
-	err := runGitSequentialStage([]string{"test.txt:1"}, patchFile)
+	err := runGitSequentialStage(context.Background(), []string{"test.txt:1"}, patchFile)
 
 	if err == nil {
 		t.Error("Expected error for staged files, but got none")
@@ -102,7 +103,7 @@ func testIntentToAddIntegration(t *testing.T) {
 	_ = os.WriteFile(patchFile, []byte(output), 0644)
 
 	// Run git-sequential-stage - should succeed with intent-to-add
-	err := runGitSequentialStage([]string{"new_file.py:1"}, patchFile)
+	err := runGitSequentialStage(context.Background(), []string{"new_file.py:1"}, patchFile)
 
 	// Note: Current implementation treats intent-to-add as staged, so it will fail
 	// This is the expected behavior based on the semantic_commit_test.go
@@ -143,7 +144,7 @@ func testFileTypeErrorMessages(t *testing.T) {
 	_ = os.WriteFile(patchFile, []byte(output), 0644)
 
 	// Try to run git-sequential-stage
-	err := runGitSequentialStage([]string{"modify.txt:1"}, patchFile)
+	err := runGitSequentialStage(context.Background(), []string{"modify.txt:1"}, patchFile)
 
 	if err == nil {
 		t.Error("Expected error for mixed staged files, but got none")
@@ -176,7 +177,7 @@ func testGitOperationErrorHandling(t *testing.T) {
 	defer cleanup()
 
 	// Test with non-existent patch file
-	err := runGitSequentialStage([]string{"test.txt:1"}, "/non/existent/patch.file")
+	err := runGitSequentialStage(context.Background(), []string{"test.txt:1"}, "/non/existent/patch.file")
 
 	if err == nil {
 		t.Error("Expected error for non-existent patch file")
@@ -213,7 +214,7 @@ def goodbye():
 	_ = os.WriteFile(patchFile, []byte(output), 0644)
 
 	// Step 3: Try to stage specific hunks
-	err := runGitSequentialStage([]string{"greetings.py:1"}, patchFile)
+	err := runGitSequentialStage(context.Background(), []string{"greetings.py:1"}, patchFile)
 
 	// Note: Current implementation detects intent-to-add as staged NEW file
 	if err != nil {
@@ -245,7 +246,7 @@ func testWorkflowPreservation(t *testing.T) {
 	statusBefore, _ := testutils.RunCommand(t, dir, "git", "status", "--porcelain")
 
 	// Run git-sequential-stage (should succeed with clean staging area)
-	err := runGitSequentialStage([]string{"test.py:1"}, patchFile)
+	err := runGitSequentialStage(context.Background(), []string{"test.py:1"}, patchFile)
 
 	if err != nil {
 		t.Fatalf("Failed to stage hunks in clean repo: %v", err)
@@ -304,7 +305,7 @@ def function3():
 	t.Logf("Generated patch:\n%s", output)
 
 	// Stage only hunk 1 (to be safe)
-	err := runGitSequentialStage([]string{"multi.py:1"}, patchFile)
+	err := runGitSequentialStage(context.Background(), []string{"multi.py:1"}, patchFile)
 
 	if err != nil {
 		t.Fatalf("Failed to stage selected hunks: %v", err)
@@ -329,7 +330,7 @@ func testErrorCases(t *testing.T) {
 	emptyPatch := filepath.Join(dir, "empty.patch")
 	_ = os.WriteFile(emptyPatch, []byte(""), 0644)
 
-	err := runGitSequentialStage([]string{"test.txt:1"}, emptyPatch)
+	err := runGitSequentialStage(context.Background(), []string{"test.txt:1"}, emptyPatch)
 	if err == nil {
 		t.Error("Expected error for empty patch file")
 	} else {
@@ -351,7 +352,7 @@ func testErrorCases(t *testing.T) {
 	_ = os.WriteFile(patchFile, []byte(output), 0644)
 
 	// Try to stage non-existent hunk
-	err = runGitSequentialStage([]string{"test.txt:99"}, patchFile)
+	err = runGitSequentialStage(context.Background(), []string{"test.txt:99"}, patchFile)
 	if err == nil {
 		t.Error("Expected error for invalid hunk number")
 	} else {
@@ -376,7 +377,7 @@ func testBasicConsistency(t *testing.T) {
 	_ = os.WriteFile(patchFile, []byte(output), 0644)
 
 	// Should work normally with clean staging area
-	err := runGitSequentialStage([]string{"test.py:1"}, patchFile)
+	err := runGitSequentialStage(context.Background(), []string{"test.py:1"}, patchFile)
 
 	if err != nil {
 		t.Fatalf("Basic operation failed: %v", err)
