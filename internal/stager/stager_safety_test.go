@@ -1,6 +1,7 @@
 package stager
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -144,7 +145,7 @@ func TestStager_StageHunks_WithSafetyCheck_Clean(t *testing.T) {
 	stager := NewStager(mockExecutor)
 
 	// This should succeed because empty patch = clean staging area
-	err = stager.StageHunks([]string{}, patchFile)
+	err = stager.StageHunks(context.Background(), []string{}, patchFile)
 
 	if err != nil {
 		t.Fatalf("Expected successful with clean staging area (empty patch), got error: %v", err)
@@ -177,7 +178,7 @@ index 257cc56..5716ca5 100644
 	stager := NewStager(mockExecutor)
 
 	// This should fail because the patch shows modified files (dirty staging area)
-	err = stager.StageHunks([]string{"already_staged.txt:1"}, patchFile)
+	err = stager.StageHunks(context.Background(), []string{"already_staged.txt:1"}, patchFile)
 
 	if err == nil {
 		t.Fatal("Expected error for dirty staging area")
@@ -219,7 +220,7 @@ index 0000000..257cc56
 	stager := NewStager(mockExecutor)
 
 	// This should fail because new files are considered "dirty" staging area
-	err = stager.StageHunks([]string{"new_file.txt:1"}, patchFile)
+	err = stager.StageHunks(context.Background(), []string{"new_file.txt:1"}, patchFile)
 
 	if err == nil {
 		t.Fatal("Expected error for new file in staging area")

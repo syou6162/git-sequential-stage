@@ -1,6 +1,7 @@
 package stager
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -110,7 +111,7 @@ index abc123..def456 100644
 			stager := NewStager(mock)
 
 			// Test without debug environment variable
-			err := stager.applyHunk([]byte(tt.hunkContent), tt.targetID)
+			err := stager.applyHunk(context.Background(), []byte(tt.hunkContent), tt.targetID)
 
 			if tt.expectErr && err == nil {
 				t.Error("Expected error but got none")

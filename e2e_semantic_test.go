@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -128,7 +129,7 @@ if __name__ == '__main__':
 
 	// シナリオ1: ロギング機能の追加のみをコミット（ハンク1のみ）
 	// これは新機能追加のセマンティックなコミット
-	err = runGitSequentialStage([]string{"web_server.py:1"}, absPatchPath)
+	err = runGitSequentialStage(context.Background(), []string{"web_server.py:1"}, absPatchPath)
 	if err != nil {
 		t.Fatalf("git-sequential-stage failed for logging commit: %v", err)
 	}
@@ -183,7 +184,7 @@ if __name__ == '__main__':
 
 	// シナリオ2: バリデーション機能の追加のみをコミット（ハンク2のみ）
 	// これはセキュリティ向上のセマンティックなコミット
-	err = runGitSequentialStage([]string{"web_server.py:2"}, absPatchPath)
+	err = runGitSequentialStage(context.Background(), []string{"web_server.py:2"}, absPatchPath)
 	if err != nil {
 		t.Fatalf("git-sequential-stage failed for validation commit: %v", err)
 	}
@@ -233,7 +234,7 @@ if __name__ == '__main__':
 
 	// シナリオ3: 残りの変更をまとめてコミット（ハンク3のみ）
 	// これは設定とAPIの改善のセマンティックなコミット
-	err = runGitSequentialStage([]string{"web_server.py:3"}, absPatchPath)
+	err = runGitSequentialStage(context.Background(), []string{"web_server.py:3"}, absPatchPath)
 	if err != nil {
 		t.Fatalf("git-sequential-stage failed for config/api improvements commit: %v", err)
 	}

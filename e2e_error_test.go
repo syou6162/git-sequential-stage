@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -44,7 +45,7 @@ func TestErrorCases_NonExistentFile(t *testing.T) {
 	defer func() { _ = os.Chdir(originalDir) }()
 
 	// 存在しないファイルを指定してgit-sequential-stageを実行
-	err = runGitSequentialStage([]string{"non_existent_file.py:1"}, absPatchPath)
+	err = runGitSequentialStage(context.Background(), []string{"non_existent_file.py:1"}, absPatchPath)
 	if err == nil {
 		t.Error("Expected error for non-existent file, but got none")
 		return
@@ -108,7 +109,7 @@ func TestErrorCases_InvalidHunkNumber(t *testing.T) {
 
 	// 存在しないハンク番号（ハンク2）を指定してgit-sequential-stageを実行
 	// パッチファイルには1つのハンクしかないはず
-	err = runGitSequentialStage([]string{"simple.py:2"}, absPatchPath)
+	err = runGitSequentialStage(context.Background(), []string{"simple.py:2"}, absPatchPath)
 	if err == nil {
 		t.Error("Expected error for invalid hunk number, but got none")
 		return
@@ -168,7 +169,7 @@ func TestErrorCases_EmptyPatchFile(t *testing.T) {
 	defer func() { _ = os.Chdir(originalDir) }()
 
 	// 空のパッチファイルを指定してgit-sequential-stageを実行
-	err = runGitSequentialStage([]string{"test.py:1"}, absEmptyPatchPath)
+	err = runGitSequentialStage(context.Background(), []string{"test.py:1"}, absEmptyPatchPath)
 	if err == nil {
 		t.Error("Expected error for empty patch file, but got none")
 		return
@@ -246,7 +247,7 @@ func newFunction() {
 	defer testRepo.Chdir()()
 
 	// 存在しないハンク番号（2,3番）を指定してエラーを発生させる
-	err = runGitSequentialStage([]string{"main.go:1,2,3"}, absPatchPath)
+	err = runGitSequentialStage(context.Background(), []string{"main.go:1,2,3"}, absPatchPath)
 	if err == nil {
 		t.Fatal("Expected error when requesting non-existent hunk, but got none")
 	}
@@ -310,7 +311,7 @@ func TestErrorCases_MultipleInvalidHunks(t *testing.T) {
 	defer testRepo.Chdir()()
 
 	// 複数の存在しないハンク番号を指定
-	err = runGitSequentialStage([]string{"single.go:2,3,4"}, absPatchPath)
+	err = runGitSequentialStage(context.Background(), []string{"single.go:2,3,4"}, absPatchPath)
 	if err == nil {
 		t.Fatal("Expected error when requesting multiple non-existent hunks, but got none")
 	}
@@ -348,7 +349,7 @@ func TestErrorCases_SameFileConflict(t *testing.T) {
 	defer testRepo.Chdir()()
 
 	// 同一ファイルに対してワイルドカードとハンク番号を混在させる
-	err := runGitSequentialStage(
+	err := runGitSequentialStage(context.Background(),
 		[]string{"main.go:1", "main.go:*"},
 		patchFile,
 	)

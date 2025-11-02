@@ -1,6 +1,7 @@
 package stager
 
 import (
+	"context"
 	"os/exec"
 	"strings"
 	"testing"
@@ -58,7 +59,7 @@ func TestStageHunks_E2E_AmbiguousFilename(t *testing.T) {
 			s := NewStager(realExec)
 
 			// This is the actual test - StageHunks should handle ambiguous filenames correctly
-			err = s.StageHunks([]string{tc.filename + ":1"}, patchFile)
+			err = s.StageHunks(context.Background(), []string{tc.filename + ":1"}, patchFile)
 			if err != nil {
 				// If error contains "ambiguous argument", our fix didn't work
 				if strings.Contains(err.Error(), "ambiguous argument") {

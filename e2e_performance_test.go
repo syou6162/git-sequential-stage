@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -44,7 +45,7 @@ func TestE2E_PerformanceWithSafetyChecks(t *testing.T) {
 			_, _ = testutils.RunCommand(t, tmpDir, "git", "reset", "HEAD")
 
 			start := time.Now()
-			err := runGitSequentialStage([]string{"large_module.py:1,3,5"}, patchFile)
+			err := runGitSequentialStage(context.Background(), []string{"large_module.py:1,3,5"}, patchFile)
 			duration := time.Since(start)
 
 			if err != nil {
@@ -74,7 +75,7 @@ func TestE2E_PerformanceWithSafetyChecks(t *testing.T) {
 		_, _ = testutils.RunCommand(t, tmpDir, "git", "add", "large_module.py")
 
 		start := time.Now()
-		err := runGitSequentialStage([]string{"large_module.py:1"}, patchFile)
+		err := runGitSequentialStage(context.Background(), []string{"large_module.py:1"}, patchFile)
 		duration := time.Since(start)
 
 		if err == nil {

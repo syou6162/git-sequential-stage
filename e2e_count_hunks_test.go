@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"os"
 	"path/filepath"
@@ -30,7 +31,7 @@ func TestE2E_CountHunks_NoChanges(t *testing.T) {
 	_ = os.Chdir(testRepo.Path)
 
 	// Run count-hunks command
-	err := runCountHunksCommand([]string{})
+	err := runCountHunksCommand(context.Background(), []string{})
 	if err != nil {
 		t.Fatalf("count-hunks failed: %v", err)
 	}
@@ -97,7 +98,7 @@ func test() {
 	}()
 
 	// Run count-hunks command
-	runErr := runCountHunksCommand([]string{})
+	runErr := runCountHunksCommand(context.Background(), []string{})
 
 	// Close write end and restore stdout
 	if err := w.Close(); err != nil {
@@ -225,7 +226,7 @@ func main() {
 	}()
 
 	// Run count-hunks command
-	runErr := runCountHunksCommand([]string{})
+	runErr := runCountHunksCommand(context.Background(), []string{})
 
 	// Close write end and restore stdout
 	if err := w.Close(); err != nil {
