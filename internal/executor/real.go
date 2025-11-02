@@ -2,6 +2,7 @@ package executor
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os/exec"
@@ -23,8 +24,8 @@ func NewRealCommandExecutor() *RealCommandExecutor {
 }
 
 // Execute implements CommandExecutor.Execute
-func (r *RealCommandExecutor) Execute(name string, args ...string) ([]byte, error) {
-	cmd := exec.Command(name, args...)
+func (r *RealCommandExecutor) Execute(ctx context.Context, name string, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
@@ -46,8 +47,8 @@ func (r *RealCommandExecutor) Execute(name string, args ...string) ([]byte, erro
 }
 
 // ExecuteWithStdin implements CommandExecutor.ExecuteWithStdin
-func (r *RealCommandExecutor) ExecuteWithStdin(name string, stdin io.Reader, args ...string) ([]byte, error) {
-	cmd := exec.Command(name, args...)
+func (r *RealCommandExecutor) ExecuteWithStdin(ctx context.Context, name string, stdin io.Reader, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Stdin = stdin
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"context"
 	"fmt"
 	"io"
 )
@@ -35,7 +36,7 @@ func NewMockCommandExecutor() *MockCommandExecutor {
 }
 
 // Execute implements CommandExecutor.Execute
-func (m *MockCommandExecutor) Execute(name string, args ...string) ([]byte, error) {
+func (m *MockCommandExecutor) Execute(ctx context.Context, name string, args ...string) ([]byte, error) {
 	key := fmt.Sprintf("%s %v", name, args)
 	m.ExecutedCommands = append(m.ExecutedCommands, ExecutedCommand{
 		Name: name,
@@ -50,7 +51,7 @@ func (m *MockCommandExecutor) Execute(name string, args ...string) ([]byte, erro
 }
 
 // ExecuteWithStdin implements CommandExecutor.ExecuteWithStdin
-func (m *MockCommandExecutor) ExecuteWithStdin(name string, stdin io.Reader, args ...string) ([]byte, error) {
+func (m *MockCommandExecutor) ExecuteWithStdin(ctx context.Context, name string, stdin io.Reader, args ...string) ([]byte, error) {
 	var stdinData []byte
 	if stdin != nil {
 		stdinData, _ = io.ReadAll(stdin)

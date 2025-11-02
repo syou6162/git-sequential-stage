@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -71,7 +72,7 @@ func TestRunGitSequentialStage_Usage(t *testing.T) {
 
 			// Capture output by redirecting stderr/stdout would be complex
 			// For now, just test the error behavior
-			err := runGitSequentialStage(hunks, patchFile)
+			err := runGitSequentialStage(context.Background(), hunks, patchFile)
 
 			if tt.expectedError && err == nil {
 				t.Error("Expected error but got none")
@@ -262,7 +263,7 @@ func TestSubcommandRouting(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Call the routing function
-			err := routeSubcommand(tt.args)
+			err := routeSubcommand(context.Background(), tt.args)
 
 			if tt.expectError {
 				if err == nil {

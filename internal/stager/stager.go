@@ -2,6 +2,7 @@ package stager
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -108,7 +109,7 @@ func setFallbackPatchID(hunk *HunkInfo) {
 }
 
 // calculatePatchIDsForHunks calculates patch IDs for all hunks in the list
-func (s *Stager) calculatePatchIDsForHunks(allHunks []HunkInfo) error {
+func (s *Stager) calculatePatchIDsForHunks(ctx context.Context, allHunks []HunkInfo) error {
 	for i := range allHunks {
 		hunkContent, err := s.extractHunkContent(&allHunks[i])
 		if err != nil {
@@ -123,7 +124,7 @@ func (s *Stager) calculatePatchIDsForHunks(allHunks []HunkInfo) error {
 			continue
 		}
 
-		patchID, err := s.calculatePatchIDStable(hunkContent)
+		patchID, err := s.calculatePatchIDStable(ctx, hunkContent)
 		if err != nil {
 			// Continue without patch ID
 			setFallbackPatchID(&allHunks[i])
@@ -273,7 +274,7 @@ func (s *Stager) generateDetailedStagingError(evaluation *StagingAreaEvaluation)
 
 // StageFiles stages entire files directly using git add.
 // This is used for wildcard specifications (file:*).
-func (s *Stager) StageFiles(files []string) error {
+func (s *Stager) StageFiles(ctx context.Context, files []string) error {
 	for _, file := range files {
 		// Check if file exists
 		if _, err := os.Stat(file); os.IsNotExist(err) {
@@ -281,7 +282,7 @@ func (s *Stager) StageFiles(files []string) error {
 		}
 
 		// Stage the entire file
-		if _, err := s.executor.Execute("git", "add", file); err != nil {
+		if _, err := s.executor.Execute(ctx, "git", "add", file); err != nil {
 			return NewGitCommandError(fmt.Sprintf("git add %s", file), err)
 		}
 
@@ -294,7 +295,7 @@ func (s *Stager) StageFiles(files []string) error {
 // StageHunks stages the specified hunks from a patch file to Git's staging area.
 // hunkSpecs should be in the format "file:hunk_numbers" (e.g., "main.go:1,3").
 // The function uses patch IDs to track hunks across changes, solving the drift problem.
-func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
+func (s *Stager) StageHunks(ctx context.Context, hunkSpecs []string, patchFile string) error {
 	// Phase 0: Safety checks (always enabled)
 	patchContent, err := os.ReadFile(patchFile)
 	if err != nil {
@@ -312,7 +313,7 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
 	}
 
 	// Phase 1: Preparation
-	allHunks, err := s.preparePatchData(patchFile)
+	allHunks, err := s.preparePatchData(ctx, patchFile)
 	if err != nil {
 		return err
 	}
@@ -326,7 +327,7 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
 	// Phase 2: Execution - Sequential staging loop
 	for len(targetIDs) > 0 {
 		// Get current diff (reuse targetFiles from Phase 0)
-		diffOutput, err := s.getCurrentDiff(targetFiles)
+		diffOutput, err := s.getCurrentDiff(ctx, targetFiles)
 		if err != nil {
 			return err
 		}
@@ -339,7 +340,7 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
 		}
 
 		// Find and apply matching hunk
-		newTargetIDs, applied, err := s.findAndApplyMatchingHunk(currentHunks, targetIDs)
+		newTargetIDs, applied, err := s.findAndApplyMatchingHunk(ctx, currentHunks, targetIDs)
 		if err != nil {
 			return err
 		}
@@ -355,7 +356,7 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
 }
 
 // preparePatchData prepares patch data by reading and parsing the patch file
-func (s *Stager) preparePatchData(patchFile string) ([]HunkInfo, error) {
+func (s *Stager) preparePatchData(ctx context.Context, patchFile string) ([]HunkInfo, error) {
 	content, err := os.ReadFile(patchFile)
 	if err != nil {
 		return nil, NewFileNotFoundError(patchFile, err)
@@ -368,7 +369,7 @@ func (s *Stager) preparePatchData(patchFile string) ([]HunkInfo, error) {
 	}
 
 	// Calculate patch IDs for all hunks
-	if err := s.calculatePatchIDsForHunks(allHunks); err != nil {
+	if err := s.calculatePatchIDsForHunks(ctx, allHunks); err != nil {
 		s.logger.Error("Failed to calculate patch IDs: %v", err)
 		return nil, NewGitCommandError("patch-id calculation", err)
 	}
@@ -377,14 +378,14 @@ func (s *Stager) preparePatchData(patchFile string) ([]HunkInfo, error) {
 }
 
 // getCurrentDiff gets the current diff for target files
-func (s *Stager) getCurrentDiff(targetFiles map[string]bool) ([]byte, error) {
+func (s *Stager) getCurrentDiff(ctx context.Context, targetFiles map[string]bool) ([]byte, error) {
 	// Build diff command with specific files
 	diffArgs := []string{"diff", "HEAD", "--"}
 	for file := range targetFiles {
 		diffArgs = append(diffArgs, file)
 	}
 
-	diffOutput, err := s.executor.Execute("git", diffArgs...)
+	diffOutput, err := s.executor.Execute(ctx, "git", diffArgs...)
 	if err != nil {
 		return nil, NewGitCommandError("git diff", err)
 	}
@@ -393,14 +394,14 @@ func (s *Stager) getCurrentDiff(targetFiles map[string]bool) ([]byte, error) {
 }
 
 // findAndApplyMatchingHunk finds a matching hunk and applies it
-func (s *Stager) findAndApplyMatchingHunk(currentHunks []HunkInfo, targetIDs []string) ([]string, bool, error) {
+func (s *Stager) findAndApplyMatchingHunk(ctx context.Context, currentHunks []HunkInfo, targetIDs []string) ([]string, bool, error) {
 	for i := range currentHunks {
 		hunkContent, err := s.extractHunkContent(&currentHunks[i])
 		if err != nil || len(hunkContent) == 0 {
 			continue
 		}
 
-		currentPatchID, err := s.calculatePatchIDStable(hunkContent)
+		currentPatchID, err := s.calculatePatchIDStable(ctx, hunkContent)
 		if err != nil {
 			continue
 		}
@@ -410,7 +411,7 @@ func (s *Stager) findAndApplyMatchingHunk(currentHunks []HunkInfo, targetIDs []s
 			if currentPatchID == targetID {
 				// Apply the hunk
 				s.logger.Info("Applying hunk with patch ID: %s", targetID)
-				if err := s.applyHunk(hunkContent, targetID); err != nil {
+				if err := s.applyHunk(ctx, hunkContent, targetID); err != nil {
 					return nil, false, err
 				}
 
@@ -425,8 +426,8 @@ func (s *Stager) findAndApplyMatchingHunk(currentHunks []HunkInfo, targetIDs []s
 }
 
 // tryNormalApply attempts to apply the patch using the standard git apply --cached command
-func (s *Stager) tryNormalApply(hunkContent []byte) error {
-	_, err := s.executor.ExecuteWithStdin("git", bytes.NewReader(hunkContent), "apply", "--cached")
+func (s *Stager) tryNormalApply(ctx context.Context, hunkContent []byte) error {
+	_, err := s.executor.ExecuteWithStdin(ctx, "git", bytes.NewReader(hunkContent), "apply", "--cached")
 	return err
 }
 
@@ -439,7 +440,7 @@ func (s *Stager) isAlreadyExistsError(err error) bool {
 }
 
 // tryResetApplyStrategy implements the reset-apply strategy for git mv scenarios
-func (s *Stager) tryResetApplyStrategy(hunkContent []byte, targetID string) error {
+func (s *Stager) tryResetApplyStrategy(ctx context.Context, hunkContent []byte, targetID string) error {
 	filename := s.extractFilenameFromPatch(hunkContent)
 	if filename == "" {
 		s.logger.Debug("Could not extract filename from patch for %s", targetID)
@@ -449,7 +450,7 @@ func (s *Stager) tryResetApplyStrategy(hunkContent []byte, targetID string) erro
 	s.logger.Debug("Extracted filename %s from patch for %s", filename, targetID)
 
 	// Try to temporarily remove from index
-	_, resetErr := s.executor.Execute("git", "reset", "HEAD", filename)
+	_, resetErr := s.executor.Execute(ctx, "git", "reset", "HEAD", filename)
 	if resetErr != nil {
 		s.logger.Debug("Failed to reset %s: %s", filename, resetErr.Error())
 		return resetErr
@@ -458,12 +459,12 @@ func (s *Stager) tryResetApplyStrategy(hunkContent []byte, targetID string) erro
 	s.logger.Debug("Successfully reset %s from index", filename)
 
 	// Now try to apply the patch
-	_, applyErr := s.executor.ExecuteWithStdin("git", bytes.NewReader(hunkContent), "apply", "--cached")
+	_, applyErr := s.executor.ExecuteWithStdin(ctx, "git", bytes.NewReader(hunkContent), "apply", "--cached")
 	if applyErr != nil {
 		s.logger.Debug("Patch apply after reset failed for %s: %s", targetID, applyErr.Error())
 
 		// Try to restore the original state
-		_, addErr := s.executor.Execute("git", "add", filename)
+		_, addErr := s.executor.Execute(ctx, "git", "add", filename)
 		if addErr != nil {
 			s.logger.Debug("Failed to restore %s to index: %s", filename, addErr.Error())
 		}
@@ -475,10 +476,10 @@ func (s *Stager) tryResetApplyStrategy(hunkContent []byte, targetID string) erro
 }
 
 // tryWorkingDirectoryApply attempts to apply the patch to the working directory as a fallback
-func (s *Stager) tryWorkingDirectoryApply(hunkContent []byte, targetID string) error {
+func (s *Stager) tryWorkingDirectoryApply(ctx context.Context, hunkContent []byte, targetID string) error {
 	s.logger.Debug("File already exists in index for %s (fallback check), trying alternative approach", targetID)
 
-	_, applyErr := s.executor.ExecuteWithStdin("git", bytes.NewReader(hunkContent), "apply")
+	_, applyErr := s.executor.ExecuteWithStdin(ctx, "git", bytes.NewReader(hunkContent), "apply")
 	if applyErr != nil {
 		s.logger.Debug("Working directory apply also failed for %s: %s", targetID, applyErr.Error())
 		return applyErr
@@ -489,7 +490,7 @@ func (s *Stager) tryWorkingDirectoryApply(hunkContent []byte, targetID string) e
 }
 
 // handleApplyError handles errors from the initial patch application attempt
-func (s *Stager) handleApplyError(hunkContent []byte, targetID string, err error) error {
+func (s *Stager) handleApplyError(ctx context.Context, hunkContent []byte, targetID string, err error) error {
 	s.logger.Debug("Initial apply failed for %s: %s", targetID, err.Error())
 
 	if !s.isAlreadyExistsError(err) {
@@ -503,13 +504,13 @@ func (s *Stager) handleApplyError(hunkContent []byte, targetID string, err error
 		stderrStr := string(exitErr.Stderr)
 		s.logger.Debug("File already exists in index for %s (stderr: %s), trying git mv compatible approach", targetID, stderrStr)
 
-		if resetErr := s.tryResetApplyStrategy(hunkContent, targetID); resetErr == nil {
+		if resetErr := s.tryResetApplyStrategy(ctx, hunkContent, targetID); resetErr == nil {
 			return nil // Success
 		}
 	}
 
 	// Fallback to working directory apply
-	if workingErr := s.tryWorkingDirectoryApply(hunkContent, targetID); workingErr == nil {
+	if workingErr := s.tryWorkingDirectoryApply(ctx, hunkContent, targetID); workingErr == nil {
 		return nil // Success
 	}
 
@@ -519,9 +520,9 @@ func (s *Stager) handleApplyError(hunkContent []byte, targetID string, err error
 }
 
 // applyHunk applies a single hunk to the staging area
-func (s *Stager) applyHunk(hunkContent []byte, targetID string) error {
-	if err := s.tryNormalApply(hunkContent); err != nil {
-		return s.handleApplyError(hunkContent, targetID, err)
+func (s *Stager) applyHunk(ctx context.Context, hunkContent []byte, targetID string) error {
+	if err := s.tryNormalApply(ctx, hunkContent); err != nil {
+		return s.handleApplyError(ctx, hunkContent, targetID, err)
 	}
 	return nil
 }
@@ -541,8 +542,8 @@ func (s *Stager) extractFilenameFromPatch(patchContent []byte) string {
 }
 
 // calculatePatchIDStable calculates patch ID using git patch-id --stable
-func (s *Stager) calculatePatchIDStable(hunkPatch []byte) (string, error) {
-	output, err := s.executor.ExecuteWithStdin("git", bytes.NewReader(hunkPatch), "patch-id", "--stable")
+func (s *Stager) calculatePatchIDStable(ctx context.Context, hunkPatch []byte) (string, error) {
+	output, err := s.executor.ExecuteWithStdin(ctx, "git", bytes.NewReader(hunkPatch), "patch-id", "--stable")
 	if err != nil {
 		return "", err
 	}

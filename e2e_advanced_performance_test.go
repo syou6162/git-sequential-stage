@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -135,7 +136,7 @@ if __name__ == "__main__":
 
 	// Measure performance
 	startTime := time.Now()
-	err = runGitSequentialStage([]string{hunkSpec}, absPatchPath)
+	err = runGitSequentialStage(context.Background(), []string{hunkSpec}, absPatchPath)
 	elapsed := time.Since(startTime)
 
 	if err != nil {
@@ -206,7 +207,7 @@ if __name__ == "__main__":
 
 	if len(manyHunks) > 0 {
 		hunkSpec := fmt.Sprintf("%s:%s", largeFile, strings.Join(manyHunks, ","))
-		err = runGitSequentialStage([]string{hunkSpec}, absPatchPath)
+		err = runGitSequentialStage(context.Background(), []string{hunkSpec}, absPatchPath)
 		if err != nil {
 			t.Logf("Failed to stage many hunks: %v", err)
 		} else {

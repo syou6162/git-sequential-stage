@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -35,7 +36,7 @@ func (e *usageShownError) Error() string {
 
 // runGitSequentialStage は git-sequential-stage の主要なロジックを実行します
 // テストから直接呼び出せるように分離されています
-func runGitSequentialStage(hunks []string, patchFile string) error {
+func runGitSequentialStage(ctx context.Context, hunks []string, patchFile string) error {
 	// Validate required arguments
 	if len(hunks) == 0 {
 		return fmt.Errorf("at least one -hunk flag is required")
@@ -97,14 +98,14 @@ func runGitSequentialStage(hunks []string, patchFile string) error {
 		}
 
 		// Stage hunks
-		if err := s.StageHunks(normalHunks, patchFile); err != nil {
+		if err := s.StageHunks(ctx, normalHunks, patchFile); err != nil {
 			return fmt.Errorf("failed to stage hunks: %v", err)
 		}
 	}
 
 	// Stage wildcard files directly with git add (after hunks)
 	if len(wildcardFiles) > 0 {
-		if err := s.StageFiles(wildcardFiles); err != nil {
+		if err := s.StageFiles(ctx, wildcardFiles); err != nil {
 			return fmt.Errorf("failed to stage wildcard files: %v", err)
 		}
 	}
@@ -122,7 +123,7 @@ func showUsage() {
 }
 
 // runStageCommand handles the 'stage' subcommand
-func runStageCommand(args []string) error {
+func runStageCommand(ctx context.Context, args []string) error {
 	// Create a new FlagSet for the stage subcommand
 	stageFlags := flag.NewFlagSet("stage", flag.ExitOnError)
 	var hunks hunkList
@@ -158,7 +159,7 @@ func runStageCommand(args []string) error {
 	}
 
 	// Call the existing implementation
-	if err := runGitSequentialStage(hunks, *patchFile); err != nil {
+	if err := runGitSequentialStage(ctx, hunks, *patchFile); err != nil {
 		handleStageError(err)
 		// handleStageError calls os.Exit(1) and never returns
 	}
@@ -169,7 +170,7 @@ func runStageCommand(args []string) error {
 }
 
 // runCountHunksCommand handles the 'count-hunks' subcommand
-func runCountHunksCommand(args []string) error {
+func runCountHunksCommand(ctx context.Context, args []string) error {
 	// Create a new FlagSet for the count-hunks subcommand
 	countFlags := flag.NewFlagSet("count-hunks", flag.ExitOnError)
 
@@ -191,7 +192,7 @@ func runCountHunksCommand(args []string) error {
 	exec := executor.NewRealCommandExecutor()
 
 	// Execute git diff HEAD
-	output, err := exec.Execute("git", "diff", "HEAD")
+	output, err := exec.Execute(ctx, "git", "diff", "HEAD")
 	if err != nil {
 		return executor.WrapGitError(err, "git diff")
 	}
@@ -219,7 +220,7 @@ func runCountHunksCommand(args []string) error {
 }
 
 // routeSubcommand routes to the appropriate subcommand handler
-func routeSubcommand(args []string) error {
+func routeSubcommand(ctx context.Context, args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("subcommand required")
 	}
@@ -229,9 +230,9 @@ func routeSubcommand(args []string) error {
 
 	switch subcommand {
 	case "stage":
-		return runStageCommand(subcommandArgs)
+		return runStageCommand(ctx, subcommandArgs)
 	case "count-hunks":
-		return runCountHunksCommand(subcommandArgs)
+		return runCountHunksCommand(ctx, subcommandArgs)
 	default:
 		return fmt.Errorf("unknown subcommand: %s", subcommand)
 	}
@@ -250,16 +251,19 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Create context
+	ctx := context.Background()
+
 	// Check dependencies early (git installation and repository)
 	exec := executor.NewRealCommandExecutor()
 	v := validator.NewValidator(exec)
-	if err := v.CheckDependencies(); err != nil {
+	if err := v.CheckDependencies(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 
 	// Route to subcommand
-	if err := routeSubcommand(os.Args[1:]); err != nil {
+	if err := routeSubcommand(ctx, os.Args[1:]); err != nil {
 		// Check if usage was already shown (e.g., by a subcommand)
 		if _, ok := err.(*usageShownError); !ok {
 			// Usage not shown yet, show top-level usage

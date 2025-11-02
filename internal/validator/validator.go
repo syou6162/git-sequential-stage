@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -25,9 +26,9 @@ func NewValidator(exec executor.CommandExecutor) *Validator {
 
 // CheckDependencies checks if required external commands (git) are available.
 // Returns an error if any dependency is missing.
-func (v *Validator) CheckDependencies() error {
+func (v *Validator) CheckDependencies(ctx context.Context) error {
 	// Check git
-	if _, err := v.executor.Execute("git", "--version"); err != nil {
+	if _, err := v.executor.Execute(ctx, "git", "--version"); err != nil {
 		return errors.New("git command not found")
 	}
 

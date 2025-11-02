@@ -2,6 +2,7 @@ package executor
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -119,7 +120,7 @@ func TestMockCommandExecutorExecute(t *testing.T) {
 			mock := NewMockCommandExecutor()
 			tt.setup(mock)
 
-			output, err := mock.Execute(tt.command, tt.args...)
+			output, err := mock.Execute(context.Background(), tt.command, tt.args...)
 			validateMockExecution(t, mock, output, err, tt.command, tt.args,
 				tt.wantOutput, tt.wantError, tt.wantErrMsg)
 		})
@@ -232,7 +233,7 @@ func TestMockCommandExecutorExecuteWithStdin(t *testing.T) {
 			mock := NewMockCommandExecutor()
 			tt.setup(mock)
 
-			output, err := mock.ExecuteWithStdin(tt.command, tt.stdin, tt.args...)
+			output, err := mock.ExecuteWithStdin(context.Background(), tt.command, tt.stdin, tt.args...)
 			validateMockExecutionWithStdin(t, mock, output, err, tt.command, tt.args,
 				tt.wantOutput, tt.wantError, tt.wantStdin)
 		})
@@ -247,7 +248,7 @@ func TestMockCommandExecutorExecutedCommandsTracking(t *testing.T) {
 	mock.Commands["git [status]"] = MockResponse{Output: []byte("git status"), Error: nil}
 
 	// Execute multiple commands
-	output1, err1 := mock.Execute("git", "--version")
+	output1, err1 := mock.Execute(context.Background(), "git", "--version")
 	if err1 != nil {
 		t.Fatalf("Unexpected error from Execute: %v", err1)
 	}
@@ -255,7 +256,7 @@ func TestMockCommandExecutorExecutedCommandsTracking(t *testing.T) {
 		t.Error("Expected non-nil output from Execute")
 	}
 
-	output2, err2 := mock.ExecuteWithStdin("git", strings.NewReader("input"), "status")
+	output2, err2 := mock.ExecuteWithStdin(context.Background(), "git", strings.NewReader("input"), "status")
 	if err2 != nil {
 		t.Fatalf("Unexpected error from ExecuteWithStdin: %v", err2)
 	}
@@ -334,7 +335,7 @@ func TestRealCommandExecutorExecute(t *testing.T) {
 				}
 			}
 
-			output, err := executor.Execute(tt.command, tt.args...)
+			output, err := executor.Execute(context.Background(), tt.command, tt.args...)
 
 			if (err != nil) != tt.wantError {
 				t.Errorf("Execute() error = %v, wantError %v", err, tt.wantError)
@@ -398,7 +399,7 @@ func TestRealCommandExecutorExecuteWithStdin(t *testing.T) {
 				t.Skipf("%s not found in PATH", tt.command)
 			}
 
-			output, err := executor.ExecuteWithStdin(tt.command, tt.stdin, tt.args...)
+			output, err := executor.ExecuteWithStdin(context.Background(), tt.command, tt.stdin, tt.args...)
 
 			if (err != nil) != tt.wantError {
 				t.Errorf("ExecuteWithStdin() error = %v, wantError %v", err, tt.wantError)
@@ -418,7 +419,7 @@ func TestRealCommandExecutorErrorOutput(t *testing.T) {
 
 	// Test with a command that should produce stderr output
 	// We'll use 'ls' with a non-existent directory
-	_, err := executor.Execute("ls", "/definitely/does/not/exist/path/12345")
+	_, err := executor.Execute(context.Background(), "ls", "/definitely/does/not/exist/path/12345")
 
 	if err == nil {
 		t.Error("Expected error for non-existent path")
@@ -460,7 +461,7 @@ func TestRealCommandExecutorStderrCapture(t *testing.T) {
 	// Execute a command that will fail in a goroutine to avoid deadlock
 	done := make(chan error, 1)
 	go func() {
-		_, execErr := executor.Execute("ls", "/definitely/does/not/exist")
+		_, execErr := executor.Execute(context.Background(), "ls", "/definitely/does/not/exist")
 		_ = w.Close() // Close write end to signal completion
 		done <- execErr
 	}()
