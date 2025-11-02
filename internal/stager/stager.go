@@ -108,7 +108,7 @@ func setFallbackPatchID(hunk *HunkInfo) {
 }
 
 // calculatePatchIDsForHunks calculates patch IDs for all hunks in the list
-func (s *Stager) calculatePatchIDsForHunks(allHunks []HunkInfo, patchContent string) error {
+func (s *Stager) calculatePatchIDsForHunks(allHunks []HunkInfo) error {
 	for i := range allHunks {
 		hunkContent, err := s.extractHunkContent(&allHunks[i])
 		if err != nil {
@@ -338,10 +338,8 @@ func (s *Stager) StageHunks(hunkSpecs []string, patchFile string) error {
 			return NewParsingError("current diff", err)
 		}
 
-		diffLines := strings.Split(string(diffOutput), "\n")
-
 		// Find and apply matching hunk
-		newTargetIDs, applied, err := s.findAndApplyMatchingHunk(currentHunks, diffLines, targetIDs)
+		newTargetIDs, applied, err := s.findAndApplyMatchingHunk(currentHunks, targetIDs)
 		if err != nil {
 			return err
 		}
@@ -370,7 +368,7 @@ func (s *Stager) preparePatchData(patchFile string) ([]HunkInfo, error) {
 	}
 
 	// Calculate patch IDs for all hunks
-	if err := s.calculatePatchIDsForHunks(allHunks, patchContent); err != nil {
+	if err := s.calculatePatchIDsForHunks(allHunks); err != nil {
 		s.logger.Error("Failed to calculate patch IDs: %v", err)
 		return nil, NewGitCommandError("patch-id calculation", err)
 	}
@@ -395,7 +393,7 @@ func (s *Stager) getCurrentDiff(targetFiles map[string]bool) ([]byte, error) {
 }
 
 // findAndApplyMatchingHunk finds a matching hunk and applies it
-func (s *Stager) findAndApplyMatchingHunk(currentHunks []HunkInfo, diffLines []string, targetIDs []string) ([]string, bool, error) {
+func (s *Stager) findAndApplyMatchingHunk(currentHunks []HunkInfo, targetIDs []string) ([]string, bool, error) {
 	for i := range currentHunks {
 		hunkContent, err := s.extractHunkContent(&currentHunks[i])
 		if err != nil || len(hunkContent) == 0 {
