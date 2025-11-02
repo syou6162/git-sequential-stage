@@ -3,6 +3,7 @@ package stager
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -126,7 +127,11 @@ func (s *Stager) calculatePatchIDsForHunks(ctx context.Context, allHunks []HunkI
 
 		patchID, err := s.calculatePatchIDStable(ctx, hunkContent)
 		if err != nil {
-			// Continue without patch ID
+			// Check if context was canceled or timed out
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return ctx.Err()
+			}
+			// Continue without patch ID for other errors
 			setFallbackPatchID(&allHunks[i])
 		} else {
 			allHunks[i].PatchID = patchID
@@ -403,6 +408,10 @@ func (s *Stager) findAndApplyMatchingHunk(ctx context.Context, currentHunks []Hu
 
 		currentPatchID, err := s.calculatePatchIDStable(ctx, hunkContent)
 		if err != nil {
+			// Check if context was canceled or timed out
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return nil, false, ctx.Err()
+			}
 			continue
 		}
 
