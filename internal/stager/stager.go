@@ -2,9 +2,7 @@ package stager
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"os/exec"
 	"strings"
@@ -410,11 +408,11 @@ func (s *Stager) createTempDiffFile(diffOutput []byte) (string, func(), error) {
 		return "", nil, NewIOError("create temp file", err)
 	}
 
+	filename := tmpFile.Name()
+
 	cleanup := func() {
-		if err := tmpFile.Close(); err != nil && !errors.Is(err, fs.ErrClosed) {
-			s.logger.Debug("Failed to close temp file: %v", err)
-		}
-		if err := os.Remove(tmpFile.Name()); err != nil {
+		_ = tmpFile.Close() // Best effort close, ignore error
+		if err := os.Remove(filename); err != nil {
 			s.logger.Debug("Failed to remove temp file: %v", err)
 		}
 	}
@@ -424,8 +422,12 @@ func (s *Stager) createTempDiffFile(diffOutput []byte) (string, func(), error) {
 		return "", nil, NewIOError("write temp file", err)
 	}
 
-	_ = tmpFile.Close()
-	return tmpFile.Name(), cleanup, nil
+	if err := tmpFile.Close(); err != nil {
+		cleanup() // Remove file even on close error
+		return "", nil, NewIOError("close temp file", err)
+	}
+
+	return filename, cleanup, nil
 }
 
 // findAndApplyMatchingHunk finds a matching hunk and applies it
