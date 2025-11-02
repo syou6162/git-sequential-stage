@@ -2,7 +2,9 @@ package stager
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"strings"
@@ -409,7 +411,7 @@ func (s *Stager) createTempDiffFile(diffOutput []byte) (string, func(), error) {
 	}
 
 	cleanup := func() {
-		if err := tmpFile.Close(); err != nil {
+		if err := tmpFile.Close(); err != nil && !errors.Is(err, fs.ErrClosed) {
 			s.logger.Debug("Failed to close temp file: %v", err)
 		}
 		if err := os.Remove(tmpFile.Name()); err != nil {
