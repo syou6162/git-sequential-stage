@@ -134,8 +134,8 @@ func NewHunkCountExceededError(filePath string, maxHunks int, invalidHunks []int
 		pluralS = "s"
 	}
 
-	message := fmt.Sprintf("%s has %d hunk%s but requested [%s]",
-		filePath, maxHunks, pluralS, strings.Join(invalidHunksStr, ", "))
+	message := fmt.Sprintf("%s has %d hunk%s (valid: 1-%d) but requested [%s]",
+		filePath, maxHunks, pluralS, maxHunks, strings.Join(invalidHunksStr, ", "))
 
 	return NewStagerError(ErrorTypeHunkCountExceeded, message, nil)
 }
