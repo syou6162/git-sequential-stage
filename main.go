@@ -103,14 +103,14 @@ func runGitSequentialStage(ctx context.Context, hunks []string, patchFile string
 
 		// Stage hunks
 		if err := s.StageHunks(ctx, normalHunks, patchFile); err != nil {
-			return fmt.Errorf("failed to stage hunks: %v", err)
+			return fmt.Errorf("failed to stage hunks: %w", err)
 		}
 	}
 
 	// Stage wildcard files directly with git add (after hunks)
 	if len(wildcardFiles) > 0 {
 		if err := s.StageFiles(ctx, wildcardFiles); err != nil {
-			return fmt.Errorf("failed to stage wildcard files: %v", err)
+			return fmt.Errorf("failed to stage wildcard files: %w", err)
 		}
 	}
 
