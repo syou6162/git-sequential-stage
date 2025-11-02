@@ -12,7 +12,7 @@ func AssertDiffContains(t *testing.T, diff string, want ...string) {
 	t.Helper()
 	for _, s := range want {
 		if !strings.Contains(diff, s) {
-			t.Fatalf("staged diff missing %q\n\nActual diff:\n%s", s, diff)
+			t.Fatalf("diff missing %q\n\nActual diff:\n%s", s, diff)
 		}
 	}
 }
@@ -24,7 +24,7 @@ func AssertDiffNotContains(t *testing.T, diff string, unwanted ...string) {
 	t.Helper()
 	for _, s := range unwanted {
 		if strings.Contains(diff, s) {
-			t.Fatalf("staged diff should not contain %q\n\nActual diff:\n%s", s, diff)
+			t.Fatalf("diff should not contain %q\n\nActual diff:\n%s", s, diff)
 		}
 	}
 }
