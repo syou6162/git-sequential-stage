@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -163,6 +164,16 @@ func runStageCommand(ctx context.Context, args []string) error {
 
 	// Call the existing implementation
 	if err := runGitSequentialStage(ctx, hunks, *patchFile); err != nil {
+		// Check if user cancelled or timeout occurred
+		if errors.Is(err, context.Canceled) {
+			fmt.Fprintf(os.Stderr, "Operation cancelled by user\n")
+			os.Exit(130) // Standard exit code for SIGINT
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			fmt.Fprintf(os.Stderr, "Operation timed out after 30 seconds\n")
+			os.Exit(1)
+		}
+
 		handleStageError(err)
 		// handleStageError calls os.Exit(1) and never returns
 	}
@@ -258,8 +269,8 @@ func main() {
 	baseCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Add 5 minute timeout on top of signal handling
-	ctx, cancel := context.WithTimeout(baseCtx, 5*time.Minute)
+	// Add 30 second timeout on top of signal handling
+	ctx, cancel := context.WithTimeout(baseCtx, 30*time.Second)
 	defer cancel()
 
 	// Check dependencies early (git installation and repository)
