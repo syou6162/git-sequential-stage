@@ -409,8 +409,12 @@ func (s *Stager) createTempDiffFile(diffOutput []byte) (string, func(), error) {
 	}
 
 	cleanup := func() {
-		_ = tmpFile.Close()
-		_ = os.Remove(tmpFile.Name())
+		if err := tmpFile.Close(); err != nil {
+			s.logger.Debug("Failed to close temp file: %v", err)
+		}
+		if err := os.Remove(tmpFile.Name()); err != nil {
+			s.logger.Debug("Failed to remove temp file: %v", err)
+		}
 	}
 
 	if _, err := tmpFile.Write(diffOutput); err != nil {
