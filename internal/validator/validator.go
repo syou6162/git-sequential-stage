@@ -29,6 +29,10 @@ func NewValidator(exec executor.CommandExecutor) *Validator {
 func (v *Validator) CheckDependencies(ctx context.Context) error {
 	// Check git
 	if _, err := v.executor.Execute(ctx, "git", "--version"); err != nil {
+		// Don't mask context errors
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return err
+		}
 		return errors.New("git command not found")
 	}
 
