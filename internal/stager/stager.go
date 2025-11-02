@@ -375,6 +375,12 @@ func (s *Stager) preparePatchData(ctx context.Context, patchFile string) ([]Hunk
 
 	// Calculate patch IDs for all hunks
 	if err := s.calculatePatchIDsForHunks(ctx, allHunks); err != nil {
+		// Don't wrap context errors - let them propagate as-is
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
+		}
+
+		// Only wrap non-context errors
 		s.logger.Error("Failed to calculate patch IDs: %v", err)
 		return nil, NewGitCommandError("patch-id calculation", err)
 	}
