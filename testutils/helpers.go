@@ -225,10 +225,10 @@ func (tr *TestRepo) GetCommitCount() int {
 	return count
 }
 
-// GeneratePatch generates a patch file for the current changes
+// GeneratePatch generates a patch file for the current unstaged changes
 func (tr *TestRepo) GeneratePatch(filename string) {
 	tr.t.Helper()
-	output, err := tr.RunCommand("git", "diff", "HEAD")
+	output, err := tr.RunCommand("git", "diff")
 	if err != nil {
 		tr.t.Fatalf("Failed to generate patch: %v", err)
 	}
