@@ -109,10 +109,7 @@ if __name__ == '__main__':
 
 	// パッチファイルを生成
 	patchPath := filepath.Join(testRepo.Path, "changes.patch")
-	output, err := testRepo.RunCommand("sh", "-c", "git diff > changes.patch")
-	if err != nil {
-		t.Fatalf("Failed to create patch file: %v\nOutput: %s", err, output)
-	}
+	testRepo.GeneratePatch("changes.patch")
 
 	// パッチファイルが作成されたことを確認
 	if _, err := os.Stat(patchPath); os.IsNotExist(err) {
