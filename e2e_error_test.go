@@ -25,10 +25,7 @@ func TestErrorCases_NonExistentFile(t *testing.T) {
 
 	// パッチファイルを生成
 	patchPath := filepath.Join(testRepo.Path, "changes.patch")
-	output, err := testRepo.RunCommand("sh", "-c", "git diff > changes.patch")
-	if err != nil {
-		t.Fatalf("Failed to create patch file: %v\nOutput: %s", err, output)
-	}
+	testRepo.GeneratePatch("changes.patch")
 
 	// パッチファイルの絶対パスを取得
 	absPatchPath, err := filepath.Abs(patchPath)
@@ -88,10 +85,7 @@ func TestErrorCases_InvalidHunkNumber(t *testing.T) {
 
 	// パッチファイルを生成
 	patchPath := filepath.Join(testRepo.Path, "changes.patch")
-	output, err := testRepo.RunCommand("sh", "-c", "git diff > changes.patch")
-	if err != nil {
-		t.Fatalf("Failed to create patch file: %v\nOutput: %s", err, output)
-	}
+	testRepo.GeneratePatch("changes.patch")
 
 	// パッチファイルの絶対パスを取得
 	absPatchPath, err := filepath.Abs(patchPath)

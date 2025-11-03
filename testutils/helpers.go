@@ -225,7 +225,9 @@ func (tr *TestRepo) GetCommitCount() int {
 	return count
 }
 
-// GeneratePatch generates a patch file for the current changes
+// GeneratePatch generates a patch file for all changes since HEAD.
+// This includes both staged (intent-to-add) and unstaged changes, matching
+// the recommended workflow in CLAUDE.md for LLM agent integration.
 func (tr *TestRepo) GeneratePatch(filename string) {
 	tr.t.Helper()
 	output, err := tr.RunCommand("git", "diff", "HEAD")
