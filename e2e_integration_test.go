@@ -389,3 +389,61 @@ func testBasicConsistency(t *testing.T) {
 		t.Error("File was not staged correctly")
 	}
 }
+
+// TestE2E_StagedFilesErrorMessage_ContainsQuickFix tests that error message
+// contains helpful quick fix suggestion when staging area is not clean
+func TestE2E_StagedFilesErrorMessage_ContainsQuickFix(t *testing.T) {
+	dir, repo, cleanup := testutils.CreateTestRepo(t, "test-staged-error-msg-*")
+	defer cleanup()
+
+	resetDir := testutils.SetupTestDir(t, dir)
+	defer resetDir()
+
+	// Create and commit initial files
+	testutils.CreateAndCommitFile(t, dir, repo, "file1.go", "package main\n\nfunc func1() {}\n", "Initial commit")
+	testutils.CreateAndCommitFile(t, dir, repo, "file2.go", "package main\n\nfunc func2() {}\n", "Add file2")
+	testutils.CreateAndCommitFile(t, dir, repo, "file5.go", "package main\n\nfunc func5() {}\n", "Add file5")
+
+	// Modify file1 and file2, then stage them (simulating pre-commit failure scenario)
+	_ = os.WriteFile("file1.go", []byte("package main\n\nfunc func1() {\n\tprintln(\"modified\")\n}\n"), 0644)
+	_ = os.WriteFile("file2.go", []byte("package main\n\nfunc func2() {\n\tprintln(\"modified\")\n}\n"), 0644)
+	_, _ = testutils.RunCommand(t, dir, "git", "add", "file1.go", "file2.go")
+
+	// Now modify file5 (target file) and create patch
+	_ = os.WriteFile("file5.go", []byte("package main\n\nfunc func5() {\n\tprintln(\"func5 modified\")\n}\n"), 0644)
+	patchFile := filepath.Join(dir, "file5.patch")
+	output, _ := testutils.RunCommand(t, dir, "git", "diff", "HEAD", "file5.go")
+	_ = os.WriteFile(patchFile, []byte(output), 0644)
+
+	// Try to stage file5 - should fail because file1 and file2 are already staged
+	err := runGitSequentialStage(context.Background(), []string{"file5.go:1"}, patchFile)
+
+	if err == nil {
+		t.Fatal("Expected error for staged files, but got none")
+	}
+
+	errMsg := err.Error()
+	t.Logf("Error message: %v", errMsg)
+
+	// Verify error message contains expected elements for improved UX
+	expectedPatterns := []string{
+		"SAFETY_CHECK_FAILED",
+		"staging_area_not_clean",
+		"STAGED_FILES",
+		"MODIFIED: file1.go,file2.go",
+		"QUICK FIX",
+		"git stash && git stash pop",
+		"pre-commit",
+	}
+
+	for _, pattern := range expectedPatterns {
+		if !strings.Contains(errMsg, pattern) {
+			t.Errorf("Error message missing expected pattern: %s", pattern)
+		}
+	}
+
+	// Verify the message explains the situation
+	if !strings.Contains(errMsg, "already staged") {
+		t.Error("Error message should explain files are already staged")
+	}
+}
