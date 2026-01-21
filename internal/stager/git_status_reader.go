@@ -126,7 +126,7 @@ func (r *DefaultGitStatusReader) parseGitStatus(status git.Status) (*GitStatusIn
 	return info, nil
 }
 
-// isIntentToAddCandidate checks if a file should be handled as intent-to-add (pure function)
+// isIntentToAddCandidate checks if a file should be handled as intent-to-add
 // This is critical for LLM agent semantic commit workflows where bulk intent-to-add is used
 func (r *DefaultGitStatusReader) isIntentToAddCandidate(path string, fileStatus *git.FileStatus) (bool, error) {
 	// Only files with Staging=Added can be intent-to-add candidates
