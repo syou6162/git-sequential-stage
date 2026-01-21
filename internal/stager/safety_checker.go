@@ -304,6 +304,13 @@ func (s *SafetyChecker) buildStagingErrorMessage(filesByStatus map[FileStatus][]
 		message.WriteString(fmt.Sprintf("  INTENT_TO_ADD: %s\n", strings.Join(intentToAddFiles, ",")))
 	}
 
+	// Add explanation and quick fix
+	message.WriteString("\nThese files are already staged in the git index (not by this tool).\n")
+	message.WriteString("This often happens after a failed pre-commit hook or interrupted commit.\n\n")
+	message.WriteString("QUICK FIX:\n")
+	message.WriteString("  git stash && git stash pop\n\n")
+	message.WriteString("This resets the staging area while keeping your working tree changes intact.\n")
+
 	return message.String()
 }
 
