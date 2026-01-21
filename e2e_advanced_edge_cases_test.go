@@ -253,8 +253,8 @@ if __name__ == "__main__":
 
 // setupIntentToAddCoexistenceTest creates a common test setup with an existing file modification
 // and a new file added with intent-to-add
-func setupIntentToAddCoexistenceTest(t *testing.T) (testRepo *testutils.TestRepo, patchPath string, cleanup func()) {
-	testRepo = testutils.NewTestRepo(t, "git-sequential-stage-intent-to-add-*")
+func setupIntentToAddCoexistenceTest(t *testing.T) (patchPath string, cleanup func()) {
+	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-intent-to-add-*")
 
 	// 初期コミットを作成（既存ファイル含む）
 	testRepo.CreateFile("existing.go", `package main
@@ -323,13 +323,13 @@ func main() {
 		testRepo.Cleanup()
 	}
 
-	return testRepo, absPatchPath, cleanup
+	return absPatchPath, cleanup
 }
 
 // TestIntentToAddCoexistence_ExistingOnly_Wildcard tests staging existing file only with wildcard
 // when intent-to-add file is present
 func TestIntentToAddCoexistence_ExistingOnly_Wildcard(t *testing.T) {
-	_, patchPath, cleanup := setupIntentToAddCoexistenceTest(t)
+	patchPath, cleanup := setupIntentToAddCoexistenceTest(t)
 	defer cleanup()
 
 	// 既存ファイルのみをワイルドカードでステージング
@@ -358,7 +358,7 @@ func TestIntentToAddCoexistence_ExistingOnly_Wildcard(t *testing.T) {
 // TestIntentToAddCoexistence_NewOnly_Hunk tests staging new file only with hunk number
 // when intent-to-add file is present
 func TestIntentToAddCoexistence_NewOnly_Hunk(t *testing.T) {
-	_, patchPath, cleanup := setupIntentToAddCoexistenceTest(t)
+	patchPath, cleanup := setupIntentToAddCoexistenceTest(t)
 	defer cleanup()
 
 	// 新規ファイルのみをhunk指定でステージング
@@ -387,7 +387,7 @@ func TestIntentToAddCoexistence_NewOnly_Hunk(t *testing.T) {
 // TestIntentToAddCoexistence_NewOnly_Wildcard tests staging new file only with wildcard
 // when intent-to-add file is present
 func TestIntentToAddCoexistence_NewOnly_Wildcard(t *testing.T) {
-	_, patchPath, cleanup := setupIntentToAddCoexistenceTest(t)
+	patchPath, cleanup := setupIntentToAddCoexistenceTest(t)
 	defer cleanup()
 
 	// 新規ファイルのみをワイルドカードでステージング
@@ -416,7 +416,7 @@ func TestIntentToAddCoexistence_NewOnly_Wildcard(t *testing.T) {
 // TestIntentToAddCoexistence_Both_HunkHunk tests staging both files with hunk numbers
 // when intent-to-add file is present
 func TestIntentToAddCoexistence_Both_HunkHunk(t *testing.T) {
-	_, patchPath, cleanup := setupIntentToAddCoexistenceTest(t)
+	patchPath, cleanup := setupIntentToAddCoexistenceTest(t)
 	defer cleanup()
 
 	// 両方のファイルをhunk指定でステージング
@@ -445,7 +445,7 @@ func TestIntentToAddCoexistence_Both_HunkHunk(t *testing.T) {
 // TestIntentToAddCoexistence_Both_WildcardWildcard tests staging both files with wildcards
 // when intent-to-add file is present
 func TestIntentToAddCoexistence_Both_WildcardWildcard(t *testing.T) {
-	_, patchPath, cleanup := setupIntentToAddCoexistenceTest(t)
+	patchPath, cleanup := setupIntentToAddCoexistenceTest(t)
 	defer cleanup()
 
 	// 両方のファイルをワイルドカードでステージング
@@ -474,7 +474,7 @@ func TestIntentToAddCoexistence_Both_WildcardWildcard(t *testing.T) {
 // TestIntentToAddCoexistence_Both_HunkWildcard tests staging existing file with hunk and new file with wildcard
 // when intent-to-add file is present
 func TestIntentToAddCoexistence_Both_HunkWildcard(t *testing.T) {
-	_, patchPath, cleanup := setupIntentToAddCoexistenceTest(t)
+	patchPath, cleanup := setupIntentToAddCoexistenceTest(t)
 	defer cleanup()
 
 	// 既存ファイルをhunk、新規ファイルをワイルドカードでステージング
@@ -503,7 +503,7 @@ func TestIntentToAddCoexistence_Both_HunkWildcard(t *testing.T) {
 // TestIntentToAddCoexistence_Both_WildcardHunk tests staging existing file with wildcard and new file with hunk
 // when intent-to-add file is present
 func TestIntentToAddCoexistence_Both_WildcardHunk(t *testing.T) {
-	_, patchPath, cleanup := setupIntentToAddCoexistenceTest(t)
+	patchPath, cleanup := setupIntentToAddCoexistenceTest(t)
 	defer cleanup()
 
 	// 既存ファイルをワイルドカード、新規ファイルをhunkでステージング
