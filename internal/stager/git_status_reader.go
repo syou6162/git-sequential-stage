@@ -36,8 +36,10 @@ func NewGitStatusReader(repoPath string) GitStatusReader {
 
 // ReadStatus implements GitStatusReader.ReadStatus
 func (r *DefaultGitStatusReader) ReadStatus() (*GitStatusInfo, error) {
-	// Open the repository
-	repo, err := git.PlainOpen(r.repoPath)
+	// Open the repository with worktree support
+	repo, err := git.PlainOpenWithOptions(r.repoPath, &git.PlainOpenOptions{
+		EnableDotGitCommonDir: true,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to open repository: %w", err)
 	}
