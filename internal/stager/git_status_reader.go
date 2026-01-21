@@ -142,9 +142,6 @@ func (r *DefaultGitStatusReader) isIntentToAddCandidate(path string, fileStatus 
 // isIntentToAddFile checks if a staged file is an intent-to-add file using go-git
 // This is critical for LLM agent workflows where agents use bulk intent-to-add operations
 // (git ls-files --others | xargs git add -N) and need to stage specific files without conflicts
-//
-// Returns an error if the index cannot be read (e.g., unsupported extensions like
-// core.untrackedCache or core.fsmonitor). See: https://github.com/go-git/go-git/issues/299
 func (r *DefaultGitStatusReader) isIntentToAddFile(path string) (bool, error) {
 	// Open the repository
 	repo, err := git.PlainOpen(r.repoPath)
@@ -155,7 +152,7 @@ func (r *DefaultGitStatusReader) isIntentToAddFile(path string) (bool, error) {
 	// Get the index from repository storer
 	idx, err := repo.Storer.Index()
 	if err != nil {
-		return false, fmt.Errorf("failed to read git index (check if core.untrackedCache or core.fsmonitor is enabled): %w", err)
+		return false, fmt.Errorf("failed to read git index: %w", err)
 	}
 
 	// Find the entry for the given path
