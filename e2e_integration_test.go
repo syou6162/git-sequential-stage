@@ -430,7 +430,7 @@ func TestE2E_StagedFilesErrorMessage_ContainsQuickFix(t *testing.T) {
 		"SAFETY_CHECK_FAILED",
 		"staging_area_not_clean",
 		"STAGED_FILES",
-		"MODIFIED: file1.go,file2.go",
+		"MODIFIED:",
 		"QUICK FIX",
 		"git stash && git stash pop",
 		"pre-commit",
@@ -440,6 +440,11 @@ func TestE2E_StagedFilesErrorMessage_ContainsQuickFix(t *testing.T) {
 		if !strings.Contains(errMsg, pattern) {
 			t.Errorf("Error message missing expected pattern: %s", pattern)
 		}
+	}
+
+	// Verify both files are mentioned (order may vary)
+	if !strings.Contains(errMsg, "file1.go") || !strings.Contains(errMsg, "file2.go") {
+		t.Error("Error message should mention both file1.go and file2.go")
 	}
 
 	// Verify the message explains the situation

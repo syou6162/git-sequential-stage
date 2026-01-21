@@ -82,7 +82,11 @@ func (r *DefaultGitStatusReader) parseGitStatus(status git.Status) (*GitStatusIn
 		}
 
 		// Check for intent-to-add files - critical for LLM agent semantic commit workflows
-		if r.isIntentToAddCandidate(path, fileStatus) {
+		isIntentToAdd, err := r.isIntentToAddCandidate(path, fileStatus)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check intent-to-add for %s: %w", path, err)
+		}
+		if isIntentToAdd {
 			info.addIntentToAddFile(path)
 			continue
 		}
@@ -122,12 +126,12 @@ func (r *DefaultGitStatusReader) parseGitStatus(status git.Status) (*GitStatusIn
 	return info, nil
 }
 
-// isIntentToAddCandidate checks if a file should be handled as intent-to-add (pure function)
+// isIntentToAddCandidate checks if a file should be handled as intent-to-add
 // This is critical for LLM agent semantic commit workflows where bulk intent-to-add is used
-func (r *DefaultGitStatusReader) isIntentToAddCandidate(path string, fileStatus *git.FileStatus) bool {
+func (r *DefaultGitStatusReader) isIntentToAddCandidate(path string, fileStatus *git.FileStatus) (bool, error) {
 	// Only files with Staging=Added can be intent-to-add candidates
 	if fileStatus.Staging != git.Added {
-		return false
+		return false, nil
 	}
 
 	// LLM agents use bulk intent-to-add (git add -N) for multiple files, then selectively stage
@@ -138,26 +142,27 @@ func (r *DefaultGitStatusReader) isIntentToAddCandidate(path string, fileStatus 
 // isIntentToAddFile checks if a staged file is an intent-to-add file using go-git
 // This is critical for LLM agent workflows where agents use bulk intent-to-add operations
 // (git ls-files --others | xargs git add -N) and need to stage specific files without conflicts
-func (r *DefaultGitStatusReader) isIntentToAddFile(path string) bool {
+func (r *DefaultGitStatusReader) isIntentToAddFile(path string) (bool, error) {
 	// Open the repository
 	repo, err := git.PlainOpen(r.repoPath)
 	if err != nil {
-		return false
+		return false, fmt.Errorf("failed to open repository for intent-to-add check: %w", err)
 	}
 
 	// Get the index from repository storer
 	idx, err := repo.Storer.Index()
 	if err != nil {
-		return false
+		return false, fmt.Errorf("failed to read git index: %w", err)
 	}
 
 	// Find the entry for the given path
 	entry, err := idx.Entry(path)
 	if err != nil {
-		return false
+		// Entry not found is not an error - file may not be in index
+		return false, nil
 	}
 
 	// Check the IntentToAdd flag using go-git's native field instead of hardcoded hash values
 	// This provides type-safe intent-to-add detection for LLM agent semantic commit workflows
-	return entry.IntentToAdd
+	return entry.IntentToAdd, nil
 }

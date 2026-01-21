@@ -250,3 +250,281 @@ if __name__ == "__main__":
 		t.Errorf("Expected file content to be staged, got: %s", stagedDiff)
 	}
 }
+
+// setupIntentToAddCoexistenceTest creates a common test setup with an existing file modification
+// and a new file added with intent-to-add
+func setupIntentToAddCoexistenceTest(t *testing.T) (patchPath string, cleanup func()) {
+	testRepo := testutils.NewTestRepo(t, "git-sequential-stage-intent-to-add-*")
+
+	// 初期コミットを作成（既存ファイル含む）
+	testRepo.CreateFile("existing.go", `package main
+
+func existing() {
+	// Original function
+}
+`)
+	testRepo.CommitChanges("Initial commit")
+
+	// 既存ファイルを修正
+	testRepo.CreateFile("existing.go", `package main
+
+func existing() {
+	// Modified function
+	println("Updated")
+}
+`)
+
+	// 新規ファイルを作成してintent-to-addで追加
+	newFile := `package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("Hello, World!")
+}
+`
+	testRepo.CreateFile("new_file.go", newFile)
+
+	// testRepoのディレクトリに移動
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get current directory: %v", err)
+	}
+	if err := os.Chdir(testRepo.Path); err != nil {
+		t.Fatalf("Failed to change to test repo directory: %v", err)
+	}
+
+	// git add -N を実行
+	cmd := exec.Command("git", "add", "-N", "new_file.go")
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Failed to add file with intent-to-add: %v", err)
+	}
+
+	// git diff でパッチを生成
+	diffOutput, err := exec.Command("git", "diff", "HEAD").Output()
+	if err != nil {
+		t.Fatalf("Failed to get diff: %v", err)
+	}
+
+	// パッチファイルを作成
+	patchPath = filepath.Join(testRepo.Path, "changes.patch")
+	if err := os.WriteFile(patchPath, diffOutput, 0644); err != nil {
+		t.Fatalf("Failed to write patch file: %v", err)
+	}
+
+	// パッチファイルの絶対パスを取得
+	absPatchPath, err := filepath.Abs(patchPath)
+	if err != nil {
+		t.Fatalf("Failed to get absolute path: %v", err)
+	}
+
+	cleanup = func() {
+		_ = os.Chdir(origDir)
+		testRepo.Cleanup()
+	}
+
+	return absPatchPath, cleanup
+}
+
+// TestIntentToAddCoexistence_ExistingOnly_Wildcard tests staging existing file only with wildcard
+// when intent-to-add file is present
+func TestIntentToAddCoexistence_ExistingOnly_Wildcard(t *testing.T) {
+	patchPath, cleanup := setupIntentToAddCoexistenceTest(t)
+	defer cleanup()
+
+	// 既存ファイルのみをワイルドカードでステージング
+	err := runGitSequentialStage(context.Background(), []string{"existing.go:*"}, patchPath)
+	if err != nil {
+		t.Fatalf("Expected staging to succeed, but got error: %v", err)
+	}
+
+	// ステージングが成功したことを確認
+	stagedDiff, err := exec.Command("git", "diff", "--cached").Output()
+	if err != nil {
+		t.Fatalf("Failed to get staged diff: %v", err)
+	}
+
+	// existing.goの変更がステージングされていることを確認
+	if !strings.Contains(string(stagedDiff), "Modified function") {
+		t.Errorf("Expected existing.go changes to be staged, got: %s", stagedDiff)
+	}
+
+	// new_file.goはステージングされていないことを確認
+	if strings.Contains(string(stagedDiff), "new_file.go") {
+		t.Errorf("new_file.go should not be staged, got: %s", stagedDiff)
+	}
+}
+
+// TestIntentToAddCoexistence_NewOnly_Hunk tests staging new file only with hunk number
+// when intent-to-add file is present
+func TestIntentToAddCoexistence_NewOnly_Hunk(t *testing.T) {
+	patchPath, cleanup := setupIntentToAddCoexistenceTest(t)
+	defer cleanup()
+
+	// 新規ファイルのみをhunk指定でステージング
+	err := runGitSequentialStage(context.Background(), []string{"new_file.go:1"}, patchPath)
+	if err != nil {
+		t.Fatalf("Expected staging to succeed, but got error: %v", err)
+	}
+
+	// ステージングが成功したことを確認
+	stagedDiff, err := exec.Command("git", "diff", "--cached").Output()
+	if err != nil {
+		t.Fatalf("Failed to get staged diff: %v", err)
+	}
+
+	// new_file.goの変更がステージングされていることを確認
+	if !strings.Contains(string(stagedDiff), "Hello, World!") {
+		t.Errorf("Expected new_file.go changes to be staged, got: %s", stagedDiff)
+	}
+
+	// existing.goはステージングされていないことを確認
+	if strings.Contains(string(stagedDiff), "Modified function") {
+		t.Errorf("existing.go should not be staged, got: %s", stagedDiff)
+	}
+}
+
+// TestIntentToAddCoexistence_NewOnly_Wildcard tests staging new file only with wildcard
+// when intent-to-add file is present
+func TestIntentToAddCoexistence_NewOnly_Wildcard(t *testing.T) {
+	patchPath, cleanup := setupIntentToAddCoexistenceTest(t)
+	defer cleanup()
+
+	// 新規ファイルのみをワイルドカードでステージング
+	err := runGitSequentialStage(context.Background(), []string{"new_file.go:*"}, patchPath)
+	if err != nil {
+		t.Fatalf("Expected staging to succeed, but got error: %v", err)
+	}
+
+	// ステージングが成功したことを確認
+	stagedDiff, err := exec.Command("git", "diff", "--cached").Output()
+	if err != nil {
+		t.Fatalf("Failed to get staged diff: %v", err)
+	}
+
+	// new_file.goの変更がステージングされていることを確認
+	if !strings.Contains(string(stagedDiff), "Hello, World!") {
+		t.Errorf("Expected new_file.go changes to be staged, got: %s", stagedDiff)
+	}
+
+	// existing.goはステージングされていないことを確認
+	if strings.Contains(string(stagedDiff), "Modified function") {
+		t.Errorf("existing.go should not be staged, got: %s", stagedDiff)
+	}
+}
+
+// TestIntentToAddCoexistence_Both_HunkHunk tests staging both files with hunk numbers
+// when intent-to-add file is present
+func TestIntentToAddCoexistence_Both_HunkHunk(t *testing.T) {
+	patchPath, cleanup := setupIntentToAddCoexistenceTest(t)
+	defer cleanup()
+
+	// 両方のファイルをhunk指定でステージング
+	err := runGitSequentialStage(context.Background(), []string{"existing.go:1", "new_file.go:1"}, patchPath)
+	if err != nil {
+		t.Fatalf("Expected staging to succeed, but got error: %v", err)
+	}
+
+	// ステージングが成功したことを確認
+	stagedDiff, err := exec.Command("git", "diff", "--cached").Output()
+	if err != nil {
+		t.Fatalf("Failed to get staged diff: %v", err)
+	}
+
+	// existing.goの変更がステージングされていることを確認
+	if !strings.Contains(string(stagedDiff), "Modified function") {
+		t.Errorf("Expected existing.go changes to be staged, got: %s", stagedDiff)
+	}
+
+	// new_file.goの変更がステージングされていることを確認
+	if !strings.Contains(string(stagedDiff), "Hello, World!") {
+		t.Errorf("Expected new_file.go changes to be staged, got: %s", stagedDiff)
+	}
+}
+
+// TestIntentToAddCoexistence_Both_WildcardWildcard tests staging both files with wildcards
+// when intent-to-add file is present
+func TestIntentToAddCoexistence_Both_WildcardWildcard(t *testing.T) {
+	patchPath, cleanup := setupIntentToAddCoexistenceTest(t)
+	defer cleanup()
+
+	// 両方のファイルをワイルドカードでステージング
+	err := runGitSequentialStage(context.Background(), []string{"existing.go:*", "new_file.go:*"}, patchPath)
+	if err != nil {
+		t.Fatalf("Expected staging to succeed, but got error: %v", err)
+	}
+
+	// ステージングが成功したことを確認
+	stagedDiff, err := exec.Command("git", "diff", "--cached").Output()
+	if err != nil {
+		t.Fatalf("Failed to get staged diff: %v", err)
+	}
+
+	// existing.goの変更がステージングされていることを確認
+	if !strings.Contains(string(stagedDiff), "Modified function") {
+		t.Errorf("Expected existing.go changes to be staged, got: %s", stagedDiff)
+	}
+
+	// new_file.goの変更がステージングされていることを確認
+	if !strings.Contains(string(stagedDiff), "Hello, World!") {
+		t.Errorf("Expected new_file.go changes to be staged, got: %s", stagedDiff)
+	}
+}
+
+// TestIntentToAddCoexistence_Both_HunkWildcard tests staging existing file with hunk and new file with wildcard
+// when intent-to-add file is present
+func TestIntentToAddCoexistence_Both_HunkWildcard(t *testing.T) {
+	patchPath, cleanup := setupIntentToAddCoexistenceTest(t)
+	defer cleanup()
+
+	// 既存ファイルをhunk、新規ファイルをワイルドカードでステージング
+	err := runGitSequentialStage(context.Background(), []string{"existing.go:1", "new_file.go:*"}, patchPath)
+	if err != nil {
+		t.Fatalf("Expected staging to succeed, but got error: %v", err)
+	}
+
+	// ステージングが成功したことを確認
+	stagedDiff, err := exec.Command("git", "diff", "--cached").Output()
+	if err != nil {
+		t.Fatalf("Failed to get staged diff: %v", err)
+	}
+
+	// existing.goの変更がステージングされていることを確認
+	if !strings.Contains(string(stagedDiff), "Modified function") {
+		t.Errorf("Expected existing.go changes to be staged, got: %s", stagedDiff)
+	}
+
+	// new_file.goの変更がステージングされていることを確認
+	if !strings.Contains(string(stagedDiff), "Hello, World!") {
+		t.Errorf("Expected new_file.go changes to be staged, got: %s", stagedDiff)
+	}
+}
+
+// TestIntentToAddCoexistence_Both_WildcardHunk tests staging existing file with wildcard and new file with hunk
+// when intent-to-add file is present
+func TestIntentToAddCoexistence_Both_WildcardHunk(t *testing.T) {
+	patchPath, cleanup := setupIntentToAddCoexistenceTest(t)
+	defer cleanup()
+
+	// 既存ファイルをワイルドカード、新規ファイルをhunkでステージング
+	err := runGitSequentialStage(context.Background(), []string{"existing.go:*", "new_file.go:1"}, patchPath)
+	if err != nil {
+		t.Fatalf("Expected staging to succeed, but got error: %v", err)
+	}
+
+	// ステージングが成功したことを確認
+	stagedDiff, err := exec.Command("git", "diff", "--cached").Output()
+	if err != nil {
+		t.Fatalf("Failed to get staged diff: %v", err)
+	}
+
+	// existing.goの変更がステージングされていることを確認
+	if !strings.Contains(string(stagedDiff), "Modified function") {
+		t.Errorf("Expected existing.go changes to be staged, got: %s", stagedDiff)
+	}
+
+	// new_file.goの変更がステージングされていることを確認
+	if !strings.Contains(string(stagedDiff), "Hello, World!") {
+		t.Errorf("Expected new_file.go changes to be staged, got: %s", stagedDiff)
+	}
+}
