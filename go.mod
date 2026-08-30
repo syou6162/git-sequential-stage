@@ -3,7 +3,7 @@ module github.com/syou6162/git-sequential-stage
 go 1.24.2
 
 require (
-	github.com/bluekeyes/go-gitdiff v0.8.1
+	github.com/bluekeyes/go-gitdiff v0.9.0
 	github.com/go-git/go-git/v5 v5.17.2
 )
 
